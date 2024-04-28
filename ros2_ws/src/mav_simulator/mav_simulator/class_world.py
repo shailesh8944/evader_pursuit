@@ -6,7 +6,6 @@ from class_vessel import Vessel
 from class_waves import Waves
 import module_shared as sh
 from class_vessel_pub_sub_ros2 import Vessel_Pub_Sub
-from class_gnc import GNC
 
 class World():
 
@@ -28,7 +27,6 @@ class World():
 
         for vessel in self.vessels:
             vessel.vessel_node = Vessel_Pub_Sub(vessel_id=vessel.vessel_id)
-            # vessel.gnc = GNC(vessel_id = vessel.vessel_id)
     
     def process_world_input(self, data=None):
         

@@ -31,23 +31,32 @@ class Vessel_Pub_Sub():
 
     def register_sensor(self, sensor):
         rate = sensor['publish_rate']
-        loc = np.array(sensor['sensor_location'])
-        orient = np.array(sensor['sensor_orientation'])
 
         sensor['id'] = len(self.sensors)
         self.sensors.append(sensor)
 
         if sensor['sensor_type'] == 'IMU':
+            loc = np.array(sensor['sensor_location'])
+            orient = np.array(sensor['sensor_orientation'])     
             self.sensors[-1]['pub'] = sh.world.node.create_publisher(Imu, f'{self.topic_prefix}/imu_{sensor["id"]:02d}', rate)
             self.sensors[-1]['timer'] = sh.world.node.create_timer(1/rate, lambda: self.publish_imu(id=sensor['id'], loc=loc, orient=orient))
 
         elif sensor['sensor_type'] == 'GPS':
+            loc = np.array(sensor['sensor_location'])
+            orient = np.array(sensor['sensor_orientation'])     
             self.sensors[-1]['pub'] = sh.world.node.create_publisher(NavSatFix, f'{self.topic_prefix}/gps_{sensor["id"]:02d}', rate)
             self.sensors[-1]['timer'] = sh.world.node.create_timer(1/rate, lambda: self.publish_gps(id=sensor['id'], loc=loc))
         
         elif sensor['sensor_type'] == 'UWB':
+            loc = np.array(sensor['sensor_location'])
+            orient = np.array(sensor['sensor_orientation'])     
             self.sensors[-1]['pub'] = sh.world.node.create_publisher(PointStamped, f'{self.topic_prefix}/uwb_{sensor["id"]:02d}', rate)
             self.sensors[-1]['timer'] = sh.world.node.create_timer(1/rate, lambda: self.publish_uwb(id=sensor['id'], loc=loc))
+        
+        elif sensor['sensor_type'] == 'encoders':
+            self.sensors[-1]['pub'] = sh.world.node.create_publisher(Actuator, f'{self.topic_prefix}/actuator_{sensor["id"]:02d}', rate)
+            self.sensors[-1]['timer'] = sh.world.node.create_timer(1/rate, lambda: self.publish_actuator(id=sensor['id']))
+        
         else:
             raise ValueError("Specified sensor type is unknown")
         
@@ -110,7 +119,19 @@ class Vessel_Pub_Sub():
         uwb.point = Point(x=r_sen[0], y=r_sen[1], z=r_sen[2])
         
         self.sensors[id]['pub'].publish(uwb)
+    
+    def publish_actuator(self, id):
+        current_time = sh.world.node.get_clock().now()
+
+        state = sh.world.vessels[self.vessel_id].current_state
+        
+        act = Actuator()
+        act.header.stamp = current_time.to_msg()
+        act.rudder = state[13] * 180.0 / np.pi
+        act.propeller = state[14] * 60.0
+
+        self.sensors[id]['pub'].publish(act)
 
     def actuator_callback(self, msg):
-        self.delta_c = msg.rudder * np.pi() / 180
-        self.n_c = msg.propeller / 60
+        self.delta_c = msg.rudder * np.pi / 180.0
+        self.n_c = msg.propeller / 60.0

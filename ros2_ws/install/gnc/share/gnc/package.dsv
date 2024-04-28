@@ -1,0 +1,6 @@
+source;share/gnc/hook/pythonpath.ps1
+source;share/gnc/hook/pythonpath.dsv
+source;share/gnc/hook/pythonpath.sh
+source;share/gnc/hook/ament_prefix_path.ps1
+source;share/gnc/hook/ament_prefix_path.dsv
+source;share/gnc/hook/ament_prefix_path.sh

@@ -9,54 +9,52 @@ import module_shared as sh
 import asyncio
 import json
 import websockets
+import threading
 import rclpy
 from class_world_node_ros2 import World_Node
 import module_kinematics as kin
 
-
+def ros_thread():
+    rclpy.spin(sh.world.node)
+    rclpy.shutdown()
 
 def main():
     # Creates an object of class 'World'
     sh.world = World('/workspaces/makara/ros2_ws/src/mav_simulator/mav_simulator/world_file.yml')
 
+    # rclpy.init()
+    # world_node = World_Node(world_rate=1/sh.dt)
+    # sh.world.node = world_node
+    # sh.world.start_vessel_ros_nodes()
+    # rclpy.spin(world_node)
+    # rclpy.shutdown()
+
     rclpy.init()
     world_node = World_Node(world_rate=1/sh.dt)
     sh.world.node = world_node
     sh.world.start_vessel_ros_nodes()
-    rclpy.spin(world_node)
-    rclpy.shutdown()
 
+    # Run ROS on a separate thread
+    ros_thread_instance = threading.Thread(target=ros_thread)
+    ros_thread_instance.start()
 
-    # rclpy.init()
-    # sh.world.node = World_Node()
-    # sh.world.start_vessel_ros_nodes()
+    # Run asyncio on a separate thread
+    async def handler(websocket):
+        while True:
+            for vessel in sh.world.vessels:
+                state = vessel.current_state
+                data = {}
+                data['vessel'] = vessel.vessel_node.topic_prefix
+                data['rudder'] = state[13] * 180 / np.pi
+                data['propeller'] = state[14] * 60
+                
+                await websocket.send(json.dumps(data))
+            sleep_time = np.max(np.array([1/sh.world.node.rate, 1/30.0]))
+            await asyncio.sleep(sleep_time)
 
-    # async def handler(websocket):
-
-    #     while rclpy.ok():
-    #         data = []
-    #         for vessel in sh.world.vessels:
-    #             state=vessel.current_state
-    #             eul=kin.quat_to_eul(state[9:13])
-    #             state_eul=state[6:9].tolist()+eul.tolist()
-    #             data.append(state_eul)
-
-    #         await websocket.send(json.dumps(data))
-    #         # await asyncio.sleep(0.01)
-    #         # sh.world.step()
-    #         rclpy.spin_once(sh.world.node)
-    #     rclpy.shutdown()
-
-    #     # Send subsequent lists, one element at a tim
-
-    # start_server = websockets.serve(handler, "localhost", 9000)
-
-    # asyncio.get_event_loop().run_until_complete(start_server)
-    # asyncio.get_event_loop().run_forever()
+    start_server = websockets.serve(handler, "0.0.0.0", 9002)
+    asyncio.get_event_loop().run_until_complete(start_server)
+    asyncio.get_event_loop().run_forever()
 
 if __name__ == '__main__':
-    print('$(pwd)')    
     main()
-
-
-

@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /workspaces/makara/ros1_ws/devel/setup.sh

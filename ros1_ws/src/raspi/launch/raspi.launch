@@ -1,0 +1,21 @@
+<launch>
+
+  <!-- <node pkg="raspi" name="Actuator_Publisher" type="actuator_publisher.py" /> -->
+
+  <!-- <node pkg="raspi" name="Encoder_Listener" type="encoder_listener.py" output="screen" /> -->
+
+  <node pkg="rosserial_python" type="serial_node.py" name="EncoderReturn">
+    <param name="port" value="/dev/ttyACM0"/>
+    <param name="baud" value="115200"/>
+  </node>
+
+  <node pkg="rosserial_python" type="serial_node.py" name="absoluteEncoder">
+    <param name="port" value="/dev/ttyACM1"/>
+    <param name="baud" value="115200"/>
+  </node>
+  
+  <node pkg="raspi" name="RasPi_ROS1" type="raspi.py" output="screen" />
+
+
+
+</launch>

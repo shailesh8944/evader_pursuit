@@ -21,7 +21,6 @@ setup(
     entry_points={
         'console_scripts': [
             'simulate = mav_simulator.simulate:main',
-            'gnc = mav_simulator.class_gnc:main'
         ],
     },
 )
