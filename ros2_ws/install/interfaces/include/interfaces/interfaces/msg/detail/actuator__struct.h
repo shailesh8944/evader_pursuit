@@ -27,6 +27,7 @@ typedef struct interfaces__msg__Actuator
   std_msgs__msg__Header header;
   double rudder;
   double propeller;
+  double covariance[4];
 } interfaces__msg__Actuator;
 
 // Struct for a sequence of interfaces__msg__Actuator.

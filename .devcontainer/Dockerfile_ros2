@@ -1,0 +1,50 @@
+FROM ros:humble
+
+RUN apt-get update
+RUN apt-get -y install software-properties-common
+RUN add-apt-repository universe
+RUN apt-get update
+RUN apt-get -y install gcc gfortran git
+RUN apt-get -y install python3-pip python3-serial
+RUN apt-get -y install libsm6 libxext6 libxrender1 libfontconfig1 libgl1 sudo xauth htop udev
+
+ENV USERNAME mavlab
+RUN useradd -m $USERNAME && \
+       echo "$USERNAME:$USERNAME" | chpasswd && \
+       usermod --shell /bin/bash $USERNAME && \
+       usermod -aG sudo $USERNAME && \
+       usermod -a -G dialout $USERNAME && \
+       echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USERNAME && \
+       chmod 0440 /etc/sudoers.d/$USERNAME
+
+USER mavlab
+WORKDIR /home/mavlab
+
+COPY requirements_ros2.txt /home/mavlab/
+RUN pip install -r requirements_ros2.txt
+ENV PATH=$PATH:/home/mavlab/.local/bin
+
+ENV PYTHONPATH=$PYTHONPATH/workspaces/makara/ros2_ws/install/mav_simulator/lib/python3.10/site-packages/mav_simulator:/workspaces/makara/ros2_ws/install/gnc/lib/python3.10/site-packages/gnc/:/workspaces/makara/ros2_ws/install/uwb_driver/lib/python3.10/site-packages/uwb_driver/
+
+RUN echo "source /opt/ros/humble/setup.bash" >> /home/mavlab/.bashrc
+RUN echo "alias sros2='source /opt/ros/humble/setup.bash && source /workspaces/makara/ros2_ws/install/setup.bash'" >> ~/.bashrc
+RUN echo "alias sbg='sros2 && ros2 launch sbg_driver sbg_device_launch.py'" >> ~/.bashrc
+RUN echo "alias uwb='sros2 && ros2 run uwb_driver uwb'" >> ~/.bashrc
+RUN echo "alias gnc='sros2 && ros2 run gnc gnc'" >> ~/.bashrc
+RUN echo "alias mavsim='sros2 && ros2 run mav_simulator simulate'" >> ~/.bashrc
+
+# Setup SBG drivers
+COPY sbg_setup.sh /home/mavlab/
+RUN ./sbg_setup.sh
+
+# For web application
+EXPOSE 9000
+
+# For actuator data transfer from gnc (jeston ROS2) to raspi (raspi ROS1)
+EXPOSE 9001
+
+# For encoder data transfer from mav_simulator (jeston ROS2) to raspi (raspi ROS1)
+EXPOSE 9002
+
+# For encoder data transfer from raspi (raspi ROS1) to gnc (jetson ROS2)
+EXPOSE 9003

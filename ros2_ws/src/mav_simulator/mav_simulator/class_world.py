@@ -36,10 +36,10 @@ class World():
             sh.dt = data['time_step']
             self.nvessels = data['nagents']
             agent_count = 0
-
+            
             for agent in data['agents'][0:self.nvessels]:
                 # Appends the objects of class 'Vessel' to the list 'vessels'
-                self.vessels.append(Vessel(agent, vessel_id=agent_count))
+                self.vessels.append(Vessel(vessel_data=agent, vessel_id=agent_count))
                 agent_count += 1
 
             if data.get('waves') is not None:
@@ -54,7 +54,6 @@ class World():
         except yaml.YAMLError as exc:
             print(exc)
             exit()
-        pass
 
     def step(self):
         for vessel in self.vessels:

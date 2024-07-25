@@ -69,7 +69,7 @@ def eul_to_rotm(eul, order='ZYX', deg=False):
     return rotm
 
 # Compute Euler angles from rotation matrix
-def rotm_to_eul(rotm, order='ZYX', prev_eul=None, deg=False):
+def rotm_to_eul(rotm, order='ZYX', prev_eul=None, deg=False, silent=True):
     eul = np.zeros(3, dtype=float)
     
     if order != 'ZYX':
@@ -115,7 +115,8 @@ def rotm_to_eul(rotm, order='ZYX', prev_eul=None, deg=False):
             else:
                 eul = eul2
         else:
-            warnings.warn(f'Both ({eul1[0]*180/np.pi:.2f}, {eul1[1]*180/np.pi:.2f}, {eul1[2]*180/np.pi:.2f}) and ({eul2[0]*180/np.pi:.2f}, {eul2[1]*180/np.pi:.2f}, {eul2[2]*180/np.pi:.2f}) are possible. But the first set is chosen!')
+            if not silent:
+                warnings.warn(f'Both ({eul1[0]*180/np.pi:.2f}, {eul1[1]*180/np.pi:.2f}, {eul1[2]*180/np.pi:.2f}) and ({eul2[0]*180/np.pi:.2f}, {eul2[1]*180/np.pi:.2f}, {eul2[2]*180/np.pi:.2f}) are possible. But the first set is chosen!')
             eul = eul1
         
         if deg:
@@ -153,7 +154,7 @@ def eul_to_quat(eul, order='ZYX', deg=False):
     return quat
 
 # Compute Euler angles from quaternion
-def quat_to_eul(quat, order='ZYX', deg=False):
+def quat_to_eul(quat, order='ZYX', deg=False, prev_quat=None, silent=True):
     eul = np.zeros(3, dtype=float)
     
     if order != 'ZYX':
@@ -167,14 +168,47 @@ def quat_to_eul(quat, order='ZYX', deg=False):
         qy = quat[2]
         qz = quat[3]
 
-        phi = np.arctan2(2 * (qy * qz + qx * qw), 1 - 2 * (qx ** 2 + qy ** 2))
-        theta = np.arcsin(2 * (qy * qw - qx * qz))
-        psi = np.arctan2(2 * (qx * qy + qz * qw), 1 - 2 * (qy ** 2 + qz ** 2))
+        theta1 = np.arcsin(2 * (qy * qw - qx * qz))
+        
+        if theta1 > 0:
+            theta2 = np.pi - theta1
+        else:
+            theta2 = -np.pi - theta1
+        
+        if theta1 == np.pi/2:
+            phi1 = np.arctan2(2 * (qx * qy - qz * qw), 1 - 2 * (qx ** 2 + qz ** 2))
+            psi1 = 0
 
-        eul[0] = phi
-        eul[1] = theta
-        eul[2] = psi
+            phi2 = phi1
+            psi2 = psi1        
 
+        elif theta1 == -np.pi/2:
+            phi1 = np.arctan2(-2 * (qx * qy - qz * qw), 1 - 2 * (qx ** 2 + qz ** 2))
+            psi1 = 0
+
+            phi2 = phi1
+            psi2 = psi1
+
+        else:
+            phi1 = np.arctan2(2 * (qy * qz + qx * qw), 1 - 2 * (qx ** 2 + qy ** 2))
+            phi2 = np.arctan2(-2 * (qy * qz + qx * qw), -1 + 2 * (qx ** 2 + qy ** 2))
+
+            psi1 = np.arctan2(2 * (qx * qy + qz * qw), 1 - 2 * (qy ** 2 + qz ** 2))
+            psi2 = np.arctan2(-2 * (qx * qy + qz * qw), -1 + 2 * (qy ** 2 + qz ** 2))
+        
+        eul1 = np.array([phi1, theta1, psi1])
+        eul2 = np.array([phi2, theta2, psi2])
+
+    if prev_quat is not None:
+        if np.linalg.norm(eul1 - quat_to_eul(prev_quat)) >= np.linalg.norm(eul2 - quat_to_eul(prev_quat)):
+            eul = eul1
+        else:
+            eul = eul2
+    else:
+        if not silent:
+            warnings.warn(f'Both ({eul1[0]*180/np.pi:.2f}, {eul1[1]*180/np.pi:.2f}, {eul1[2]*180/np.pi:.2f}) and ({eul2[0]*180/np.pi:.2f}, {eul2[1]*180/np.pi:.2f}, {eul2[2]*180/np.pi:.2f}) are possible. But the first set is chosen!')
+        eul = eul1
+        
     if deg:
         eul = eul * 180 / np.pi
 
@@ -215,30 +249,77 @@ def rotm_to_quat(rotm):
 
     # Write your code here
 
-    r11 = rotm[0, 0]
-    r12 = rotm[0, 1]
-    r13 = rotm[0, 2]
+    trace = np.trace(rotm)
+    
+    if trace > 0:
+        S = np.sqrt(trace + 1.0) * 2
+        w = 0.25 * S
+        x = (rotm[2, 1] - rotm[1, 2]) / S
+        y = (rotm[0, 2] - rotm[2, 0]) / S
+        z = (rotm[1, 0] - rotm[0, 1]) / S
+    elif (rotm[0, 0] > rotm[1, 1]) and (rotm[0, 0] > rotm[2, 2]):
+        S = np.sqrt(1.0 + rotm[0, 0] - rotm[1, 1] - rotm[2, 2]) * 2
+        w = (rotm[2, 1] - rotm[1, 2]) / S
+        x = 0.25 * S
+        y = (rotm[0, 1] + rotm[1, 0]) / S
+        z = (rotm[0, 2] + rotm[2, 0]) / S
+    elif rotm[1, 1] > rotm[2, 2]:
+        S = np.sqrt(1.0 + rotm[1, 1] - rotm[0, 0] - rotm[2, 2]) * 2
+        w = (rotm[0, 2] - rotm[2, 0]) / S
+        x = (rotm[0, 1] + rotm[1, 0]) / S
+        y = 0.25 * S
+        z = (rotm[1, 2] + rotm[2, 1]) / S
+    else:
+        S = np.sqrt(1.0 + rotm[2, 2] - rotm[0, 0] - rotm[1, 1]) * 2
+        w = (rotm[1, 0] - rotm[0, 1]) / S
+        x = (rotm[0, 2] + rotm[2, 0]) / S
+        y = (rotm[1, 2] + rotm[2, 1]) / S
+        z = 0.25 * S
 
-    r21 = rotm[1, 0]
-    r22 = rotm[1, 1]
-    r23 = rotm[1, 2]
+    return np.array([w, x, y, z])
 
-    r31 = rotm[2, 0]
-    r32 = rotm[2, 1]
-    r33 = rotm[2, 2]
+    # Old code (not quite accurate)
+    # r11 = rotm[0, 0]
+    # r12 = rotm[0, 1]
+    # r13 = rotm[0, 2]
 
-    qw = np.sqrt(r11 + r22 + r33 + 1) / 2
-    qx = (r32 - r23) / (2 * qw)
-    qy = (r13 - r31) / (2 * qw)
-    qz = (r21 - r12) / (2 * qw)
+    # r21 = rotm[1, 0]
+    # r22 = rotm[1, 1]
+    # r23 = rotm[1, 2]
 
-    quat[0] = qw
-    quat[1] = qx
-    quat[2] = qy
-    quat[3] = qz
+    # r31 = rotm[2, 0]
+    # r32 = rotm[2, 1]
+    # r33 = rotm[2, 2]
 
-    quat = quat / np.linalg.norm(quat)
+    # qw = np.sqrt(r11 + r22 + r33 + 1) / 2
+    # qx = (r32 - r23) / (2 * qw)
+    # qy = (r13 - r31) / (2 * qw)
+    # qz = (r21 - r12) / (2 * qw)
 
+    # quat[0] = qw
+    # quat[1] = qx
+    # quat[2] = qy
+    # quat[3] = qz
+
+    # quat = quat / np.linalg.norm(quat)
+
+    # return quat
+
+def quat_multiply(q1, q2):
+
+    w1 = q1[0]; x1 = q1[1]; y1 = q1[2]; z1 = q1[3]
+    w2 = q2[0]; x2 = q2[1]; y2 = q2[2]; z2 = q2[3]
+
+    return np.array([
+        w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+        w1 * x2 + w2 * x1 + y1 * z2 - y2 * z1,
+        w1 * y2 + w2 * y1 + z1 * x2 - z2 * x1,
+        w1 * z2 + w2 * z1 + x1 * y2 - x2 * y1
+    ])
+
+def quat_conjugate(quat):
+    q = quat.copy()
+    q[1:3] = -quat[1:3]
     return quat
 
 # Compute T matrix (or J2 matrix) from Euler angles
@@ -323,12 +404,77 @@ def quat_rate(quat, w):
     
     return dquat
 
+def deul_dquat(quat):
+    
+    w = quat[0]
+    x = quat[1]
+    y = quat[2]
+    z = quat[3]
+
+    dphi_dw = -(2*x*(2*x**2 + 2*y**2 - 1))/(4*w**2*x**2 + 8*w*x*y*z + 4*x**4 + 8*x**2*y**2 - 4*x**2 + 4*y**4 + 4*y**2*z**2 - 4*y**2 + 1)
+    dphi_dx = (2*(2*w*x**2 + 4*z*x*y - 2*w*y**2 + w))/(4*w**2*x**2 + 8*w*x*y*z + 4*x**4 + 8*x**2*y**2 - 4*x**2 + 4*y**4 + 4*y**2*z**2 - 4*y**2 + 1)
+    dphi_dy = (2*(- 2*z*x**2 + 4*w*x*y + 2*z*y**2 + z))/(4*w**2*x**2 + 8*w*x*y*z + 4*x**4 + 8*x**2*y**2 - 4*x**2 + 4*y**4 + 4*y**2*z**2 - 4*y**2 + 1)
+    dphi_dz = -(2*y*(2*x**2 + 2*y**2 - 1))/(4*w**2*x**2 + 8*w*x*y*z + 4*x**4 + 8*x**2*y**2 - 4*x**2 + 4*y**4 + 4*y**2*z**2 - 4*y**2 + 1)
+
+    dtheta_dw = (2*y)/((- 4*w**2*y**2 + 8*w*x*y*z - 4*x**2*z**2 + 1)**(1/2))
+    dtheta_dx = -(2*z)/((- 4*w**2*y**2 + 8*w*x*y*z - 4*x**2*z**2 + 1)**(1/2))
+    dtheta_dy = (2*w)/((- 4*w**2*y**2 + 8*w*x*y*z - 4*x**2*z**2 + 1)**(1/2))
+    dtheta_dz = -(2*x)/((- 4*w**2*y**2 + 8*w*x*y*z - 4*x**2*z**2 + 1)**(1/2))
+
+    dpsi_dw = -(2*z*(2*y**2 + 2*z**2 - 1))/(4*w**2*z**2 + 8*w*x*y*z + 4*x**2*y**2 + 4*y**4 + 8*y**2*z**2 - 4*y**2 + 4*z**4 - 4*z**2 + 1)
+    dpsi_dx = -(2*y*(2*y**2 + 2*z**2 - 1))/(4*w**2*z**2 + 8*w*x*y*z + 4*x**2*y**2 + 4*y**4 + 8*y**2*z**2 - 4*y**2 + 4*z**4 - 4*z**2 + 1)
+    dpsi_dy = (2*(2*x*y**2 + 4*w*y*z - 2*x*z**2 + x))/(4*w**2*z**2 + 8*w*x*y*z + 4*x**2*y**2 + 4*y**4 + 8*y**2*z**2 - 4*y**2 + 4*z**4 - 4*z**2 + 1)
+    dpsi_dz = (2*(- 2*w*y**2 + 4*x*y*z + 2*w*z**2 + w))/(4*w**2*z**2 + 8*w*x*y*z + 4*x**2*y**2 + 4*y**4 + 8*y**2*z**2 - 4*y**2 + 4*z**4 - 4*z**2 + 1)
+
+    return np.array([
+        [dphi_dw, dphi_dx, dphi_dy, dphi_dz],
+        [dtheta_dw, dtheta_dx, dtheta_dy, dtheta_dz],
+        [dpsi_dw, dpsi_dx, dpsi_dy, dpsi_dz]
+    ])
+
+def dquat_deul(quat):
+
+    eul = quat_to_eul(quat)
+    phi = eul[0]
+    theta = eul[1]
+    psi = eul[2]
+
+    J = np.zeros((4, 3))
+    half_phi = phi / 2
+    half_theta = theta / 2
+    half_psi = psi / 2
+
+    J[0, 0] = -0.5 * np.sin(half_phi) * np.cos(half_theta) * np.cos(half_psi) + 0.5 * np.cos(half_phi) * np.sin(half_theta) * np.sin(half_psi)
+    J[0, 1] = -0.5 * np.cos(half_phi) * np.sin(half_theta) * np.cos(half_psi) + 0.5 * np.sin(half_phi) * np.cos(half_theta) * np.sin(half_psi)
+    J[0, 2] = -0.5 * np.cos(half_phi) * np.cos(half_theta) * np.sin(half_psi) + 0.5 * np.sin(half_phi) * np.sin(half_theta) * np.cos(half_psi)
+
+    J[1, 0] =  0.5 * np.cos(half_phi) * np.cos(half_theta) * np.cos(half_psi) + 0.5 * np.sin(half_phi) * np.sin(half_theta) * np.sin(half_psi)
+    J[1, 1] = -0.5 * np.sin(half_phi) * np.sin(half_theta) * np.cos(half_psi) - 0.5 * np.cos(half_phi) * np.cos(half_theta) * np.sin(half_psi)
+    J[1, 2] = -0.5 * np.sin(half_phi) * np.cos(half_theta) * np.sin(half_psi) - 0.5 * np.cos(half_phi) * np.sin(half_theta) * np.cos(half_psi)
+
+    J[2, 0] =  0.5 * np.cos(half_phi) * np.cos(half_theta) * np.sin(half_psi) - 0.5 * np.sin(half_phi) * np.sin(half_theta) * np.cos(half_psi)
+    J[2, 1] = -0.5 * np.sin(half_phi) * np.sin(half_theta) * np.sin(half_psi) + 0.5 * np.cos(half_phi) * np.cos(half_theta) * np.cos(half_psi)
+    J[2, 2] =  0.5 * np.sin(half_phi) * np.cos(half_theta) * np.cos(half_psi) - 0.5 * np.cos(half_phi) * np.sin(half_theta) * np.sin(half_psi)
+
+    J[3, 0] = -0.5 * np.sin(half_phi) * np.cos(half_theta) * np.sin(half_psi) - 0.5 * np.cos(half_phi) * np.sin(half_theta) * np.cos(half_psi)
+    J[3, 1] = -0.5 * np.cos(half_phi) * np.sin(half_theta) * np.sin(half_psi) - 0.5 * np.sin(half_phi) * np.cos(half_theta) * np.cos(half_psi)
+    J[3, 2] =  0.5 * np.cos(half_phi) * np.cos(half_theta) * np.cos(half_psi) + 0.5 * np.sin(half_phi) * np.sin(half_theta) * np.sin(half_psi)
+
+    return J
+
 def ssa(ang, deg=False):
     if deg:
         ang = (ang + 180) % (360.0) - 180.0
     else:
         ang = (ang + np.pi) % (2 * np.pi) - np.pi
     return ang
+
+# Clips the value to plus minus threshold
+def clip(value, threshold):
+    if np.abs(value) > threshold:
+        return np.sign(value) * threshold
+    else:
+        return value
 
 def ned_to_llh(ned, llh0):
     xn = ned[0]
@@ -451,5 +597,22 @@ def Smat(vec):
     return S - S.T
 
 if __name__ == "__main__":
-    wp = generate_waypoints()
-    print(wp)
+    q1 = np.random.random(4)
+    q1 = q1 / np.linalg.norm(q1)
+
+    q2 = np.random.random(4)
+    q2 = q2 / np.linalg.norm(q2)
+
+    R1 = quat_to_rotm(q1)
+    R2 = quat_to_rotm(q2)
+
+    R = R1 @ R2
+    q = quat_multiply(q1, q2)
+    R_q = quat_to_rotm(q)
+
+    print(R)
+    print(R_q)
+
+    eul = np.array([0.5, 0.3, 0.7])
+    q = eul_to_quat(eul)
+    print(dquat_deul(q))

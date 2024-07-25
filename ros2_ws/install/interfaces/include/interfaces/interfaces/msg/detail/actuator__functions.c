@@ -28,6 +28,7 @@ interfaces__msg__Actuator__init(interfaces__msg__Actuator * msg)
   }
   // rudder
   // propeller
+  // covariance
   return true;
 }
 
@@ -41,6 +42,7 @@ interfaces__msg__Actuator__fini(interfaces__msg__Actuator * msg)
   std_msgs__msg__Header__fini(&msg->header);
   // rudder
   // propeller
+  // covariance
 }
 
 bool
@@ -63,6 +65,12 @@ interfaces__msg__Actuator__are_equal(const interfaces__msg__Actuator * lhs, cons
   if (lhs->propeller != rhs->propeller) {
     return false;
   }
+  // covariance
+  for (size_t i = 0; i < 4; ++i) {
+    if (lhs->covariance[i] != rhs->covariance[i]) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -84,6 +92,10 @@ interfaces__msg__Actuator__copy(
   output->rudder = input->rudder;
   // propeller
   output->propeller = input->propeller;
+  // covariance
+  for (size_t i = 0; i < 4; ++i) {
+    output->covariance[i] = input->covariance[i];
+  }
   return true;
 }
 

@@ -45,17 +45,20 @@ struct Actuator_
     {
       this->rudder = 0.0;
       this->propeller = 0.0;
+      std::fill<typename std::array<double, 4>::iterator, double>(this->covariance.begin(), this->covariance.end(), 0.0);
     }
   }
 
   explicit Actuator_(const ContainerAllocator & _alloc, rosidl_runtime_cpp::MessageInitialization _init = rosidl_runtime_cpp::MessageInitialization::ALL)
-  : header(_alloc, _init)
+  : header(_alloc, _init),
+    covariance(_alloc)
   {
     if (rosidl_runtime_cpp::MessageInitialization::ALL == _init ||
       rosidl_runtime_cpp::MessageInitialization::ZERO == _init)
     {
       this->rudder = 0.0;
       this->propeller = 0.0;
+      std::fill<typename std::array<double, 4>::iterator, double>(this->covariance.begin(), this->covariance.end(), 0.0);
     }
   }
 
@@ -69,6 +72,9 @@ struct Actuator_
   using _propeller_type =
     double;
   _propeller_type propeller;
+  using _covariance_type =
+    std::array<double, 4>;
+  _covariance_type covariance;
 
   // setters for named parameter idiom
   Type & set__header(
@@ -87,6 +93,12 @@ struct Actuator_
     const double & _arg)
   {
     this->propeller = _arg;
+    return *this;
+  }
+  Type & set__covariance(
+    const std::array<double, 4> & _arg)
+  {
+    this->covariance = _arg;
     return *this;
   }
 
@@ -139,6 +151,9 @@ struct Actuator_
       return false;
     }
     if (this->propeller != other.propeller) {
+      return false;
+    }
+    if (this->covariance != other.covariance) {
       return false;
     }
     return true;

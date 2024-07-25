@@ -1,11 +1,12 @@
 import os
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess
+from launch.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
-        ExecuteProcess(
-            cmd=[os.path.join(os.getcwd(), 'gnc', 'start_gnc.py')],
-            output='screen',
+        Node(
+            package='gnc',  # Replace with your package name
+            executable='start_gnc.py',  # Replace with your script name
+            name='GNC'
         )
     ])

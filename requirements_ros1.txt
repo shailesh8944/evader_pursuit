@@ -1,8 +1,9 @@
 pynput
 numpy
 scipy
+websockets
 serial
 pyserial
-websockets
 setuptools==58.2.0
 websocket-client
+flask

@@ -18,8 +18,7 @@ class Vessel():
     start_location = np.zeros(3)
     start_orientation = np.zeros(4)
     start_rudder_cmd = 0.0
-    start_propeller_cmd = 0.0
-    publish_rate = 10          # Rate of vessel odom publisher
+    start_propeller_cmd = 0.0    
     
     dt = 0.1                   # Initialization of dt. Ideally we should set the value of dt for the world itself
     ode = None                 # Will be a function imported from module_dynamics
@@ -41,9 +40,12 @@ class Vessel():
         self.vessel_id = vessel_id
 
         if isinstance(vessel_data, str):
-            vessel_data = yaml.safe_load(vessel_data)
+            with open(vessel_data) as stream:
+                vessel_data_yaml = yaml.safe_load(stream)
+            self.process_vessel_input(vessel_data_yaml)
+        else:
+            self.process_vessel_input(vessel_data)
         
-        self.process_vessel_input(vessel_data)  
         current_state = []
         current_state.extend(self.start_velocity.tolist())
         current_state.extend(self.start_angular_velocity.tolist())
@@ -189,9 +191,10 @@ class Vessel():
             
 
         if 'sensors' in list(data.keys()):
+            self.sensors = []
             for sensor in data['sensors']:
                 self.sensors.append(sensor)
-        
+
         # If by mistake we set different dt for each vessel in world_file.yml then it could mess up the stepping of each vessel
         # When we initialize the objects of vessel class we can send 'world_data' also as an argument
         # The 'world_data' can include 'rho', 'g', 'dt' and other world parameters related to external forces
@@ -211,10 +214,11 @@ class Vessel():
 
         deltad_max = 3 * np.pi / 180 * np.sqrt(self.length * self.scale / sh.g) / self.Fn
         T_rud = 1 / (4 * deltad_max)
+        T_prop = T_rud
         
         self.ode_options = dyn.ode_options(scale=self.scale,
                             deltad_max = deltad_max,
-                            T_prop = 0.1*T_rud, 
+                            T_prop = T_prop, 
                             T_rud = T_rud, 
                             nd_max=100)
 
@@ -348,7 +352,55 @@ class Vessel():
         self.ode_options['D_prop'] = self.propeller_diameter / self.length
         self.ode_options['rudder_area'] = 0.002415163 # (taken from accompanying excel sheet in hullform folder)
         self.ode_options['rudder_aspect_ratio'] = 1.25 # (taken from accompanying excel sheet in hullform folder)
+        
+        D_prop = self.ode_options['D_prop']
+        A_R = self.ode_options['rudder_area']
+        Lamda = self.ode_options['rudder_aspect_ratio']
+        pow_coeff_port = self.ode_options['pow_coeff_port']
+        pow_coeff_stbd = self.ode_options['pow_coeff_stbd']
+        
+        pow_coeff = 0.5 * (pow_coeff_port + pow_coeff_stbd)           
 
+        wp = 0.355              # Effective Wake Fraction of the Propeller (taken from KCS)
+        tp = 0.207              # Thrust Deduction Factor (taken from KCS)
+        xp_R = -0.46104         # Rudder stock location based on geometry (calculated from Rhino)
+        tR = 1 - 0.75           # Steering resistance deduction factor - taken from KCS - value modified
+        aH = 0.0                # Rudder force increase factor - taken from KCS - value modified
+        xp_H = xp_R             # Longitudinal coordinate of acting point of the additional lateral force -  taken from KCS - value modified (same as rudder stock)
+        eta = 0.6               # Ratio of propeller diameter to height of rudder in slipstream
+        eps = 1.0               # Ratio of (1 - wR) / (1 - wP)
+        X_by_Dp = 0.766797661   # Full scale X/D = 4.0/5.2165
+        lp_R = -0.75            # Effective longitudinal coordinate of rudder position (taken from KCS - value modified)
+        gamma_R1 = 0.6          # gamma_R for b_p > 0 (formula from from KCS structure - values modified)
+        gamma_R2 = 0.3          # gamma_R for b_p < 0 (formula from from KCS structure - values modified)
+        
+        self.ode_options['wp'] = wp
+        self.ode_options['tp'] = tp
+        self.ode_options['xp_R'] = xp_R
+        self.ode_options['tR'] = tR
+        self.ode_options['aH'] = aH
+        self.ode_options['xp_H'] = xp_H
+        self.ode_options['eta'] = eta
+        self.ode_options['eps'] = eps
+        self.ode_options['X_by_Dp'] = X_by_Dp
+        self.ode_options['lp_R'] = lp_R
+        self.ode_options['gamma_R1'] = gamma_R1
+        self.ode_options['gamma_R2'] = gamma_R2
+         
+        n_prop = (800 / 60 ) * self.length / self.U_des
+        up_prop = (1 - wp)
+        kappa_R = 0.5 + 0.5 * X_by_Dp / (X_by_Dp + 0.15)
+        f_alp = 6.13 * Lamda / (2.25 + Lamda)
+        
+        Kt_up2_by_J2 = pow_coeff[0] * (up_prop ** 2) + pow_coeff[1] * n_prop * D_prop * up_prop + pow_coeff[2] * (n_prop * D_prop) ** 2
+        Up_R = eps * np.sqrt( eta * (up_prop + kappa_R * (np.sqrt(up_prop ** 2 + 8/np.pi * Kt_up2_by_J2) - up_prop)) ** 2 + (1 - eta) * up_prop ** 2 )
+        F_N = A_R * f_alp * (Up_R ** 2)
+
+        self.ode_options['X_d_d'] = - (1 - tR) * F_N
+        self.ode_options['Y_d'] = - (1 + aH) * F_N
+        self.ode_options['N_d'] = - (xp_R + aH * xp_H) * F_N
+        self.ode_options['X_n'] = 2 * (1 - tp) * (D_prop ** 2) * ((1 - wp) * D_prop * pow_coeff[1] + 2 * n_prop * (D_prop ** 2) * pow_coeff[2])
+        self.ode_options['X_n_n'] = 2 * (1 - tp) * (D_prop ** 2) * (2 * (D_prop ** 2) * pow_coeff[2])
 
     def cross_flow_drag(self):
         Cd_2D = self.hoerner()
@@ -439,6 +491,11 @@ class Vessel():
             tspan = (sh.current_time * self.U_des / self.length, (sh.current_time + sh.dt) * self.U_des / self.length)
         
         delta_c, n_c = self.vessel_node.delta_c, self.vessel_node.n_c * self.length / self.U_des
+        if np.isnan(delta_c):
+            delta_c = 0
+
+        if np.isnan(n_c):
+            n_c = 0
 
         sol = solve_ivp(self.ode, tspan, state, args=(delta_c, n_c, self.ode_options))
         new_state = np.array(sol.y)[:,-1]
@@ -475,16 +532,17 @@ class Vessel():
     def print_state(self):
 
         eul = kin.quat_to_eul(self.current_state[9:13])
-        str0 = f"Time (sec)               : {sh.current_time:.2f}"
-        str1 = f"Linear Velocity (m/s)    : {self.current_state[0]:.4f}, {self.current_state[1]:.4f}, {self.current_state[2]:.4f}"
-        str2 = f"Angular Velocity (rad/s) : {self.current_state[3]:.4f}, {self.current_state[4]:.4f}, {self.current_state[5]:.4f}"
-        str3 = f"Linear Position  (m)     : {self.current_state[6]:.4f}, {self.current_state[7]:.4f}, {self.current_state[8]:.4f}"
-        str4 = f"Orientation (deg)        : {eul[0]*180/np.pi:.2f}, {eul[1]*180/np.pi:.2f}, {eul[2]*180/np.pi:.2f}"
-        str5 = f"Unit Quaternion          : {self.current_state[9]:.2f}, {self.current_state[10]:.2f}, {self.current_state[11]:.2f}, {self.current_state[12]:.2f}"
-        str6 = f"Rudder Angle (deg)       : {self.current_state[13] * 180 / np.pi:.2f}"
-        str7 = f"Propeller Speed (RPM)    : {self.current_state[14] * 60:.2f}\n\n"
+        str0 = f"Vessel ID                : {self.vessel_id}"
+        str1 = f"Time (sec)               : {sh.current_time:.2f}"
+        str2 = f"Linear Velocity (m/s)    : {self.current_state[0]:.4f}, {self.current_state[1]:.4f}, {self.current_state[2]:.4f}"
+        str3 = f"Angular Velocity (rad/s) : {self.current_state[3]:.4f}, {self.current_state[4]:.4f}, {self.current_state[5]:.4f}"
+        str4 = f"Linear Position  (m)     : {self.current_state[6]:.4f}, {self.current_state[7]:.4f}, {self.current_state[8]:.4f}"
+        str5 = f"Orientation (deg)        : {eul[0]*180/np.pi:.2f}, {eul[1]*180/np.pi:.2f}, {eul[2]*180/np.pi:.2f}"
+        str6 = f"Unit Quaternion          : {self.current_state[9]:.2f}, {self.current_state[10]:.2f}, {self.current_state[11]:.2f}, {self.current_state[12]:.2f}"
+        str7 = f"Rudder Angle (deg)       : {self.current_state[13] * 180 / np.pi:.2f}"
+        str8 = f"Propeller Speed (RPM)    : {self.current_state[14] * 60:.2f}\n\n"
 
-        print(str0); print(str1); print(str2); print(str3); print(str4); print(str5); print(str6); print(str7)        
+        print(str0); print(str1); print(str2); print(str3); print(str4); print(str5); print(str6); print(str7); print(str8)
 
     def reset(self):
         pass

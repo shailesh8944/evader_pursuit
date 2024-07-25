@@ -1,0 +1,44 @@
+FROM ros:noetic
+# FROM arm64v8/ros:noetic
+
+RUN apt-get update
+RUN apt-get -y install software-properties-common
+RUN add-apt-repository universe
+RUN apt-get update
+RUN apt-get -y install gcc gfortran git
+RUN apt-get -y install python3-pip
+RUN apt-get -y install libsm6 libxext6 libxrender1 libfontconfig1 libgl1 sudo xauth htop udev
+
+ENV USERNAME mavlab
+RUN useradd -m $USERNAME && \
+       echo "$USERNAME:$USERNAME" | chpasswd && \
+       usermod --shell /bin/bash $USERNAME && \
+       usermod -aG sudo $USERNAME && \
+       usermod -a -G dialout $USERNAME && \
+       echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USERNAME && \
+       chmod 0440 /etc/sudoers.d/$USERNAME
+
+USER mavlab
+WORKDIR /home/mavlab
+
+COPY requirements_ros1.txt /home/mavlab/
+RUN pip install -r requirements_ros1.txt
+ENV PATH=$PATH:/home/mavlab/.local/bin
+
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/aarch64-linux-gnu/
+
+RUN echo "source /opt/ros/noetic/setup.bash" >> /home/mavlab/.bashrc
+RUN echo "alias sros1='source /opt/ros/noetic/setup.bash && source /workspaces/makara/ros1_ws/devel/setup.bash'" >> ~/.bashrc
+RUN echo 'alias stopact="rostopic pub /ASV std_msgs/String \"0.0, 0.0\""' >> ~/.bashrc
+
+# For web application
+EXPOSE 9000
+
+# For actuator data transfer from gnc (jeston ROS2) to raspi (raspi ROS1)
+EXPOSE 9001
+
+# For encoder data transfer from mav_simulator (jeston ROS2) to raspi (raspi ROS1)
+EXPOSE 9002
+
+# For encoder data transfer from raspi (raspi ROS1) to gnc (jetson ROS2)
+EXPOSE 9003

@@ -20,7 +20,7 @@ def ros_thread():
 
 def main():
     # Creates an object of class 'World'
-    sh.world = World('/workspaces/makara/ros2_ws/src/mav_simulator/mav_simulator/world_file.yml')
+    sh.world = World('/workspaces/makara/inputs/inputs.yml')
 
     # rclpy.init()
     # world_node = World_Node(world_rate=1/sh.dt)

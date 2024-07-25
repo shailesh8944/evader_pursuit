@@ -6,12 +6,15 @@
 
 module interfaces {
   module msg {
+    typedef double double__4[4];
     struct Actuator {
       std_msgs::msg::Header header;
 
       double rudder;
 
       double propeller;
+
+      double__4 covariance;
     };
   };
 };

@@ -287,7 +287,7 @@ def kcs_ode(t, v, delta_c, n_c, options):
 
     return vd
 
-def onrt_ode(t, ss, delta_c, n_c, options):
+def onrt_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False):
 
     scale = options['scale']
     wind_flag = options['wind_flag']
@@ -331,6 +331,19 @@ def onrt_ode(t, ss, delta_c, n_c, options):
     A_R = options['rudder_area']
     Lamda = options['rudder_aspect_ratio']
 
+    wp = options['wp']
+    tp = options['tp']
+    xp_R = options['xp_R']
+    tR = options['tR']
+    aH = options['aH']
+    xp_H = options['xp_H']
+    eta = options['eta']
+    eps = options['eps']
+    X_by_Dp = options['X_by_Dp']
+    lp_R = options['lp_R']
+    gamma_R1 = options['gamma_R1']
+    gamma_R2 = options['gamma_R2']
+
     L = options['L']
     U_des = options['U_des']
 
@@ -340,11 +353,22 @@ def onrt_ode(t, ss, delta_c, n_c, options):
     pp = ss[3]; qp = ss[4]; rp = ss[5]
     xp = ss[6]; yp = ss[7]; zp = ss[8]
     
-    quat = ss[9:13]
-    eul = kin.quat_to_eul(quat)
-    phi = eul[0]; theta = eul[1]; psi = eul[2]
+    if euler_angle_flag:
+        eul = ss[9:12]
+    else:
+        quat = ss[9:13]
+        eul = kin.quat_to_eul(quat)
     
-    delta = ss[13]; n_prop = ss[14]
+    phi = eul[0]; theta = eul[1]; psi = eul[2]
+
+    if euler_angle_flag:
+        rud_indx = 12
+        prop_indx = 13
+    else:
+        rud_indx = 13
+        prop_indx = 14
+    
+    delta = ss[rud_indx]; n_prop = ss[prop_indx]
 
     v1 = ss[0:3]; v2 = ss[3:6]
 
@@ -384,14 +408,11 @@ def onrt_ode(t, ss, delta_c, n_c, options):
     # Stiffness force calculation
 
     xi = np.zeros(6)
-    xi[0:3] = ss[6:9]
-    xi[3:6] = kin.quat_to_eul(ss[9:13])
+    xi[0:3] = ss[6:9]    
+    xi[3:6] = eul
     tau_K = -(K @ xi)
 
     # Propeller force calculation
-
-    wp = 0.355  # Effective Wake Fraction of the Propeller (taken from KCS)
-    tp = 0.207  # Thrust Deduction Factor (taken from KCS)
 
     X_port = pow_coeff_port[0] * ((up * (1 - wp)) **2) * (D_prop **2) \
                 + pow_coeff_port[1] * (up * (1 - wp)) * (n_prop * (D_prop ** 3)) \
@@ -406,9 +427,6 @@ def onrt_ode(t, ss, delta_c, n_c, options):
 
     # Rudder force calculation
     
-    eta = 0.6
-    eps = 1.0 # Ratio of (1 - wR) / (1 - wP)
-    X_by_Dp = 0.766797661           # Full scale X/D = 4.0/5.2165
     kappa_R = 0.5 + 0.5 * X_by_Dp / (X_by_Dp + 0.15)
 
     pow_coeff = 0.5 * (pow_coeff_port + pow_coeff_stbd)    
@@ -420,14 +438,11 @@ def onrt_ode(t, ss, delta_c, n_c, options):
     b = np.arctan2(-vp, up)     # Drift angle
     b_p = b - (-X_by_Dp * D_prop) * rp
     
-    # Effective longitudinal coordinate of rudder position
-    lp_R = -0.75 # (taken from KCS - value modified)
-    
     # gamma_R (formula from from KCS structure - values modified)
     if b_p > 0:
-        gamma_R = 0.6
+        gamma_R = gamma_R1 # 0.6
     else:
-        gamma_R = 0.3
+        gamma_R = gamma_R2 # 0.3
     
     vp_R = gamma_R * (vp + rp * lp_R)
 
@@ -443,12 +458,6 @@ def onrt_ode(t, ss, delta_c, n_c, options):
     # Rudder normal force
     F_N = A_R * f_alp * (Up_R ** 2) * np.sin(alpha_R)
 
-    
-    xp_R = -0.46104 # Rudder stock location based on geometry (calculated from Rhino)
-    tR = 1 - 0.75   # Steering resistance deduction factor - taken from KCS - value modified
-    aH = 0.0        # Rudder force increase factor - taken from KCS - value modified
-    xp_H = xp_R     # Longitudinal coordinate of acting point of the additional lateral force -  taken from KCS - value modified (same as rudder stock)
-
     Xp_R = - (1 - tR) * F_N * np.sin(delta)
     Yp_R = - (1 + aH) * F_N * np.cos(delta)
     Np_R = - (xp_R + aH * xp_H) * F_N * np.cos(delta)
@@ -456,7 +465,7 @@ def onrt_ode(t, ss, delta_c, n_c, options):
     tau_R = np.zeros(6)
     tau_R[0] = Xp_R
     tau_R[1] = Yp_R
-    tau_R[2] = Np_R
+    tau_R[5] = Np_R
 
     # Total force calculation
 
@@ -469,10 +478,20 @@ def onrt_ode(t, ss, delta_c, n_c, options):
     veld = M_inv @ tau
 
     # Derivative of state vector
-    ssd = np.zeros(15)
+    if euler_angle_flag:
+        n = 14
+    else:
+        n = 15
+
+    ssd = np.zeros(n)
     ssd[0:6] = veld
-    ssd[6:9] = kin.quat_to_rotm(quat) @ v1
-    ssd[9:13] = kin.quat_rate(quat, v2)
+
+    if euler_angle_flag:
+        ssd[6:9] = kin.eul_to_rotm(eul) @ v1
+        ssd[9:12] = kin.eul_rate(eul, v2)
+    else:
+        ssd[6:9] = kin.quat_to_rotm(quat) @ v1
+        ssd[9:13] = kin.quat_rate(quat, v2)
     
     # Rudder dynamics
 
@@ -489,8 +508,8 @@ def onrt_ode(t, ss, delta_c, n_c, options):
     if np.abs(nd_prop) > nd_max:
         nd_prop = np.sign(nd_prop) * nd_max
 
-    ssd[13] = deltad
-    ssd[14] = nd_prop
+    ssd[rud_indx] = deltad
+    ssd[prop_indx] = nd_prop
 
     return ssd
 

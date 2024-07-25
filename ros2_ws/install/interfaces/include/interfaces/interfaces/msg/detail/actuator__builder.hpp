@@ -21,16 +21,32 @@ namespace msg
 namespace builder
 {
 
+class Init_Actuator_covariance
+{
+public:
+  explicit Init_Actuator_covariance(::interfaces::msg::Actuator & msg)
+  : msg_(msg)
+  {}
+  ::interfaces::msg::Actuator covariance(::interfaces::msg::Actuator::_covariance_type arg)
+  {
+    msg_.covariance = std::move(arg);
+    return std::move(msg_);
+  }
+
+private:
+  ::interfaces::msg::Actuator msg_;
+};
+
 class Init_Actuator_propeller
 {
 public:
   explicit Init_Actuator_propeller(::interfaces::msg::Actuator & msg)
   : msg_(msg)
   {}
-  ::interfaces::msg::Actuator propeller(::interfaces::msg::Actuator::_propeller_type arg)
+  Init_Actuator_covariance propeller(::interfaces::msg::Actuator::_propeller_type arg)
   {
     msg_.propeller = std::move(arg);
-    return std::move(msg_);
+    return Init_Actuator_covariance(msg_);
   }
 
 private:

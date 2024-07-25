@@ -3,9 +3,12 @@
 import rospy
 import websocket
 from std_msgs.msg import String
+import time
 
 class WebSocketROSBridge_Actuator:
-    def __init__(self, websocket_url, ros_topic):
+    def __init__(self, node, websocket_url, ros_topic):
+        # Initialize ROS node
+        self.node = node
         self.websocket_url = websocket_url
         self.ros_topic = ros_topic
 
@@ -18,31 +21,34 @@ class WebSocketROSBridge_Actuator:
         self.pub.publish(message)
 
     def on_error(self, ws, error):
-        rospy.logerr("WebSocket error: %s", error)
+        rospy.logerr(f"WebSocket error: {error}")
 
     def on_close(self, ws, close_status_code, close_msg):
-        rospy.loginfo("WebSocket closed with status code %s: %s", close_status_code, close_msg)
+        rospy.loginfo(f"WebSocket closed with status code {close_status_code}: {close_msg}")
 
     def on_open(self, ws):
         rospy.loginfo("WebSocket connected")
 
     def run(self):
-        # Connect to the WebSocket server
-        # websocket.enableTrace(True)  # Enable trace for debugging (optional)
-        ws = websocket.WebSocketApp(self.websocket_url,
-                                    on_message=self.on_message,
-                                    on_error=self.on_error,
-                                    on_close=self.on_close)
-        ws.on_open = self.on_open
-        ws.run_forever()
+        while True:
+            time.sleep(5)
+            try:
+                # Connect to the WebSocket server
+                # websocket.enableTrace(True)  # Enable trace for debugging (optional)
+                ws = websocket.WebSocketApp(self.websocket_url,
+                                            on_message=self.on_message,
+                                            on_error=self.on_error,
+                                            on_close=self.on_close)
+                ws.on_open = self.on_open
+                ws.run_forever()
+            except:
+                pass
 
-if __name__ == '__main__':
-    # Initialize ROS node
-    rospy.init_node('actuator_publisher', anonymous=True)
+if __name__ == '__main__':   
 
     # Replace 'ws://example.com/socket' with your WebSocket URL
     # Replace '/ros_topic' with the name of your ROS topic
-    bridge = WebSocketROSBridge_Actuator(websocket_url='ws://192.168.0.27:9001',
+    bridge = WebSocketROSBridge_Actuator(websocket_url='ws://localhost:9001',
                                 ros_topic='/ASV')
     bridge.run()
     

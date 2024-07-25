@@ -47,6 +47,24 @@ inline void to_flow_style_yaml(
   {
     out << "propeller: ";
     rosidl_generator_traits::value_to_yaml(msg.propeller, out);
+    out << ", ";
+  }
+
+  // member: covariance
+  {
+    if (msg.covariance.size() == 0) {
+      out << "covariance: []";
+    } else {
+      out << "covariance: [";
+      size_t pending_items = msg.covariance.size();
+      for (auto item : msg.covariance) {
+        rosidl_generator_traits::value_to_yaml(item, out);
+        if (--pending_items > 0) {
+          out << ", ";
+        }
+      }
+      out << "]";
+    }
   }
   out << "}";
 }  // NOLINT(readability/fn_size)
@@ -82,6 +100,26 @@ inline void to_block_style_yaml(
     out << "propeller: ";
     rosidl_generator_traits::value_to_yaml(msg.propeller, out);
     out << "\n";
+  }
+
+  // member: covariance
+  {
+    if (indentation > 0) {
+      out << std::string(indentation, ' ');
+    }
+    if (msg.covariance.size() == 0) {
+      out << "covariance: []\n";
+    } else {
+      out << "covariance:\n";
+      for (auto item : msg.covariance) {
+        if (indentation > 0) {
+          out << std::string(indentation, ' ');
+        }
+        out << "- ";
+        rosidl_generator_traits::value_to_yaml(item, out);
+        out << "\n";
+      }
+    }
   }
 }  // NOLINT(readability/fn_size)
 

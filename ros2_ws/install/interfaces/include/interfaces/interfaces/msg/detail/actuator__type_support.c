@@ -37,7 +37,52 @@ void interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_fin
   interfaces__msg__Actuator__fini(message_memory);
 }
 
-static rosidl_typesupport_introspection_c__MessageMember interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_message_member_array[3] = {
+size_t interfaces__msg__Actuator__rosidl_typesupport_introspection_c__size_function__Actuator__covariance(
+  const void * untyped_member)
+{
+  (void)untyped_member;
+  return 4;
+}
+
+const void * interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_const_function__Actuator__covariance(
+  const void * untyped_member, size_t index)
+{
+  const double * member =
+    (const double *)(untyped_member);
+  return &member[index];
+}
+
+void * interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_function__Actuator__covariance(
+  void * untyped_member, size_t index)
+{
+  double * member =
+    (double *)(untyped_member);
+  return &member[index];
+}
+
+void interfaces__msg__Actuator__rosidl_typesupport_introspection_c__fetch_function__Actuator__covariance(
+  const void * untyped_member, size_t index, void * untyped_value)
+{
+  const double * item =
+    ((const double *)
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_const_function__Actuator__covariance(untyped_member, index));
+  double * value =
+    (double *)(untyped_value);
+  *value = *item;
+}
+
+void interfaces__msg__Actuator__rosidl_typesupport_introspection_c__assign_function__Actuator__covariance(
+  void * untyped_member, size_t index, const void * untyped_value)
+{
+  double * item =
+    ((double *)
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_function__Actuator__covariance(untyped_member, index));
+  const double * value =
+    (const double *)(untyped_value);
+  *item = *value;
+}
+
+static rosidl_typesupport_introspection_c__MessageMember interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_message_member_array[4] = {
   {
     "header",  // name
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
@@ -88,13 +133,30 @@ static rosidl_typesupport_introspection_c__MessageMember interfaces__msg__Actuat
     NULL,  // fetch(index, &value) function pointer
     NULL,  // assign(index, value) function pointer
     NULL  // resize(index) function pointer
+  },
+  {
+    "covariance",  // name
+    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
+    0,  // upper bound of string
+    NULL,  // members of sub message
+    true,  // is array
+    4,  // array size
+    false,  // is upper bound
+    offsetof(interfaces__msg__Actuator, covariance),  // bytes offset in struct
+    NULL,  // default value
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__size_function__Actuator__covariance,  // size() function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_const_function__Actuator__covariance,  // get_const(index) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_function__Actuator__covariance,  // get(index) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__fetch_function__Actuator__covariance,  // fetch(index, &value) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__assign_function__Actuator__covariance,  // assign(index, value) function pointer
+    NULL  // resize(index) function pointer
   }
 };
 
 static const rosidl_typesupport_introspection_c__MessageMembers interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_message_members = {
   "interfaces__msg",  // message namespace
   "Actuator",  // message name
-  3,  // number of fields
+  4,  // number of fields
   sizeof(interfaces__msg__Actuator),
   interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_message_member_array,  // message members
   interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_init_function,  // function to initialize message memory (memory has to be allocated)
