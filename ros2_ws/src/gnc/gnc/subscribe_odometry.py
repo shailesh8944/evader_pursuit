@@ -91,9 +91,21 @@ def start_flask():
     app_thread = threading.Thread(target=flask_thread)
     app_thread.start()
 
-@app.route('/odometry')
+@app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/odometry')
+def odometry():
+    return render_template('odometry.html')
+
+@app.route('/mission')
+def mission():
+    return render_template('mission.html')
+
+@app.route('/odometry_plot')
+def index():
+    return render_template('odomometry_chart.html')
 
 @app.route('/get_trajectory')
 def get_trajectory():
@@ -104,6 +116,15 @@ def get_trajectory():
 def get_encoders():
     global encoders
     return jsonify(encoders)
+
+@app.route('/get_state')
+def get_state():
+    global trajectory
+    global encoders
+    dict = {}
+    dict['odometry'] = trajectory[-1]
+    dict['encoders'] = encoders[-1]
+    return jsonify(dict)
 
 @app.route('/reset', methods=['POST'])
 def reset():
