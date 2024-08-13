@@ -2,11 +2,17 @@
 
 {% block title %}Odometry Plots{% endblock %}
 
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.27.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@0.1.1"></script>
+{% endblock %}
+
 {% block content %}
 <h1>Odometry Plots Page</h1>
 <p>This is the Odometry Plots page. You can add content related to the odometry plots here.</p>
 
-<div>
+<div class="my_div">
     <select id="chartSelect">
         <option value="XY">X-Y Path</option>
         <option value="YZ">Y-Z Path</option>
@@ -26,21 +32,23 @@
         <option value="rudder">Rudder Angle</option>
         <option value="propeller">Propeller RPM</option>        
     </select>
-</div>
-<div>
-    <style>
-    canvas {
-        width: auto; /* Set canvas height to auto for aspect ratio preservation */
-        height: auto; /* Set canvas width to 80% of container */
-        max-width: 800px; /* Limit maximum height to 800px */
-        max-height: 800px;
-    }
-    </style>
-    <canvas id="OdometryChart" width="800" height="400"></canvas>
-</div>
-<div>
     <button id="resetButton">Reset</button>
 </div>
+
+<!-- Flexbox example -->
+<div class="centered-div-flex">
+    <div class="centered-div-chart">
+        <canvas id="OdometryChart" style="justify-content: center;"></canvas>
+    </div>
+</div>
+
+<!-- Grid example
+<div class="centered-div-grid">
+    <div class="centered-div">
+        <canvas id="OdometryChart" style="justify-content: center;"></canvas>
+    </div>
+</div> -->
+
 <script>
     function updateChart(selectedChart) {
 

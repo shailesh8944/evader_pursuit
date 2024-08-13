@@ -6,7 +6,8 @@ RUN add-apt-repository universe
 RUN apt-get update
 RUN apt-get -y install gcc gfortran git
 RUN apt-get -y install python3-pip python3-serial
-RUN apt-get -y install libsm6 libxext6 libxrender1 libfontconfig1 libgl1 sudo xauth htop udev libboost-all-dev
+RUN apt-get -y install libsm6 libxext6 libxrender1 libfontconfig1 libgl1 sudo xauth htop udev
+RUN apt-get -y install libboost-dev-all
 
 ENV USERNAME mavlab
 RUN useradd -m $USERNAME && \
