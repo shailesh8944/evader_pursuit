@@ -21,3 +21,11 @@ Once the simulator is up and running, open another terminal and navigate to the 
 ```
 $ ./ros2_gnc.sh
 ```
+
+## Visualizing the data
+
+Once the simulator is up and running, open another terminal and navigate to the root folder of the repository. Now execute the following command to start a Flask with url http://localhost:8500 where the odometry data from the EKF can be visualized.
+
+```
+$ ./ros2_odom.sh
+```

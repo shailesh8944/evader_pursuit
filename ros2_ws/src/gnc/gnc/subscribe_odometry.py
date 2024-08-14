@@ -85,7 +85,7 @@ class OdometrySubscriber(Node):
         )
 
 def flask_thread():
-    app.run(host='0.0.0.0', port=8500, )
+    app.run(host='0.0.0.0', port=8500)
 
 def start_flask():
     app_thread = threading.Thread(target=flask_thread)
@@ -95,17 +95,17 @@ def start_flask():
 def home():
     return render_template('index.html')
 
-@app.route('/odometry')
-def odometry():
-    return render_template('odometry.html')
+@app.route('/odometry_plot')
+def odometry_plot():
+    return render_template('odometry_plot.html')
 
 @app.route('/mission')
 def mission():
     return render_template('mission.html')
 
-@app.route('/odometry_plot')
-def odometry_plot():
-    return render_template('odometry_plot.html')
+@app.route('/odometry')
+def odometry():
+    return render_template('odometry.html')
 
 @app.route('/get_trajectory')
 def get_trajectory():

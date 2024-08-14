@@ -5,6 +5,8 @@ import cmath
 from serial import Serial
 import json
 from geometry_msgs.msg import PointStamped
+from threading import Thread
+import time
 
 class UWB():
 
@@ -16,7 +18,7 @@ class UWB():
     B = None
     c1 = None
 
-    def __init__(self, portName='/dev/ttyUSB1', topic='/makara_00/uwb_01', rate=5):
+    def __init__(self, portName='/dev/ttyUSB0', topic='/makara_00/uwb_00', rate=5):
         
         self.topic = topic
         self.rate = rate
@@ -55,9 +57,11 @@ class UWB():
         self.x = 0.0
         self.y = 0.0
         self.z = 0.0
-
+        
         self.register_uwb()
-
+        
+        self.data_thread = Thread(target=self.listen_for_uwb)
+        self.data_thread.start()
 
     def P123(self,r1,r2,r3):
         f = cmath.sqrt(-self.B**4*self.L**2 - self.B**2*self.L**4 + 2*self.B**2*self.L**2*r1**2 + 2*self.B**2*self.L**2*r3**2 - self.B**2*r2**4 + 2*self.B**2*r2**2*r3**2 - self.B**2*r3**4 - self.L**2*r1**4 + 2*self.L**2*r1**2*r2**2 - self.L**2*r2**4)
@@ -97,19 +101,20 @@ class UWB():
     
     def publish_uwb(self):
         current_time = self.node.get_clock().now()
-
+        
         # Create PointStamped message
         pt = PointStamped()
         pt.header.stamp = current_time.to_msg()
-        pt.x = self.x
-        pt.y = self.y
-        pt.z = self.z
-
+        pt.header.frame_id= "base_link"
+        pt.point.x = self.x
+        pt.point.y = self.y
+        pt.point.z = self.z
         self.uwb['pub'].publish(pt)
-
-    def start_uwb(self):
-        while True:            
-            try:                
+        
+    def listen_for_uwb(self):
+        while rclpy.ok():            
+            try:       
+                     
                 N = self.ser.in_waiting        
                 data = self.ser.readline() 
                 data = data.decode('utf-8')
@@ -118,6 +123,7 @@ class UWB():
                 for i in f['links']:
                     if int(i["A"])==1786:
                         dis["r1"]=float(i["R"])
+                   
                     if int(i["A"])==1787:
                         dis["r2"]=float(i["R"])
                     if int(i["A"])==1788:
@@ -141,14 +147,16 @@ class UWB():
                             fs = self.P243(dis['r2'],dis['r4'],dis['r3'])
                         
                         self.x = fs[0]
-                        self.y = fs[1]                        
+                        self.y = fs[1] 
+                        print(fs[0])
+                                               
                         
                     except RuntimeError:
                         self.node.get_logger().warning("Value error")
                 
                 elif len(dis)==4:
                     try:
-                        self.node.get_logger().info("4d Fix")
+                        self.node.get_logger().info("4d Fix")                        
                         
                         fs1 = self.P123(dis['r1'],dis['r2'],dis['r3'])
                         fs2 = self.P124(dis['r1'],dis['r2'],dis['r4'])
@@ -159,7 +167,8 @@ class UWB():
                         fs = [fsx,fsy]
                         
                         self.x = fs[0]
-                        self.y = fs[1]                       
+                        self.y = fs[1]  
+                        #print(self.x,self.y)                                  
                     
                     except RuntimeError:
                         self.node.get_logger().warning("value error")
@@ -169,4 +178,6 @@ class UWB():
 
             except Exception as e:
                 pass
+                
+            time.sleep(0.1)
         self.ser.close()

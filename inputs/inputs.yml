@@ -1,5 +1,7 @@
-jetson_ip: 192.168.0.27  # 192.168.0.27
-raspi_ip: 192.168.0.10   # 192.168.0.10
+#jetson_ip: 192.168.0.27  # 192.168.0.27
+#raspi_ip: 192.168.0.10   # 192.168.0.10
+jetson_ip: 0.0.0.0  # 192.168.0.27
+raspi_ip: 0.0.0.0   # 192.168.0.10
 HIL_flag: True
 
 density: 1000
@@ -25,5 +27,5 @@ time_step: 0.1
 #     data: [2.0, 6.0, 180.0, 0.0]
 
 agents:
-  - '/workspaces/makara/inputs/makara_00.yml'
+  - '/workspaces/makara/inputs/makara_hwd.yml'
   # - '/workspaces/makara/inputs/makara_01.yml'

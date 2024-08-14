@@ -15,4 +15,3 @@ docker run -it --rm --privileged --name raspi_docker\
     --volume="/dev/ttyACM2":"/dev/ttyACM2" \
     --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
     abhilashiit/mav_simulator_ros1:1.0 $cmd
-    

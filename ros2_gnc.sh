@@ -1,5 +1,3 @@
-#!/bin/bash
-
 docker run -it --rm --privileged --name jetson_docker_2 \
     --net=host \
     --env="DISPLAY" \
