@@ -324,7 +324,7 @@ class GNC():
         z_sen = sen_loc[2] / self.length
         r_sen = np.array([x_sen, y_sen, z_sen])
 
-        if self.eul_rate_matrix:
+        if self.euler_angle_flag:
             eul = self.x_hat[9:12]
             fun = lambda x: kin.eul_to_rotm(x) @ r_sen
             jacob = self.jacobian(fun, eul)
@@ -816,7 +816,7 @@ class GNC():
             
             pass
         except Exception as e:
-            print('Predictor Diverges: ', e)            
+            print('Predictor Diverges: ', e)
             pass        
 
     def N_matrix(self, v_vec, M, D_l, Xuu, Yvv, Yvr, Yrv, Yrr, Nvv, Nvr, Nrv, Nrr):
@@ -962,5 +962,21 @@ class GNC():
             self.rudder_cmd = 0.0 * np.pi / 180.0
             self.propeller_cmd = 0.0 * self.length / (self.U_des * 60.0)
         
+        # Uncomment the following lines to only do localization without any control
+        # Useful when trying to analyze data collected through RF mode
+        
+        if self.euler_angle_flag:
+            rud_indx = 12
+            prop_indx = 13
+        else:
+            rud_indx = 13
+            prop_indx = 14
+        
+        # self.u_cmd = np.array([self.x_hat[rud_indx], self.x_hat[prop_indx]])
+
+        # Uncomment the following line to do localization along with guidance and control
+        # Useful when trying to analyze data collected in autonomous mode. 
+        # This should be the default.
+
         self.u_cmd = np.array([self.rudder_cmd, self.propeller_cmd])
 

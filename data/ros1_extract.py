@@ -68,8 +68,8 @@ def message_to_dict(msg):
     return {}
 
 if __name__ == "__main__":
-    ros1_bag_path = 'free_running_1.bag'
-    output_file = 'free_running_1_extracted_data.json'
+    ros1_bag_path = 'bagfiles/free_running_1.bag'
+    output_file = 'bagfiles/free_running_1_extracted_data.json'
     topics_to_extract = ['/ardusimple/gnss', '/sbg/imu/data', '/absoluteEncoder']
 
     extract_data_from_ros1_bag(ros1_bag_path, topics_to_extract, output_file)

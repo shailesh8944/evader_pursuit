@@ -106,7 +106,7 @@ def dict_to_message(topic, msg_dict, timestamp):
     return None, None
 
 if __name__ == "__main__":
-    json_file = 'free_running_1_extracted_data.json'
-    ros2_bag_path = 'free_running_1_ros2'
+    json_file = 'bagfiles/free_running_1_extracted_data.json'
+    ros2_bag_path = 'bagfiles/free_running_1_ros2'
 
     record_data_to_ros2_bag(json_file, ros2_bag_path)

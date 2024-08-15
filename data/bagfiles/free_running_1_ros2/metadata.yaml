@@ -1,0 +1,38 @@
+rosbag2_bagfile_information:
+  version: 5
+  storage_identifier: sqlite3
+  duration:
+    nanoseconds: 709740054272
+  starting_time:
+    nanoseconds_since_epoch: 1707034590353152000
+  message_count: 102760
+  topics_with_message_count:
+    - topic_metadata:
+        name: /makara_00/encoders
+        type: interfaces/msg/Actuator
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 41048
+    - topic_metadata:
+        name: /makara_00/imu
+        type: sensor_msgs/msg/Imu
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 61045
+    - topic_metadata:
+        name: /makara_00/gps
+        type: sensor_msgs/msg/NavSatFix
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 667
+  compression_format: ""
+  compression_mode: ""
+  relative_file_paths:
+    - free_running_1_ros2_0.db3
+  files:
+    - path: free_running_1_ros2_0.db3
+      starting_time:
+        nanoseconds_since_epoch: 1707034590353152000
+      duration:
+        nanoseconds: 709740054272
+      message_count: 102760

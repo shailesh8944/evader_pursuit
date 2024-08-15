@@ -64,7 +64,9 @@ def main():
     # rclpy.spin(sh.world.node)
     # rclpy.shutdown()
 
-    with open('/workspaces/makara/inputs/inputs.yml') as stream:
+    inp_fpath = '/workspaces/makara/inputs/free_running_1_ros2/free_running_1_ros2_inputs.yml'
+
+    with open(inp_fpath) as stream:
         inp_data = yaml.safe_load(stream)  # content from inputs.yml stored in data
 
     rclpy.init()
@@ -91,10 +93,11 @@ def main():
         topic_prefix = f'{name.strip()}_{count:02d}'
         
         sensor_count = 0
-        for sensor in sensors:
-            # sensors[sensor_count]['topic'] = f'/{topic_prefix}/{sensor["sensor_type"].lower().strip()}_{sensor_count:02d}'
-            sensors[sensor_count]['topic'] = sensor["topic"]
-            sensor_count += 1            
+        if sensors is not None:
+            for sensor in sensors:
+                # sensors[sensor_count]['topic'] = f'/{topic_prefix}/{sensor["sensor_type"].lower().strip()}_{sensor_count:02d}'
+                sensors[sensor_count]['topic'] = sensor["topic"]
+                sensor_count += 1
 
         vessel = Vessel(vessel_data=agent)
         vessels.append(vessel)
