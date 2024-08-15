@@ -4,7 +4,7 @@ import numpy as np
 import cmath
 from serial import Serial
 import json
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PointStamped, PoseWithCovarianceStamped
 from threading import Thread
 import time
 
@@ -101,15 +101,21 @@ class UWB():
     
     def publish_uwb(self):
         current_time = self.node.get_clock().now()
+
+        uwb_rms = np.array([1, 1, 1], dtype=np.float64)
+        uwb_cov = np.diag(uwb_rms ** 2)
+        
+        uwb_cov_full = -np.eye(6)               # Specify -1 for orientation covariance
+        uwb_cov_full[0:3][:, 0:3] = uwb_cov
         
         # Create PointStamped message
-        pt = PointStamped()
-        pt.header.stamp = current_time.to_msg()
-        pt.header.frame_id= "base_link"
-        pt.point.x = self.x
-        pt.point.y = self.y
-        pt.point.z = self.z
-        self.uwb['pub'].publish(pt)
+        msg = PoseWithCovarianceStamped()
+        msg.header.stamp = current_time.to_msg()
+        msg.pose.pose.position = Point(x=self.x, y=self.y, z=self.z)
+        msg.pose.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
+        msg.pose.covariance = uwb_cov_full.flatten()
+
+        self.uwb['pub'].publish(msg)
         
     def listen_for_uwb(self):
         while rclpy.ok():            
