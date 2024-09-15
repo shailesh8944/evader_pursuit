@@ -39,7 +39,7 @@ def record_data_to_ros2_bag(json_file, ros2_bag_path):
 def create_topic(writer, topic):
     # Define the topic metadata (type and reliability)
     if topic == '/absoluteEncoder':
-        topic_metadata = TopicMetadata(name='/makara_00/encoders', type='interfaces/msg/Actuator', serialization_format='cdr')
+        topic_metadata = TopicMetadata(name='/makara_00/actuator_cmd', type='interfaces/msg/Actuator', serialization_format='cdr')
     elif topic == '/sbg/imu/data':
         topic_metadata = TopicMetadata(name='/makara_00/imu', type='sensor_msgs/msg/Imu', serialization_format='cdr')
     elif topic == '/ardusimple/gnss':
@@ -66,42 +66,42 @@ def dict_to_message(topic, msg_dict, timestamp):
         msg.rudder = np.float64(msg_dict['data'].split(',')[0])
         msg.propeller = np.float64(msg_dict['data'].split(',')[1])
         msg.covariance = encoders_cov.flatten()
-        topic_remap = '/makara_00/encoders'
+        topic_remap = '/makara_00/actuator_cmd'
         return msg, topic_remap
     
     # Handle Imu messages
-    if topic == '/sbg/imu/data':
-        msg = Imu()
-        msg.header.stamp = ros_time
-        msg.orientation.x = msg_dict['orientation']['x']
-        msg.orientation.y = msg_dict['orientation']['y']
-        msg.orientation.z = msg_dict['orientation']['z']
-        msg.orientation.w = msg_dict['orientation']['w']
-        msg.orientation_covariance = msg_dict['orientation_covariance']
-        msg.angular_velocity.x = msg_dict['angular_velocity']['x']
-        msg.angular_velocity.y = msg_dict['angular_velocity']['y']
-        msg.angular_velocity.z = msg_dict['angular_velocity']['z']
-        msg.angular_velocity_covariance = msg_dict['angular_velocity_covariance']
-        msg.linear_acceleration.x = msg_dict['linear_acceleration']['x']
-        msg.linear_acceleration.y = msg_dict['linear_acceleration']['y']
-        msg.linear_acceleration.z = msg_dict['linear_acceleration']['z']
-        msg.linear_acceleration_covariance = msg_dict['linear_acceleration_covariance']
-        topic_remap = '/makara_00/imu'
-        return msg, topic_remap
+    # if topic == '/sbg/imu/data':
+    #     msg = Imu()
+    #     msg.header.stamp = ros_time
+    #     msg.orientation.x = msg_dict['orientation']['x']
+    #     msg.orientation.y = msg_dict['orientation']['y']
+    #     msg.orientation.z = msg_dict['orientation']['z']
+    #     msg.orientation.w = msg_dict['orientation']['w']
+    #     msg.orientation_covariance = msg_dict['orientation_covariance']
+    #     msg.angular_velocity.x = msg_dict['angular_velocity']['x']
+    #     msg.angular_velocity.y = msg_dict['angular_velocity']['y']
+    #     msg.angular_velocity.z = msg_dict['angular_velocity']['z']
+    #     msg.angular_velocity_covariance = msg_dict['angular_velocity_covariance']
+    #     msg.linear_acceleration.x = msg_dict['linear_acceleration']['x']
+    #     msg.linear_acceleration.y = msg_dict['linear_acceleration']['y']
+    #     msg.linear_acceleration.z = msg_dict['linear_acceleration']['z']
+    #     msg.linear_acceleration_covariance = msg_dict['linear_acceleration_covariance']
+    #     topic_remap = '/makara_00/imu'
+    #     return msg, topic_remap
 
-    # Handle NavSatFix messages
-    if topic == '/ardusimple/gnss':
-        msg = NavSatFix()
-        msg.header.stamp = ros_time
-        msg.latitude = msg_dict['latitude']
-        msg.longitude = msg_dict['longitude']
-        msg.altitude = msg_dict['altitude']
-        msg.position_covariance = msg_dict['position_covariance']
-        msg.position_covariance_type = msg_dict['position_covariance_type']
-        msg.status.status = msg_dict['status']['status']
-        msg.status.service = msg_dict['status']['service']
-        topic_remap = '/makara_00/gps'
-        return msg, topic_remap
+    # # Handle NavSatFix messages
+    # if topic == '/ardusimple/gnss':
+    #     msg = NavSatFix()
+    #     msg.header.stamp = ros_time
+    #     msg.latitude = msg_dict['latitude']
+    #     msg.longitude = msg_dict['longitude']
+    #     msg.altitude = msg_dict['altitude']
+    #     msg.position_covariance = msg_dict['position_covariance']
+    #     msg.position_covariance_type = msg_dict['position_covariance_type']
+    #     msg.status.status = msg_dict['status']['status']
+    #     msg.status.service = msg_dict['status']['service']
+    #     topic_remap = '/makara_00/gps'
+    #     return msg, topic_remap
 
     return None, None
 

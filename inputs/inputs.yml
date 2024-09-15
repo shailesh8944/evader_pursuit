@@ -27,5 +27,5 @@ time_step: 0.1
 #     data: [2.0, 6.0, 180.0, 0.0]
 
 agents:
-  - '/workspaces/makara/inputs/makara_hwd.yml'
-  # - '/workspaces/makara/inputs/makara_01.yml'
+  # - '/workspaces/makara/inputs/makara_hwd.yml'
+  - '/workspaces/makara/inputs/makara_01.yml'

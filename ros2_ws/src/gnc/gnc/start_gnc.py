@@ -110,7 +110,8 @@ def main():
                         waypoint_type=agent_data['waypoint_type'],
                         vessel_data=vessel.ode_options,
                         vessel_ode=vessel.ode,
-                        euler_angle_flag=True))
+                        euler_angle_flag=True,
+                        gnc_flag="gnc"))
         count += 1
 
     # ros_thread_instance = threading.Thread(target=ros_thread, args=(ros_nodes,))

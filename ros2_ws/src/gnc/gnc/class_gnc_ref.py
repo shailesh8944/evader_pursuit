@@ -60,12 +60,14 @@ class GNC():
                 waypoints=None,
                 vessel_data=None,
                 vessel_ode=None,
-                euler_angle_flag=False):
+                euler_angle_flag=False,
+                gnc_flag='gnc'):
         
         self.topic_prefix = topic_prefix
         self.rate = int(rate)
         self.sensors = sensors
         self.llh0 = gps_datum
+        self.gnc_flag = gnc_flag
         
         self.length = length
         self.Fn = Fn
@@ -114,7 +116,8 @@ class GNC():
             self.register_sensors()
         
         # Register the actuator
-        self.register_actuator()
+        if self.gnc_flag == "gnc":
+            self.register_actuator()
 
         # Register odometry publisher
         self.register_odometry()
@@ -495,8 +498,9 @@ class GNC():
     def publish_odometry(self):
         
         # Compute guidance and contorl
-        self.guidance()
-        self.control()
+        if self.gnc_flag == "gnc":
+            self.guidance()
+            self.control()
 
         # Predict EKF state estimate
         self.state_predictor()

@@ -55,7 +55,7 @@ def odometry_callback(msg):
             vel.x, vel.y, vel.z,
             ang_vel.x, ang_vel.y, ang_vel.z,
             position.x, position.y, position.z,
-            eul[0], eul[1], eul[2]            
+            eul[0], eul[1], eul[2]
         ])
 
 def encoders_callback(msg):

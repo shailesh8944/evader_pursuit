@@ -12,6 +12,7 @@ import module_kinematics as kin
 class Vessel_Pub_Sub():
     sensors = []
     actuators = []
+    odometry = None
     vessel_id = None
     vessel_name = None
     topic_prefix = None
@@ -27,6 +28,12 @@ class Vessel_Pub_Sub():
         for sensor in sh.world.vessels[self.vessel_id].sensors:
             self.register_sensor(sensor)
         self.register_actuators()
+        self.register_odometry()
+    
+    def register_odometry(self):
+        self.odometry = {}
+        self.odometry['pub'] = sh.world.node.create_publisher(Odometry, f'{self.topic_prefix}/odometry_sim', 10)
+        self.odometry['timer'] = sh.world.node.create_timer(sh.dt, callback=self.publish_odometry)
     
     def register_actuators(self):
         self.actuators.append(sh.world.node.create_subscription(Actuator, f'{self.topic_prefix}/actuator_cmd', self.actuator_callback, 1))
@@ -179,3 +186,28 @@ class Vessel_Pub_Sub():
     def actuator_callback(self, msg):
         self.delta_c = msg.rudder * np.pi / 180.0
         self.n_c = msg.propeller / 60.0
+
+    def publish_odometry(self):
+        
+        current_time = sh.world.node.get_clock().now()
+
+        # Create Actuator message
+        odo = Odometry()
+        odo.header.stamp = current_time.to_msg()
+        odo.header.frame_id = 'NED'
+        odo.child_frame_id = 'BODY'
+
+        x_state = sh.world.vessels[self.vessel_id].current_state
+
+        odo.pose.pose.position = Point(x=x_state[6], y=x_state[7], z=x_state[8])        
+        odo.pose.pose.orientation = Quaternion(x=x_state[10], y=x_state[11], z=x_state[12], w=x_state[9])
+        odo.twist.twist.linear = Vector3(x=x_state[0], y=x_state[1], z=x_state[2])
+        odo.twist.twist.angular = Vector3(x=x_state[3], y=x_state[4], z=x_state[5])
+
+        pose_cov = np.zeros((6,6), dtype=np.float64)        
+        odo.pose.covariance = pose_cov.flatten()
+
+        twist_cov = np.zeros((6,6))
+        odo.twist.covariance = twist_cov.flatten()
+
+        self.odometry['pub'].publish(odo)
