@@ -28,4 +28,4 @@ time_step: 0.1
 
 agents:
   # - '/workspaces/makara/inputs/makara_hwd.yml'
-  - '/workspaces/makara/inputs/makara_01.yml'
+  - '/workspaces/makara/inputs/kurma_00.yml'
