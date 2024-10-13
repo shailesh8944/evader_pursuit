@@ -1,6 +1,6 @@
 
 name: makara
-geometry_file: /workspaces/makara/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/HydRA/ONRT.gdf
+geometry_file: /workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/HydRA/ONRT.gdf
 scale: 48.9355
 
 start_velocity: [0.0, 0.0, 0.0]
@@ -33,19 +33,19 @@ sensors:
     sensor_location: [0.0, 0.0, 0.0]          # With respect to BODY frame
     sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
     publish_rate: 50
-    topic: /makara_00/imu
-  # - 
-  #   sensor_type: GPS
-  #   sensor_location: [1.0, 0.01, 0.015]         # With respect to BODY frame
-  #   sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
-  #   publish_rate: 1
-  #   topic: /makara_00/gps
+    topic: /imu/data
   - 
-    sensor_type: UWB
+    sensor_type: GPS
     sensor_location: [0.0, 0.0, 0.0]         # With respect to BODY frame
     sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
     publish_rate: 1
-    topic: /makara_00/uwb
+    topic: /fix
+  # - 
+  #   sensor_type: UWB
+  #   sensor_location: [0.0, 0.0, 0.0]         # With respect to BODY frame
+  #   sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
+  #   publish_rate: 1
+  #   topic: /makara_00/uwb
   - 
     sensor_type: encoders
     publish_rate: 10

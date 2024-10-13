@@ -2,7 +2,7 @@
 
 import numpy as np
 import sys
-sys.path.append('/workspaces/makara/ros2_ws/install/mav_simulator/lib/python3.10/site-packages/mav_simulator/')
+sys.path.append('/workspaces/mavlab/ros2_ws/install/mav_simulator/lib/python3.10/site-packages/mav_simulator/')
 
 from class_world import World
 import module_shared as sh
@@ -20,7 +20,7 @@ def ros_thread():
 
 def main():
     # Creates an object of class 'World'
-    sh.world = World('/workspaces/makara/inputs/inputs.yml')
+    sh.world = World('/workspaces/mavlab/inputs/inputs.yml')
 
     # rclpy.init()
     # world_node = World_Node(world_rate=1/sh.dt)

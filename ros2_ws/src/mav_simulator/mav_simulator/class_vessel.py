@@ -208,6 +208,8 @@ class Vessel():
             self.ode = dyn.kcs_ode
         elif ode == 'onrt_ode':
             self.ode = dyn.onrt_ode
+        elif ode == 'kvlcc2_ode':
+            self.ode = dyn.onrt_ode # The ODE structure does not change, only parameter values change
         else:
             raise ValueError('Specified ODE for vessel is not available!')
         
@@ -237,35 +239,46 @@ class Vessel():
         self.cross_flow_drag()
 
     def calculate_hydrodynamics(self):
+        
         if self.name == 'makara':
-            with open('/workspaces/makara/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/HydRA/Output_Archive/matlab/ONRT_hydra.json','r') as file:
-                mdict = json.load(file)
-            
-            # Note that the hydrodynamic data is for zero speed
-            omg = np.array(mdict['w'])
-            AM = np.array(mdict['AM'])
-            BD = np.array(mdict['BD'])
+            hydra_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/HydRA/Output_Archive/matlab/ONRT_hydra.json'
+            pow_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/pow.json'
 
-            M = np.array(mdict['M'])
-            C = np.array(mdict['C'])            
+        elif self.name == 'kurma':
+            hydra_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/KVLCC2/HydRA/Output_Archive/matlab/KVLCC2_hydra.json'
+            pow_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/KVLCC2/pow.json'
 
-            with open('/workspaces/makara/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/pow.json', 'r') as file:
-                pow = json.load(file)
-            
+        with open(hydra_file,'r') as file:
+            mdict = json.load(file)
+
+        with open(pow_file, 'r') as file:
+            pow = json.load(file)
+
+        if self.name == 'makara':
             J = np.array(pow['J'])
             Kt_port = np.array(pow['Kt_port'])
             Kt_stbd = np.array(pow['Kt_stbd'])
+            Kt = Kt_port + Kt_stbd
+        else:
+            J = np.array(pow['J'])
+            Kt = np.array(pow['Kt'])
+        
+        Amat = np.ones((np.size(J), 3))
+        b = np.zeros((np.size(J)))
+        Amat[:, 0] = J ** 2
+        Amat[:, 1] = J
+        b = Kt            
+        coeff, residue, rank, sing_val = np.linalg.lstsq(Amat, b, rcond=-1)
+        
+        self.ode_options['pow_coeff'] = coeff
+        
+        # Note that the hydrodynamic data is for zero speed
+        omg = np.array(mdict['w'])
+        AM = np.array(mdict['AM'])
+        BD = np.array(mdict['BD'])
 
-            A = np.ones((np.size(J), 3))
-            b = np.zeros((np.size(J), 2))
-            A[:, 0] = J ** 2
-            A[:, 1] = J
-            b[:, 0] = Kt_port
-            b[:, 1] = Kt_stbd
-            coeff, residue, rank, sing_val = np.linalg.lstsq(A, b, rcond=-1)
-            
-            self.ode_options['pow_coeff_port'] = coeff[:, 0]
-            self.ode_options['pow_coeff_stbd'] = coeff[:, 1]
+        M = np.array(mdict['M'])
+        C = np.array(mdict['C'])
 
         A_zero = AM[1, :, :, 0, 0]
         A33 = AM[1:, 2, 2, 0, 0]
@@ -350,16 +363,21 @@ class Vessel():
         self.ode_options['M_inv'] = np.linalg.inv(M_RB + A)
 
         self.ode_options['D_prop'] = self.propeller_diameter / self.length
-        self.ode_options['rudder_area'] = 0.002415163 # (taken from accompanying excel sheet in hullform folder)
-        self.ode_options['rudder_aspect_ratio'] = 1.25 # (taken from accompanying excel sheet in hullform folder)
+        
+        # Taken from accompanying excel sheet in hullform folder
+        if self.name == 'makara':
+            self.ode_options['rudder_area'] = 0.002415163
+            self.ode_options['rudder_aspect_ratio'] = 1.25
+
+        elif self.name == 'kurma':
+            self.ode_options['rudder_area'] = 0.0026689453125
+            self.ode_options['rudder_aspect_ratio'] = 1.8287037037037
         
         D_prop = self.ode_options['D_prop']
         A_R = self.ode_options['rudder_area']
         Lamda = self.ode_options['rudder_aspect_ratio']
-        pow_coeff_port = self.ode_options['pow_coeff_port']
-        pow_coeff_stbd = self.ode_options['pow_coeff_stbd']
         
-        pow_coeff = 0.5 * (pow_coeff_port + pow_coeff_stbd)           
+        pow_coeff = self.ode_options['pow_coeff']
 
         wp = 0.355              # Effective Wake Fraction of the Propeller (taken from KCS)
         tp = 0.207              # Thrust Deduction Factor (taken from KCS)

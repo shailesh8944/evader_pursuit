@@ -2,8 +2,8 @@ docker run -it --rm --privileged --name jetson_docker_3 \
     --net=host \
     --env="DISPLAY" \
     --env="ROS_DOMAIN_ID=42" \
-    --workdir="/workspaces/makara" \
-    --volume="$(pwd)":"/workspaces/makara" \
+    --workdir="/workspaces/mavlab" \
+    --volume="$(pwd)":"/workspaces/mavlab" \
     --volume="/dev/shm":"/dev/shm" \
     --volume="/dev/ttyACM0":"/dev/ttyACM0" \
     --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \

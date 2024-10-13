@@ -1,6 +1,6 @@
 
 name: kurma
-geometry_file: /workspaces/makara/ros2_ws/src/mav_simulator/mav_simulator/hullform/KVLCC2/HydRA/KVLCC2.gdf
+geometry_file: /workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/KVLCC2/HydRA/KVLCC2.gdf
 scale: 110.0
 
 start_velocity: [0.0, 0.0, 0.0]

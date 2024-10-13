@@ -10,8 +10,8 @@ docker run -it --rm --privileged --name jetson_docker \
     --net=host \
     --env="DISPLAY" \
     --env="ROS_DOMAIN_ID=42" \
-    --workdir="/workspaces/makara" \
-    --volume="$(pwd)":"/workspaces/makara" \
+    --workdir="/workspaces/mavlab" \
+    --volume="$(pwd)":"/workspaces/mavlab" \
     --volume="/dev/shm":"/dev/shm" \
     --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
     abhilashiit/mav_simulator_ros2:1.0 $cmd

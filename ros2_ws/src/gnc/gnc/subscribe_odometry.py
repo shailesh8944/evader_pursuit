@@ -8,6 +8,11 @@ from flask import Flask, render_template, jsonify, request
 import threading
 import logging
 from logging.handlers import RotatingFileHandler
+
+import sys
+import os
+module_path = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator'
+sys.path.append(os.path.abspath(module_path))
 import module_kinematics as kin
 
 app = Flask(__name__, static_folder='static')

@@ -5,6 +5,12 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, PointCloud2, Image, LaserScan, NavSatFix, NavSatStatus
 from geometry_msgs.msg import Point, Vector3, Pose, Quaternion, Twist, PoseWithCovarianceStamped
 from interfaces.msg import Actuator
+
+import sys
+import os
+module_path = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator'
+sys.path.append(os.path.abspath(module_path))
+
 import module_kinematics as kin
 import warnings
 import scipy
@@ -737,10 +743,7 @@ class GNC():
         wp = self.vessel_data['wp']
         tp = self.vessel_data['tp']
         D_prop = self.vessel_data['D_prop']
-        pow_coeff_port = self.vessel_data['pow_coeff_port']
-        pow_coeff_stbd = self.vessel_data['pow_coeff_stbd']
-        
-        pow_coeff = 0.5 * (pow_coeff_port + pow_coeff_stbd)
+        pow_coeff = self.vessel_data['pow_coeff']
 
         Xn = 2 * (1 - tp) * (D_prop ** 2) * ((1 - wp) * D_prop * pow_coeff[1] + 2 * self.x_hat[prop_indx] * (D_prop ** 2) * pow_coeff[2])
         

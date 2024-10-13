@@ -325,8 +325,9 @@ def onrt_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False):
     Nrr = options['N_r_ar']
 
     D_prop = options['D_prop']
-    pow_coeff_port = options['pow_coeff_port']
-    pow_coeff_stbd = options['pow_coeff_stbd']
+    
+    # Now we only pass only a single propeller open water curve (pow)
+    pow_coeff = options['pow_coeff']
 
     A_R = options['rudder_area']
     Lamda = options['rudder_aspect_ratio']
@@ -414,22 +415,18 @@ def onrt_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False):
 
     # Propeller force calculation
 
-    X_port = pow_coeff_port[0] * ((up * (1 - wp)) **2) * (D_prop **2) \
-                + pow_coeff_port[1] * (up * (1 - wp)) * (n_prop * (D_prop ** 3)) \
-                + pow_coeff_port[2] * ((n_prop ** 2) * (D_prop ** 4))
-    
-    X_stbd = pow_coeff_stbd[0] * ((up * (1 - wp)) **2) * (D_prop **2) \
-                + pow_coeff_stbd[1] * (up * (1 - wp)) * (n_prop * (D_prop ** 3)) \
-                + pow_coeff_stbd[2] * ((n_prop ** 2) * (D_prop ** 4))
+    X_prop = pow_coeff[0] * ((up * (1 - wp)) **2) * (D_prop **2) \
+                + pow_coeff[1] * (up * (1 - wp)) * (n_prop * (D_prop ** 3)) \
+                + pow_coeff[2] * ((n_prop ** 2) * (D_prop ** 4))
 
     tau_P = np.zeros(6)
-    tau_P[0] = 2 * (1 - tp) * (X_port + X_stbd)
+    tau_P[0] = 2 * (1 - tp) * X_prop
 
     # Rudder force calculation
     
     kappa_R = 0.5 + 0.5 * X_by_Dp / (X_by_Dp + 0.15)
 
-    pow_coeff = 0.5 * (pow_coeff_port + pow_coeff_stbd)    
+    # pow_coeff = 0.5 * (pow_coeff_port + pow_coeff_stbd)    
 
     up_prop = up * (1 - wp)
     Kt_up2_by_J2 = pow_coeff[0] * (up_prop ** 2) + pow_coeff[1] * n_prop * D_prop * up_prop + pow_coeff[2] * (n_prop * D_prop) ** 2
