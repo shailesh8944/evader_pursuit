@@ -238,7 +238,7 @@ class Vessel():
 
     def calculate_hydrodynamics(self):
         if self.name == 'makara':
-            with open('/workspaces/makara/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/HydRA/Output_Archive/matlab/ONRT_hydra.json','r') as file:
+            with open('/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/HydRA/Output_Archive/matlab/ONRT_hydra.json','r') as file:
                 mdict = json.load(file)
             
             # Note that the hydrodynamic data is for zero speed
@@ -249,7 +249,7 @@ class Vessel():
             M = np.array(mdict['M'])
             C = np.array(mdict['C'])            
 
-            with open('/workspaces/makara/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/pow.json', 'r') as file:
+            with open('/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/pow.json', 'r') as file:
                 pow = json.load(file)
             
             J = np.array(pow['J'])

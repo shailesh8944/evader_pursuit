@@ -23,7 +23,7 @@ class RasPi():
 
 def main(raspi):
 
-    with open('/workspaces/makara/inputs/inputs.yml') as stream:
+    with open('/workspaces/mavlab/inputs/inputs.yml') as stream:
         inp_data = yaml.safe_load(stream)  # content from inputs.yml stored in data
     
 

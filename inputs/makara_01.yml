@@ -1,6 +1,6 @@
 
 name: makara
-geometry_file: /workspaces/makara/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/HydRA/ONRT.gdf
+geometry_file: /workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/HydRA/ONRT.gdf
 scale: 48.9355
 
 start_velocity: [0.0, 0.0, 0.0]

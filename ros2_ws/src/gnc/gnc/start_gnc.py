@@ -64,7 +64,7 @@ def main():
     # rclpy.spin(sh.world.node)
     # rclpy.shutdown()
 
-    inp_fpath = '/workspaces/makara/inputs/free_running_1_ros2/free_running_1_ros2_inputs.yml'
+    inp_fpath = '/workspaces/mavlab/inputs/inputs.yml'
 
     with open(inp_fpath) as stream:
         inp_data = yaml.safe_load(stream)  # content from inputs.yml stored in data
