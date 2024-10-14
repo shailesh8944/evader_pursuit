@@ -494,8 +494,8 @@ class GNC():
         act = Actuator()
         act.header.stamp = current_time.to_msg()
         
-        act.rudder = self.rudder_cmd * 180.0 / np.pi
-        act.propeller = self.propeller_cmd * 60 * self.U_des / self.length
+        act.rudder = 0.0*self.rudder_cmd * 180.0 / np.pi
+        act.propeller = 0.0*self.propeller_cmd * 60 * self.U_des / self.length
 
         self.actuator['pub'].publish(act)
 

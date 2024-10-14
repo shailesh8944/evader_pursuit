@@ -1,5 +1,13 @@
 # MAKARA simulator + GNC modules
 
+## Hardware interface
+
+For interfacing with the hardware we need to map the `/dev/ttyUSB` and `/dev/ttyACM` devices correctly. This can be acieved by running `udev.sh` in the jeston base environment (NOT inside the docker container). This will remap the host device ports to now enable `/dev/sbg`, `/dev/ardusimple`, `/dev/bldc`, `/dev/stepper`.
+
+```
+./udev.sh
+```
+
 ## Starting the simulator
 
 It is presumed that you have docker on your desktop and hence the instructions to install docker are omitted here. Before you can begin, we need to build the docker image needed for the simulator to run. The docker image can be build with the following command executed at the root of the repository that you have cloned.

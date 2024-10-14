@@ -21,6 +21,8 @@ RUN useradd -m $USERNAME && \
        echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USERNAME && \
        chmod 0440 /etc/sudoers.d/$USERNAME
 
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
 USER mavlab
 WORKDIR /home/mavlab
 
@@ -36,6 +38,7 @@ RUN echo "alias sbg='sros2 && ros2 launch sbg_driver sbg_device_launch.py'" >> ~
 RUN echo "alias uwb='sros2 && ros2 run uwb_driver uwb'" >> ~/.bashrc
 RUN echo "alias gnc='sros2 && ros2 run gnc gnc'" >> ~/.bashrc
 RUN echo "alias mavsim='sros2 && ros2 run mav_simulator simulate'" >> ~/.bashrc
+RUN echo "alias ardusimple='sros2 && ros2 launch ublox_gps ublox_gps_node-launch.py'" >> ~/.bashrc
 
 # Setup SBG drivers
 COPY sbg_setup.sh /home/mavlab/
