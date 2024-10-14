@@ -494,8 +494,8 @@ class GNC():
         act = Actuator()
         act.header.stamp = current_time.to_msg()
         
-        act.rudder = 0.0*self.rudder_cmd * 180.0 / np.pi
-        act.propeller = 0.0*self.propeller_cmd * 60 * self.U_des / self.length
+        act.rudder = self.rudder_cmd * 180.0 / np.pi
+        act.propeller = self.propeller_cmd * 60 * self.U_des / self.length
 
         self.actuator['pub'].publish(act)
 
@@ -551,7 +551,7 @@ class GNC():
 
         if not self.terminate_flag:
             dt = (1 / self.rate) * self.U_des / self.length
-            self.score = self.score + np.abs(self.y_p_e) * dt + np.abs(self.x_hat[13] / (35 * np.pi / 180)) * dt
+            # self.score = self.score + np.abs(self.y_p_e) * dt + np.abs(self.x_hat[13] / (35 * np.pi / 180)) * dt
             self.current_time += dt
 
         if self.euler_angle_flag:
@@ -568,15 +568,15 @@ class GNC():
             rud_indx = 13
             prop_indx = 14
         
-        print(f"Linear Velocity (m/s)    : {self.x_hat[0] * self.U_des:.4f}, {self.x_hat[1] * self.U_des:.4f}, {self.x_hat[2] * self.U_des:.4f}")
-        print(f"Angular Velocity (rad/s) : {self.x_hat[3] * self.U_des / self.length:.4f}, {self.x_hat[4] * self.U_des / self.length:.4f}, {self.x_hat[5] * self.U_des / self.length:.4f}")
-        print(f"Linear Position (m)      : {self.x_hat[6] * self.length:.4f}, {self.x_hat[7] * self.length:.4f}, {self.x_hat[8] * self.length:.4f}")
-        print(f"Orientation (deg)        : {eul[0]:.2f}, {eul[1]:.2f}, {eul[2]:.2f}")
-        print(f"Unit quaternion          : {quat[0]:.2f}, {quat[1]:.2f}, {quat[2]:.2f}, {quat[3]:.2f}")
-        print(f"Rudder angle (deg)       : {self.x_hat[rud_indx] * 180 / np.pi:.2f}")
-        print(f"Propeller Speed (RPM)    : {self.x_hat[prop_indx] * 60 * self.U_des / self.length:.2f}")
-        print(f"Goal Waypoint (m)        : {self.goal_waypoint[0]:.2f}, {self.goal_waypoint[1]:.2f}, {self.goal_waypoint[2]:.2f} ")
-        print(f"Distance to Goal (m)     : {np.linalg.norm(self.goal_waypoint - self.x_hat[6:9] * self.length):.2f}")
+        # print(f"Linear Velocity (m/s)    : {self.x_hat[0] * self.U_des:.4f}, {self.x_hat[1] * self.U_des:.4f}, {self.x_hat[2] * self.U_des:.4f}")
+        # print(f"Angular Velocity (rad/s) : {self.x_hat[3] * self.U_des / self.length:.4f}, {self.x_hat[4] * self.U_des / self.length:.4f}, {self.x_hat[5] * self.U_des / self.length:.4f}")
+        # print(f"Linear Position (m)      : {self.x_hat[6] * self.length:.4f}, {self.x_hat[7] * self.length:.4f}, {self.x_hat[8] * self.length:.4f}")
+        # print(f"Orientation (deg)        : {eul[0]:.2f}, {eul[1]:.2f}, {eul[2]:.2f}")
+        # print(f"Unit quaternion          : {quat[0]:.2f}, {quat[1]:.2f}, {quat[2]:.2f}, {quat[3]:.2f}")
+        # print(f"Rudder angle (deg)       : {self.x_hat[rud_indx] * 180 / np.pi:.2f}")
+        # print(f"Propeller Speed (RPM)    : {self.x_hat[prop_indx] * 60 * self.U_des / self.length:.2f}")
+        # print(f"Goal Waypoint (m)        : {self.goal_waypoint[0]:.2f}, {self.goal_waypoint[1]:.2f}, {self.goal_waypoint[2]:.2f} ")
+        # print(f"Distance to Goal (m)     : {np.linalg.norm(self.goal_waypoint - self.x_hat[6:9] * self.length):.2f}")
         # print(f"Score                    : {100 - self.score:.2f}")
 
         # print(f"Covariance               : {np.sqrt(self.P_hat[0, 0]):.2f}, {np.sqrt(self.P_hat[1,1]):.2f}, {np.sqrt(self.P_hat[2,2]):.2f}")
@@ -584,7 +584,7 @@ class GNC():
         # print(f"                         : {np.sqrt(self.P_hat[6,6]):.2f}, {np.sqrt(self.P_hat[7,7]):.2f}, {np.sqrt(self.P_hat[8,8]):.2f}")
         # print(f"                         : {np.sqrt(self.P_hat[9,9]):.2f}, {np.sqrt(self.P_hat[10,10]):.2f}, {np.sqrt(self.P_hat[11,11]):.2f}, {np.sqrt(self.P_hat[12,12]):.2f}")
         # print(f"                         : {np.sqrt(self.P_hat[13,13]):.2f}, {np.sqrt(self.P_hat[14,14]):.2f}")
-        print(f'\n\n')
+        # print(f'\n\n')
     
     # Extended Kalman Filter state correction based on measurements
 

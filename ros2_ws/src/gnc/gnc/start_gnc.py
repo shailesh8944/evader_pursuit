@@ -111,7 +111,7 @@ def main():
                         vessel_data=vessel.ode_options,
                         vessel_ode=vessel.ode,
                         euler_angle_flag=True,
-                        gnc_flag="gnc"))
+                        gnc_flag="nav"))        ###### ------> Change 'nav' to 'gnc' for guidance, control and actuation
         count += 1
 
     # ros_thread_instance = threading.Thread(target=ros_thread, args=(ros_nodes,))

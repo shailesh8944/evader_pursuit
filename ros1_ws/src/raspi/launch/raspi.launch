@@ -5,12 +5,12 @@
   <!-- <node pkg="raspi" name="Encoder_Listener" type="encoder_listener.py" output="screen" /> -->
 
   <node pkg="rosserial_python" type="serial_node.py" name="EncoderReturn">
-    <param name="port" value="/dev/bldc"/>
+    <param name="port" value="/dev/propeller"/>
     <param name="baud" value="115200"/>
   </node>
 
   <node pkg="rosserial_python" type="serial_node.py" name="absoluteEncoder">
-    <param name="port" value="/dev/stepper"/>
+    <param name="port" value="/dev/rudder"/>
     <param name="baud" value="115200"/>
   </node>
   

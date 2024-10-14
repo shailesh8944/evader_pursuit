@@ -39,7 +39,7 @@ sensors:
     sensor_location: [0.0, 0.0, 0.0]         # With respect to BODY frame
     sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
     publish_rate: 1
-    topic: /fix
+    topic: /ublox_gps_node/fix
   # - 
   #   sensor_type: UWB
   #   sensor_location: [0.0, 0.0, 0.0]         # With respect to BODY frame
