@@ -11,6 +11,7 @@ from logging.handlers import RotatingFileHandler
 import subprocess
 import time
 import sys
+import signal
 import os
 module_path = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator'
 sys.path.append(os.path.abspath(module_path))
@@ -31,7 +32,7 @@ def launch_ros2_node(package, launch_file):
     command = ['ros2', 'launch', package, launch_file]
     try:
         # Start the ROS 2 launch process
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
         logging.info(f'Launched {launch_file} from package {package} with PID {process.pid}')
         return process
     except Exception as e:
@@ -41,7 +42,10 @@ def launch_ros2_node(package, launch_file):
 def stop_process_with_failsafe(process, timeout=5):
     try:
         # Attempt graceful termination
-        process.terminate()
+        # process.terminate()
+        # os.kill(process.pid, signal.SIGTERM)
+        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+        
         start_time = time.time()
         while process.poll() is None:
             if time.time() - start_time > timeout:
