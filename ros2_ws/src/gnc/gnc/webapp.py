@@ -10,49 +10,50 @@ import logging
 from logging.handlers import RotatingFileHandler
 import subprocess
 import time
-
 import sys
 import os
 module_path = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator'
 sys.path.append(os.path.abspath(module_path))
 import module_kinematics as kin
 
+app = Flask(__name__, static_folder='static')
+trajectory = []
+encoders = []
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Dictionary to keep track of active ROS 2 launch processes
 ros2_processes = {}
+process_lock = threading.Lock()  # Lock for thread-safe access to ros2_processes
 
-# Function to launch a ROS 2 node
 def launch_ros2_node(package, launch_file):
     command = ['ros2', 'launch', package, launch_file]
     try:
         # Start the ROS 2 launch process
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        logging.info(f'Launched {launch_file} from package {package} with PID {process.pid}')
         return process
     except Exception as e:
+        logging.error(f'Failed to launch {launch_file} from package {package}: {str(e)}')
         return str(e)
 
-# Function to safely stop a process with failsafes
-def stop_ros2_with_failsafe(process, timeout=5):
+def stop_process_with_failsafe(process, timeout=5):
     try:
         # Attempt graceful termination
         process.terminate()
         start_time = time.time()
-        while process.poll() is None:  # Process is still running
+        while process.poll() is None:
             if time.time() - start_time > timeout:
-                # Timeout exceeded, escalate to forceful termination
                 process.kill()
                 break
-            time.sleep(0.1)  # Wait a bit before checking again
-        # Ensure process is actually terminated
+            time.sleep(0.1)
         process.wait(timeout=1)
+        logging.info(f'Process with PID {process.pid} terminated successfully')
     except Exception as e:
+        logging.error(f'Failed to terminate process with PID {process.pid}: {str(e)}')
         return f'Failed to terminate process: {str(e)}'
     return None
-
-
-app = Flask(__name__, static_folder='static')
-trajectory = []
-encoders = []
 
 def odometry_callback(msg):
     global trajectory, t0
@@ -155,24 +156,29 @@ def reset():
 @app.route('/start_ros2', methods=['POST'])
 def start_ros2():
     data = request.get_json()
-    package = data.get('package')
-    launch_file = data.get('launch_file')
+    package_launch_list = data.get('package_launch')
+    # package_launch_list = request.form.getlist('package_launch')
+    
+    if not package_launch_list:
+        return jsonify({'error': 'No package-launch pairs selected'}), 400
 
-    if not package or not launch_file:
-        return jsonify({'error': 'Package and launch file must be specified'}), 400
+    responses = []
+    with process_lock:
+        for package_launch in package_launch_list:
+            package, launch_file = package_launch.split(':')
 
-    # Check if a launch is already running for this package
-    if (package, launch_file) in ros2_processes:
-        return jsonify({'error': 'This ROS 2 launch is already running'}), 400
+            if (package, launch_file) in ros2_processes:
+                responses.append({'error': f'{package} - {launch_file} is already running'})
+                continue
 
-    # Start the ROS 2 launch
-    process = launch_ros2_node(package, launch_file)
-    if isinstance(process, str):  # If the process is an error message
-        return jsonify({'error': process}), 500
+            process = launch_ros2_node(package, launch_file)
+            if isinstance(process, str):
+                responses.append({'error': f'Failed to launch {package} - {launch_file}: {process}'})
+            else:
+                ros2_processes[(package, launch_file)] = process
+                responses.append({'message': f'Launched {package} - {launch_file}', 'pid': process.pid})
 
-    # Store the process
-    ros2_processes[(package, launch_file)] = process
-    return jsonify({'message': f'Launched {launch_file} from package {package}', 'pid': process.pid}), 200
+    return jsonify(responses), 200
 
 @app.route('/stop_ros2', methods=['POST'])
 def stop_ros2():
@@ -183,20 +189,27 @@ def stop_ros2():
     if not package or not launch_file:
         return jsonify({'error': 'Package and launch file must be specified'}), 400
 
-    # Check if the process is running
-    process_key = (package, launch_file)
-    if process_key not in ros2_processes:
-        return jsonify({'error': 'This ROS 2 launch is not running'}), 400
+    with process_lock:
+        process_key = (package, launch_file)
+        if process_key not in ros2_processes:
+            return jsonify({'error': f'{package} - {launch_file} is not running'}), 400
 
-    # Terminate the process with failsafes
-    process = ros2_processes[process_key]
-    error = stop_ros2_with_failsafe(process)
-    if error:
-        return jsonify({'error': error}), 500
+        process = ros2_processes[process_key]
+        error = stop_process_with_failsafe(process)
+        if error:
+            return jsonify({'error': error}), 500
 
-    # Remove from dictionary after successful termination
-    del ros2_processes[process_key]
-    return jsonify({'message': f'Stopped {launch_file} from package {package}'}), 200
+        del ros2_processes[process_key]
+    return jsonify({'message': f'Stopped {package} - {launch_file}'}), 200
+
+@app.route('/active_launches', methods=['GET'])
+def active_launches():
+    with process_lock:
+        active_list = [
+            {'package': pkg, 'launch_file': lf, 'pid': proc.pid}
+            for (pkg, lf), proc in ros2_processes.items()
+        ]
+    return jsonify(active_list), 200
 
 @app.route('/reset_ros2', methods=['POST'])
 def reset_ros2():
@@ -207,24 +220,26 @@ def reset_ros2():
     if not package or not launch_file:
         return jsonify({'error': 'Package and launch file must be specified'}), 400
 
-    # Stop the existing process if it is running
     process_key = (package, launch_file)
-    if process_key in ros2_processes:
+    with process_lock:
+        if process_key not in ros2_processes:
+            return jsonify({'error': f'{package} - {launch_file} is not running'}), 400
+
+        # Stop the existing process
         process = ros2_processes[process_key]
-        error = stop_ros2_with_failsafe(process)
+        error = stop_process_with_failsafe(process)
         if error:
             return jsonify({'error': error}), 500
-        # Remove from dictionary after successful termination
-        del ros2_processes[process_key]
 
-    # Start a new process
-    process = launch_ros2_node(package, launch_file)
-    if isinstance(process, str):  # If the process is an error message
-        return jsonify({'error': process}), 500
+        # Restart the process
+        new_process = launch_ros2_node(package, launch_file)
+        if isinstance(new_process, str):
+            return jsonify({'error': f'Failed to restart {package} - {launch_file}: {new_process}'}), 500
 
-    # Store the new process
-    ros2_processes[process_key] = process
-    return jsonify({'message': f'Restarted {launch_file} from package {package}', 'pid': process.pid}), 200
+        # Update the process dictionary
+        ros2_processes[process_key] = new_process
+
+    return jsonify({'message': f'Reset {package} - {launch_file} successfully', 'pid': new_process.pid}), 200
 
 def main():
     global node, t0, odom_topic, encoders_topic

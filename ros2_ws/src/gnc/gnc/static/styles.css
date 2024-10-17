@@ -82,3 +82,16 @@ p {
     padding: 20px;
     text-align: center;
 }
+
+.launch-item {
+    display: flex;
+    align-items: center;
+    width: 100%; /* Ensure each item takes up the full width */
+    margin-bottom: 10px; /* Optional: add some space between items */
+}
+
+#active-launches {
+    display: flex;
+    align-items: center; /* Center items horizontally */
+    flex-direction: column; /* Stack items vertically */
+}
