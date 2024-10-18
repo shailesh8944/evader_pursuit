@@ -249,7 +249,7 @@ def main():
     global node, t0, odom_topic, encoders_topic
 
     odom_topic = '/makara_00/odometry'  # Default selected topic
-    encoders_topic = '/makara_00/actuator_cmd'  # Default selected topic
+    encoders_topic = '/makara_00/encoders'  # Default selected topic
 
     rclpy.init()
     node = OdometrySubscriber()
