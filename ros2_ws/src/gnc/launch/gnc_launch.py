@@ -6,7 +6,7 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='gnc',  # Replace with your package name
-            executable='start_gnc.py',  # Replace with your script name
+            executable='gnc',  # Replace with your script name
             name='GNC'
         ),
     ])
