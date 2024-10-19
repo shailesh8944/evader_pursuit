@@ -85,8 +85,9 @@ p {
 
 .launch-item {
     display: flex;
+    justify-content: center; /* Center horizontally */
     align-items: center;
-    width: 100%; /* Ensure each item takes up the full width */
+    width: 100vw; /* Ensure each item takes up the full width */
     margin-bottom: 10px; /* Optional: add some space between items */
 }
 

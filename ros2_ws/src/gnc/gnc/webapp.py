@@ -10,6 +10,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import subprocess
 import time
+from datetime import datetime
 import sys
 import signal
 import os
@@ -20,6 +21,7 @@ import module_kinematics as kin
 app = Flask(__name__, static_folder='static')
 trajectory = []
 encoders = []
+TOPIC_TYPES = ['Imu', 'NavSatFix', 'Odometry', 'Actuator']
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -29,7 +31,9 @@ ros2_processes = {}
 process_lock = threading.Lock()  # Lock for thread-safe access to ros2_processes
 
 def launch_ros2_node(package, launch_file):
+
     command = ['ros2', 'launch', package, launch_file]
+
     try:
         # Start the ROS 2 launch process
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
@@ -93,8 +97,17 @@ def encoders_callback(msg):
     encoders.append([t, rudder, propeller])
 
 class OdometrySubscriber(Node):
+    odom_topic = None
+    encoders_topic = None
+
     def __init__(self):
-        super().__init__('odometry_subscriber')
+        super().__init__('webapp_subscriber')
+        
+        global odom_topic, encoders_topic
+        
+        self.odom_topic = odom_topic
+        self.encoders_topic = encoders_topic
+
         self.odom_subscription = self.create_subscription(
             Odometry,
             odom_topic,
@@ -107,6 +120,30 @@ class OdometrySubscriber(Node):
             encoders_callback,
             10
         )
+    def update_subscriber(self):
+        self.odom_subscription.destroy()  # Clear existing callback group
+        self.encoders_subscription.destroy()  # Clear existing callback group
+        
+        global odom_topic, encoders_topic
+
+        logging.info(f'Shifting odometry topic from {self.odom_topic} to {odom_topic}')
+        logging.info(f'Shifting encoders topic from {self.encoders_topic} to {encoders_topic}')
+        
+        self.odom_subscription = self.create_subscription(
+            Odometry,
+            odom_topic,
+            odometry_callback,
+            10
+        )
+        self.encoders_subscription = self.create_subscription(
+            Actuator,
+            encoders_topic,
+            encoders_callback,
+            10
+        )
+
+        self.odom_topic = odom_topic
+        self.encoders_topic = encoders_topic
 
 def flask_thread():
     app.run(host='0.0.0.0', port=8500)
@@ -131,15 +168,29 @@ def mission():
 def odometry():
     return render_template('odometry.html')
 
-@app.route('/get_trajectory')
+@app.route('/get_trajectory', methods=['GET'])
 def get_trajectory():
-    global trajectory
-    return jsonify(trajectory)
+    global trajectory, odom_topic, node
+    topic = request.args.get('topic')
+    if topic == odom_topic or topic == '':        
+        return jsonify(trajectory)
+    else:
+        # odom_topic = topic
+        # trajectory = []  # Reset the trajectory variable
+        # node.update_subscriber()
+        return jsonify(trajectory)
 
-@app.route('/get_encoders')
+@app.route('/get_encoders', methods=['GET'])
 def get_encoders():
-    global encoders
-    return jsonify(encoders)
+    global encoders, encoders_topic, node
+    topic = request.args.get('topic')
+    if topic == encoders_topic or topic == '':
+        return jsonify(encoders)
+    else:
+        # encoders_topic = topic
+        # encoders = []  # Reset the encoders variable
+        # node.update_subscriber()        
+        return jsonify(encoders)
 
 @app.route('/get_state')
 def get_state():
@@ -157,10 +208,130 @@ def reset():
     encoders = []  # Reset the encoders variable
     return 'Trajectory and encoders variables reset'
 
+def has_active_publisher(topic):
+    """Check if a given topic has active publishers using 'ros2 topic info'."""
+    result = subprocess.run(['ros2', 'topic', 'info', topic], capture_output=True, text=True)
+    # Look for "Publisher count: 0" in the output, which indicates no active publishers
+    return "Publisher count: 0" not in result.stdout
+
+@app.route('/get_topics', methods=['GET'])
+def get_topics():
+    try:
+        # Get all active topics and their types using ros2 topic list command
+        result = subprocess.run(['ros2', 'topic', 'list', '-t'], capture_output=True, text=True)        
+
+        if result.returncode != 0:
+            return jsonify({"error": "Failed to retrieve topics"}), 500
+
+        topic_type_list = result.stdout.splitlines()
+        topic_list = [line.split('[')[0].strip() for line in topic_type_list]
+        type_list = [line.split('[')[1][:-1].strip() for line in topic_type_list]
+        
+        # Filter topics based on types in desired types and that are being published
+        filtered_topics = [
+            topic for topic, topic_type in zip(topic_list, type_list)
+            if has_active_publisher(topic) and topic_type.split('/')[-1] in TOPIC_TYPES
+        ]
+
+        return jsonify({"topics": filtered_topics}), 200
+
+    except Exception as e:
+
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_odometry_topics', methods=['GET'])
+def get_odometry_topics():
+    try:
+        # Get all active topics and their types using ros2 topic list command
+        result = subprocess.run(['ros2', 'topic', 'list', '-t'], capture_output=True, text=True)        
+
+        if result.returncode != 0:
+            return jsonify({"error": "Failed to retrieve topics"}), 500
+
+        topic_type_list = result.stdout.splitlines()
+        topic_list = [line.split('[')[0].strip() for line in topic_type_list]
+        type_list = [line.split('[')[1][:-1].strip() for line in topic_type_list]
+        
+        # Filter topics based on types in desired types and that are being published
+        filtered_topics = [
+            topic for topic, topic_type in zip(topic_list, type_list)
+            if has_active_publisher(topic) and topic_type.split('/')[-1] in ['Odometry']
+        ]
+
+        return jsonify({"topics": filtered_topics}), 200
+
+    except Exception as e:
+
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_encoder_topics', methods=['GET'])
+def get_encoder_topics():
+    try:
+        # Get all active topics and their types using ros2 topic list command
+        result = subprocess.run(['ros2', 'topic', 'list', '-t'], capture_output=True, text=True)
+
+        if result.returncode != 0:
+            return jsonify({"error": "Failed to retrieve topics"}), 500
+
+        topic_type_list = result.stdout.splitlines()
+        topic_list = [line.split('[')[0].strip() for line in topic_type_list]
+        type_list = [line.split('[')[1][:-1].strip() for line in topic_type_list]
+        
+        # Filter topics based on types in desired types and that are being published
+        filtered_topics = [
+            topic for topic, topic_type in zip(topic_list, type_list)
+            if has_active_publisher(topic) and topic_type.split('/')[-1] in ['Actuator']
+        ]
+
+        return jsonify({"topics": filtered_topics}), 200
+
+    except Exception as e:
+
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/start_rosbag', methods=['POST'])
+def start_rosbag():
+
+    data = request.json
+    selected_topics = data.get('topics', [])
+    user_filename = data.get('filename')
+
+    # Construct the file path
+    date_str = datetime.now().strftime('%Y_%m_%d')
+    base_dir = f"/workspaces/mavlab/bagfiles/{date_str}"
+
+    # Ensure the directory exists
+    os.makedirs(base_dir, exist_ok=True)
+
+    # Full path for the bag file
+    bag_file_path = os.path.join(base_dir, user_filename)
+    
+    # Construct the command for rosbag
+    command = ["ros2", "bag", "record", "-o", bag_file_path] + selected_topics
+    logging.info(command)
+
+    # Start the rosbag record command
+    try:
+        # Start the ROS 2 launch process
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        logging.info(f'Launched ROS2 bag recording with PID {process.pid}')
+        ros2_processes[('ros2-bag', user_filename)] = process
+        return jsonify({'message': f'Launched ROS2 bag recording pid: {process.pid}', 'topics': selected_topics}), 200
+
+    except Exception as e:
+        
+        logging.error(f'Failed to launch ROS2 bag recording: {str(e)}')
+        return jsonify({"error": str(e)}), 500
+
+    return
+
 @app.route('/start_ros2', methods=['POST'])
 def start_ros2():
     data = request.get_json()
     package_launch_list = data.get('package_launch')
+
+    # if not isinstance(package_launch_list, list):
+    #     package_launch_list = [package_launch_list]
     # package_launch_list = request.form.getlist('package_launch')
     
     if not package_launch_list:

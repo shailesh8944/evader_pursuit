@@ -13,6 +13,14 @@
 <p>This is the Odometry Plots page. You can add content related to the odometry plots here.</p>
 
 <div class="my_div">
+    <select id="odomTopicSelect">
+    </select>
+    <select id="encTopicSelect">
+    </select>
+    <button style="display: inline-block; margin-left: 10px;" onclick="fetchOdomEncTopics()">Refresh Topics</button>
+</div>
+
+<div class="my_div">
     <select id="chartSelect">
         <option value="XY">X-Y Path</option>
         <option value="YZ">Y-Z Path</option>
@@ -50,11 +58,70 @@
 </div> -->
 
 <script>
+    async function fetchOdomEncTopics() {
+        try {
+            const odom_response = await fetch('/get_odometry_topics');
+            const enc_response = await fetch('/get_encoder_topics');
+
+            if (!odom_response.ok || !enc_response.ok) {
+                throw new Error('Network response was not ok');
+            }
+
+            let odom_topics_of_topics = await odom_response.json();
+            let odom_topics = odom_topics_of_topics.topics;
+
+            let enc_topics_of_topics = await enc_response.json();
+            let enc_topics = enc_topics_of_topics.topics;
+
+            const odomTopicSelect = document.getElementById('odomTopicSelect');
+            const encTopicSelect = document.getElementById('encTopicSelect');
+
+            // Clear existing options
+            odomTopicSelect.innerHTML = '';
+            encTopicSelect.innerHTML = '';
+
+            // Populate odometry topics
+            odom_topics.forEach(topic => {
+                const option = document.createElement('option');
+                option.value = topic; // Set the value of the option
+                option.textContent = topic; // Set the displayed text
+                odomTopicSelect.appendChild(option); // Add the option to the select
+            });
+
+            // Populate encoder topics
+            enc_topics.forEach(topic => {
+                const option = document.createElement('option');
+                option.value = topic; // Set the value of the option
+                option.textContent = topic; // Set the displayed text
+                encTopicSelect.appendChild(option); // Add the option to the select
+            });
+        } catch (error) {
+            console.error('Error fetching topics:', error);
+        }
+    }
+
     function updateChart(selectedChart) {
+
+        // Sample JSON object
+        const odom_params = {
+            topic: document.getElementById('odomTopicSelect').value
+        };
+
+        const enc_params = {
+            topic: document.getElementById('encTopicSelect').value
+        };
+
+        // Convert JSON object to query string
+        const odom_queryString = new URLSearchParams(odom_params).toString();
+        const enc_queryString = new URLSearchParams(enc_params).toString();
+
+        // Create the full URL
+        const odom_url = `/get_trajectory?${odom_queryString}`;
+        const enc_url = `/get_encoders?${enc_queryString}`;
 
         if (selectedChart === "rudder" || selectedChart === "propeller") {
             
-            fetch('/get_encoders')
+            fetch(enc_url)
             .then(response => response.json())
             .then(data => {
                 
@@ -88,9 +155,10 @@
             });
 
         } else {
-            fetch('/get_trajectory')
+            fetch(odom_url)
             .then(response => response.json())
             .then(data => {
+                console.log(data);
                 
                 if (selectedChart === "XY") {
                     
@@ -311,10 +379,13 @@
         
     });
 
+    fetchOdomEncTopics();
+
     setInterval(function() {
         var selectedChart = document.getElementById('chartSelect').value;
-        updateChart(selectedChart);
+        updateChart(selectedChart);        
     }, 1000);
+
 </script>
 
 {% endblock %}
