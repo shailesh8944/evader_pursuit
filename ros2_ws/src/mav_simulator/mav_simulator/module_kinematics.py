@@ -319,8 +319,14 @@ def quat_multiply(q1, q2):
 
 def quat_conjugate(quat):
     q = quat.copy()
-    q[1:3] = -quat[1:3]
-    return quat
+    q[1:] = -quat[1:]
+    return q
+
+def rotate_vec_by_quat(vec_a, q_a_b):
+    q_vec_a = np.zeros(4)
+    q_vec_a[1:] = vec_a
+    vec_b = quat_multiply(quat_multiply(q_a_b, q_vec_a), quat_conjugate(q_a_b))[1:]
+    return vec_b
 
 # Compute T matrix (or J2 matrix) from Euler angles
 def eul_rate_matrix(eul, order='ZYX', deg=False):
