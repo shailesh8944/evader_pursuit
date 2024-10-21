@@ -1,4 +1,1 @@
-# see MonVER message
-#
-
-char[30] field
+/workspaces/mavlab/ros2_ws/src/ublox/ublox_msgs/msg/MonVERExtension.msg

@@ -1,1 +1,1 @@
-geometry_msgs;rclcpp;sensor_msgs;std_msgs;std_srvs;nav_msgs;tf2_ros;tf2_msgs;tf2_geometry_msgs;boost;rosidl_default_runtime
+/workspaces/mavlab/ros2_ws/build/sbg_driver/ament_cmake_index/share/ament_index/resource_index/package_run_dependencies/sbg_driver

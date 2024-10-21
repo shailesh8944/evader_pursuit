@@ -1,1 +1,1 @@
-asio;diagnostic_msgs;diagnostic_updater;geometry_msgs;nmea_msgs;rcl_interfaces;rclcpp;rclcpp_components;rtcm_msgs;sensor_msgs;std_msgs;tf2;ublox_msgs;ublox_serialization
+/workspaces/mavlab/ros2_ws/build/ublox_gps/ament_cmake_index/share/ament_index/resource_index/package_run_dependencies/ublox_gps

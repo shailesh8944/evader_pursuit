@@ -1,1 +1,1 @@
-prepend-non-duplicate;PYTHONPATH;local/lib/python3.10/dist-packages
+/workspaces/mavlab/ros2_ws/build/sbg_driver/ament_cmake_environment_hooks/pythonpath.dsv

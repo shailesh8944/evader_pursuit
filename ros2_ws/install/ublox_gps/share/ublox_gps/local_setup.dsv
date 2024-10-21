@@ -1,2 +1,1 @@
-source;share/ublox_gps/environment/ament_prefix_path.sh
-source;share/ublox_gps/environment/path.sh
+/workspaces/mavlab/ros2_ws/build/ublox_gps/ament_cmake_environment_hooks/local_setup.dsv

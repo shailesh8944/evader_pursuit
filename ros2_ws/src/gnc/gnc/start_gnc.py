@@ -8,11 +8,10 @@ import yaml
 import json
 import threading
 # from class_gnc_ref import GNC
-# from class_gnc_new import GNC
-from class_navigation import GNC
-from class_bridge import WebSocketROSBridge_Encoder
+from gnc.class_navigation import GNC 
+from gnc.class_bridge import WebSocketROSBridge_Encoder
 from rclpy.executors import MultiThreadedExecutor
-from class_vessel import Vessel
+from mav_simulator.class_vessel import Vessel
 
 def ros_thread(ros_nodes):
 

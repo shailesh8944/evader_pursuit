@@ -76,7 +76,9 @@ class GNC():
         self.gnc_flag = gnc_flag
         
         self.length = length
+        self.scale = 48.9355
         self.Fn = Fn
+        self.g = 9.80665
         self.U_des = self.Fn * np.sqrt(9.80665 * self.length)
 
         # Convert GPS waypoints to NED waypoints
@@ -97,16 +99,21 @@ class GNC():
         self.vessel_data = vessel_data
         self.vessel_ode = vessel_ode
         self.euler_angle_flag = euler_angle_flag
+        
+        self.gnss_measurement = np.ones(3)
+        self.imu_measurement = np.ones(9)
 
         if self.euler_angle_flag:
-            self.x_hat = np.zeros(14)
-            self.P_hat = np.eye(14)
+            # [u, v, w, phi_dot, theta_dot, psi_dot, x, y, z, phi, theta, psi, ax, ay, az, rudder, prop]
+            self.x_hat = np.zeros(17)
+            self.P_hat = np.eye(17)*1e-6
             self.u_cmd = np.zeros(2)
         else:
-            self.x_hat = np.zeros(15)
-            self.x_hat[9] = 1.0
-            self.P_hat = np.eye(15)
-            self.u_cmd = np.zeros(2)
+            # self.x_hat = np.zeros(15)
+            # self.x_hat[9] = 1.0
+            # self.P_hat = np.eye(15)
+            # self.u_cmd = np.zeros(2)
+            pass
         
         self.node = Node(f'GNC_{self.topic_prefix}')
         
@@ -197,54 +204,78 @@ class GNC():
     def imu_callback(self, msg, sensor_id):
 
         self.sensor_measurements[sensor_id] = msg
+        
+        q_b_i = self.sensors[sensor_id]['sensor_orientation']
+        R_b_i = kin.quat_to_rotm(q_b_i)
+        R_i_b = R_b_i.T
+        
+        r_bi_b = self.sensors[sensor_id]['sensor_location']
 
         if self.euler_angle_flag:
-            q = 6; p = 2; n = 14
+            # [u, v, w, phi_dot, theta_dot, psi_dot, x, y, z, phi, theta, psi, ax, ay, az, rudder_angle, prop]
+            q = 9; p = 2; n = 17
 
+            # [phi, theta, psi, phi_dot, theta_dot, psi_dot, ax, ay, az]
             y = np.zeros(q)
             quat = np.zeros(4)
 
-            y[0] = msg.angular_velocity.x / (self.U_des / self.length)
-            y[1] = msg.angular_velocity.y / (self.U_des / self.length)
-            y[2] = msg.angular_velocity.z / (self.U_des / self.length)
-            
+            # Non dimensional measurements
             quat[0] = msg.orientation.w
             quat[1] = msg.orientation.x
             quat[2] = msg.orientation.y
             quat[3] = msg.orientation.z
 
-            eul = kin.quat_to_eul(quat)
-            y[3:6] = eul
+            Theta_n_i = kin.quat_to_eul(quat)
+            R_i_n = kin.eul_to_rotm(Theta_n_i)
+            R_b_n = R_i_n @ R_b_i
+            Theta_n_b = kin.rotm_to_eul(R_b_n)
+            y[0:3] = Theta_n_b
+            
+            omega_ni_i = np.zeros(3)
+            omega_ni_i[0] = msg.angular_velocity.x
+            omega_ni_i[1] = msg.angular_velocity.y
+            omega_ni_i[2] = msg.angular_velocity.z
+            J2_n_b = kin.eul_rate_matrix(Theta_n_b)
+            Theta_dot_n_b = J2_n_b @ R_b_i @ omega_ni_i
+            
+            y[3:6] = Theta_dot_n_b / (self.U_des / self.length)
+            
+            a_ni_i = np.zeros(3)
+            a_ni_i[0] = msg.linear_acceleration.x 
+            a_ni_i[1] = msg.linear_acceleration.y
+            a_ni_i[2] = msg.linear_acceleration.z 
+            g_vec = np.array([0, 0, 9.80665])
+            a_ni_i = a_ni_i + R_i_n.T @ g_vec 
+            
+            a_nb_n = R_i_n @ (a_ni_i - (R_b_i @ (np.cross(R_i_b @ omega_ni_i, np.cross(R_i_b @ omega_ni_i, r_bi_b)))))
+            a_nb_n[2] = 0
+            y[6:9] = a_nb_n / (self.U_des**2 / self.length)
 
         else:
-            q = 7; p = 2; n = 15
+            pass 
 
-            y = np.zeros(q)
-
-            y[0] = msg.angular_velocity.x / (self.U_des / self.length)
-            y[1] = msg.angular_velocity.y / (self.U_des / self.length)
-            y[2] = msg.angular_velocity.z / (self.U_des / self.length)
-            y[3] = msg.orientation.w
-            y[4] = msg.orientation.x
-            y[5] = msg.orientation.y
-            y[6] = msg.orientation.z
-        
-        q_b_i = self.sensors[sensor_id]['sensor_orientation']
-        R_b_i = kin.quat_to_rotm(q_b_i)
-        R_i_b = R_b_i.T
-
-        # Measurement Noise
-        Rd = np.eye(q)
-        Rd[0:3][:, 0:3] = msg.angular_velocity_covariance.reshape((3, 3)) / ( (self.U_des / self.length) ** 2)
+        self.imu_measurement = y 
+               
+    def imu_corrector(self):
         
         if self.euler_angle_flag:
-            Rd[3:6][:, 3:6] = msg.orientation_covariance.reshape((3, 3))
+            # [u, v, w, phi_dot, theta_dot, psi_dot, x, y, z, phi, theta, psi, ax, ay, az, rudder_angle, prop]
+            q = 9; p = 2; n = 17
+            
+        y = self.imu_measurement
+        # Measurement Noise
+        Rd = np.eye(q)
+        # Rd[0:3][:, 0:3] = msg.angular_velocity_covariance.reshape((3, 3)) / ( (self.U_des / self.length) ** 2)
+        
+        if self.euler_angle_flag:
+            # Rd[0:3][:, 0:3] = msg.orientation_covariance.reshape((3, 3))
+            Rd[0:3][:, 0:3] = np.eye(3) * 1e-6
+        
+        Rd[3:6][:, 3:6] = np.eye(3) * 1e-6 / ( (self.U_des / self.length) ** 2)
+        Rd[6:9][:, 6:9] = np.eye(3) * 1e-4 / ( (self.U_des ** 2 / self.length) ** 2)
 
-        else:            
-            Ceul = msg.orientation_covariance.reshape((3, 3))
-            G = kin.dquat_deul(y[3:7])
-            Cq = G @ Ceul @ G.T
-            Rd[3:7][:, 3:7] = (Cq + Cq.T) / 2.0
+        # else:
+        #     pass 
 
         # Feed forward matrix
         Dd = np.zeros((q, p))
@@ -257,44 +288,26 @@ class GNC():
             # Output matrix
             Cd = np.zeros((q, n))
 
-            x0 = kin.quat_to_eul(quat)
-            fun = lambda x: kin.rotm_to_eul(kin.eul_to_rotm(x) @ kin.quat_to_rotm(q_b_i).T)
-            jacob = self.jacobian(fun, x0)
-            
-            Cd[0:3][:, 3:6] = R_i_b
-            Cd[3:6][:, 9:12] = jacob
+            Cd[0:3][:, 9:12] = np.eye(3)
+            Cd[3:6][:, 3:6] = np.eye(3)
+            Cd[6:9][:, 12:15] = np.eye(3)
 
-        else:
-            # Output matrix
-            Cd = np.zeros((q, n))
-
-            qw = q_b_i[0]
-            qx = q_b_i[1]
-            qy = q_b_i[2]
-            qz = q_b_i[3]
-            
-            Cd[0:3][:, 3:6] = R_i_b
-            Cd[3:7][:, 9:13] = np.array([
-                [qw, -qx, -qy, -qz],
-                [qx,  qw,  qz, -qy],
-                [qy, -qz,  qw,  qx],
-                [qz,  qy, -qx,  qw]
-            ])
-
-        ################################################################################
 
         self.state_corrector(y, Cd, Dd, Rd, sensor='IMU')
-               
     
     def gps_callback(self, msg, sensor_id):
+        
         self.sensor_measurements[sensor_id] = msg
+        r_bs_b = self.sensors[sensor_id]['sensor_location']
+        pred_Theta_nb = self.x_hat[9:12]
+        r_bs_n = kin.eul_to_rotm(pred_Theta_nb) @ r_bs_b
 
         q = 3; p = 2; 
         
         if self.euler_angle_flag:
-            n = 14
+            n = 17
         else:
-            n = 15
+            pass
 
         y = np.zeros(q)
 
@@ -304,15 +317,24 @@ class GNC():
         llh = np.array([lat, lon, alt])
 
         ned = kin.llh_to_ned(llh, self.llh0)
-
-        y[0] = ned[0]
-        y[1] = ned[1]
-        y[2] = ned[2]
+        y = ned - r_bs_n 
 
         y = y / self.length
 
+        ################################################################################
+
+        self.gnss_measurement = y 
+    
+    def gnss_corrector(self): 
+        
+        q = 3
+        p = 2 
+        n = 17
+        
+        y = self.gnss_measurement 
         # Measurement Noise
-        Rd = np.array(msg.position_covariance).reshape((3, 3))  / (self.length ** 2)
+        # Rd = np.array(msg.position_covariance).reshape((3, 3))  / (self.length ** 2)
+        Rd = np.eye(3) * 1e-4 / (self.length ** 2) 
 
         # Feed forward matrix
         Dd = np.zeros((q, p))
@@ -325,45 +347,9 @@ class GNC():
         Cd = np.zeros((q, n))
         Cd[0, 6] = 1
         Cd[1, 7] = 1
-        Cd[2, 8] = 1
-
-        sen_loc = self.sensors[sensor_id]['sensor_location']
-        x_sen = sen_loc[0] / self.length
-        y_sen = sen_loc[1] / self.length
-        z_sen = sen_loc[2] / self.length
-        r_sen = np.array([x_sen, y_sen, z_sen])
-
-        if self.euler_angle_flag:
-            eul = self.x_hat[9:12]
-            fun = lambda x: kin.eul_to_rotm(x) @ r_sen
-            jacob = self.jacobian(fun, eul)
-
-            Cd[0:3][:, 9:12] = jacob
+        Cd[2, 8] = 1 
         
-        else:
-            qw = self.x_hat[9]
-            qx = self.x_hat[10]
-            qy = self.x_hat[11]
-            qz = self.x_hat[12]
-
-            Cd[0, 9]  = -2 * qz * y_sen + 2 * qy * z_sen
-            Cd[0, 10] = 2 * qy * y_sen + 2 * qz * z_sen
-            Cd[0, 11] = -4 * qy * x_sen + 2 * qx * y_sen + 2 * qw * z_sen
-            Cd[0, 12] = -4 * qz * x_sen - 2 * qw * y_sen + 2 * qx * z_sen
-            
-            Cd[1, 9]  = 2 * qz * x_sen - 2 * qx * z_sen
-            Cd[1, 10] = 2 * qy * x_sen - 4 * qx * y_sen - 2 * qw * z_sen
-            Cd[1, 11] = 2 * qx * x_sen + 2 * qz * z_sen
-            Cd[1, 12] = 2 * qw * x_sen - 4 * qz * y_sen + 2 * qy * z_sen
-
-            Cd[2, 9]  = -2 * qy * x_sen + 2 * qx * y_sen
-            Cd[2, 10] = 2 * qz * x_sen + 2 * qw * y_sen - 4 * qx * z_sen
-            Cd[2, 11] = -2 * qw * x_sen + 2 * qz * y_sen - 4 * qy * z_sen
-            Cd[2, 12] = 2 * qx * x_sen + 2 * qy * y_sen
-
-        ################################################################################
-
-        self.state_corrector(y, Cd, Dd, Rd)
+        self.state_corrector(y, Cd, Dd, Rd, sensor = "GNSS")
     
     def uwb_callback(self, msg, sensor_id):
         
@@ -510,6 +496,12 @@ class GNC():
 
         # Predict EKF state estimate
         self.state_predictor()
+        print(f"JUST AFTER PREDICTION  x : {self.x_hat[6] * self.length}  y : {self.x_hat[7] * self.length} ")
+        self.imu_corrector() 
+        print(f"AFTER IMU CORRECTION  x : {self.x_hat[6] * self.length}  y : {self.x_hat[7] * self.length} ")
+        self.gnss_corrector() 
+        print(f"AFTER GNSS CORRECTOR   x : {self.x_hat[6] * self.length}  y : {self.x_hat[7] * self.length} ")
+        print(f"GNSS MEASUREMENT  x : {self.gnss_measurement[0] * self.length}  y : {self.gnss_measurement[1] * self.length} ")
 
         current_time = self.node.get_clock().now()
 
@@ -525,26 +517,24 @@ class GNC():
             quat = kin.eul_to_quat(self.x_hat[9:12])
             odo.pose.pose.orientation = Quaternion(x=quat[1], y=quat[2], z=quat[3], w=quat[0])
         else:
-            odo.pose.pose.orientation = Quaternion(x=self.x_hat[10], y=self.x_hat[11], z=self.x_hat[12], w=self.x_hat[9])
+            pass 
+            # odo.pose.pose.orientation = Quaternion(x=self.x_hat[10], y=self.x_hat[11], z=self.x_hat[12], w=self.x_hat[9])
 
         odo.twist.twist.linear = Vector3(x=self.x_hat[0] * self.U_des, y=self.x_hat[1] * self.U_des, z=self.x_hat[2] * self.U_des)
-        odo.twist.twist.angular = Vector3(x=self.x_hat[3] * self.U_des / self.length, y=self.x_hat[4] * self.U_des / self.length, z=self.x_hat[5] * self.U_des / self.length)
-
-        if self.euler_angle_flag:
-            Ceul = self.P_hat[9:12][:, 9:12]
-        else:
-            G = kin.deul_dquat(self.x_hat[9:13])
-            Cq = self.P_hat[9:13][:, 9:13]
-            Ceul = G @ Cq @ G.T
+        Theta_n_b = self.x_hat[9:12]
+        J2_n_b = kin.eul_rate_matrix(Theta_n_b)
+        J2_n_b_inv = np.linalg.inv(J2_n_b)
+        ang_vel = J2_n_b_inv @ self.x_hat[3:6] 
+        odo.twist.twist.angular = Vector3(x=ang_vel[0] * self.U_des / self.length, y=ang_vel[1] * self.U_des / self.length, z=ang_vel[2] * self.U_des / self.length)
 
         pose_cov = np.zeros((6,6), dtype=np.float64)
         pose_cov[0:3][:, 0:3] = self.P_hat[6:9][:, 6:9] * (self.length ** 2)
-        pose_cov[3:6][:, 3:6] = Ceul
+        pose_cov[3:6][:, 3:6] = self.P_hat[9:12][:, 9:12]
         odo.pose.covariance = pose_cov.flatten()
 
         twist_cov = np.zeros((6,6))
         twist_cov[0:3][:, 0:3] = self.P_hat[0:3][:, 0:3] * (self.U_des ** 2)
-        twist_cov[3:6][:, 3:6] = self.P_hat[3:6][:, 3:6] * ((self.U_des / self.length) ** 2)
+        twist_cov[3:6][:, 3:6] = (J2_n_b_inv @ self.P_hat[3:6][:, 3:6] @ J2_n_b_inv.T) * ((self.U_des / self.length) ** 2)
         odo.twist.covariance = twist_cov.flatten()
 
         self.odometry['pub'].publish(odo)
@@ -553,20 +543,6 @@ class GNC():
             dt = (1 / self.rate) * self.U_des / self.length
             # self.score = self.score + np.abs(self.y_p_e) * dt + np.abs(self.x_hat[13] / (35 * np.pi / 180)) * dt
             self.current_time += dt
-
-        if self.euler_angle_flag:
-            eul = self.x_hat[9:12] * 180 / np.pi
-            quat = kin.eul_to_quat(eul, deg=True)
-        else:
-            quat = self.x_hat[9:13]
-            eul = kin.quat_to_eul(quat, deg=True)            
-        
-        if self.euler_angle_flag:
-            rud_indx = 12
-            prop_indx = 13
-        else:
-            rud_indx = 13
-            prop_indx = 14
         
         # print(f"Linear Velocity (m/s)    : {self.x_hat[0] * self.U_des:.4f}, {self.x_hat[1] * self.U_des:.4f}, {self.x_hat[2] * self.U_des:.4f}")
         # print(f"Angular Velocity (rad/s) : {self.x_hat[3] * self.U_des / self.length:.4f}, {self.x_hat[4] * self.U_des / self.length:.4f}, {self.x_hat[5] * self.U_des / self.length:.4f}")
@@ -591,9 +567,10 @@ class GNC():
     def state_corrector(self, y, Cd, Dd, Rd, y_hat=None, sensor=None):
         
         if self.euler_angle_flag:
-            n = 14
+            n = 17
         else:
-            n = 15
+            pass 
+        
         try:
             
             #########################################################################################
@@ -612,37 +589,18 @@ class GNC():
                     innovation[i + 3] = kin.ssa(innovation[i + 3]) 
                 
             x_hat_corr = K @ innovation
-            
-            if not self.euler_angle_flag:
-                old_quat = self.x_hat[9:13]
 
             #########################################################################################
 
             # DO NOT EDIT THE FOLLOWING LINES (THIS IS NEEDED TO KEEP THE UPDATES STABLE)
-
-            if self.euler_angle_flag:
-                thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, 0.1, 0.1, 0.1, 0.6, 40])
-                # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
-            else:
-                thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, np.inf, np.inf, np.inf, np.inf, 0.6, 40])
-                # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
-            
-            x_hat_corr = np.where(np.abs(x_hat_corr) > thresh, np.sign(x_hat_corr) * thresh, x_hat_corr)            
+                       
             self.x_hat = self.x_hat + x_hat_corr
             
-            if not self.euler_angle_flag:
-                self.x_hat[9:13] = self.x_hat[9:13] / np.linalg.norm(self.x_hat[9:13])
-
-                quat_diff = kin.quat_multiply(old_quat, kin.quat_conjugate(self.x_hat[9:13]))
-                if quat_diff[0] < 0:
-                    self.x_hat[9:13] = -self.x_hat[9:13]
-            
             if self.euler_angle_flag:
-                rud_indx = 12
-                prop_indx = 13
+                rud_indx = 15
+                prop_indx = 16
             else:
-                rud_indx = 13
-                prop_indx = 14
+                pass 
             
             self.x_hat[rud_indx] = kin.clip(self.x_hat[rud_indx], 35 * np.pi / 180)
             self.x_hat[prop_indx] = kin.clip(self.x_hat[prop_indx], 800.0 * self.length / (self.U_des * 60.0))
@@ -658,110 +616,31 @@ class GNC():
     def state_predictor(self):
         
         if self.euler_angle_flag:
-            n = 14; p = 2
+            n = 17; p = 2
+            rud_indx = 15
+            prop_indx = 16
         else:
-            n = 15; p = 2
+            pass
+            # n = 15; p = 2
         
-        h = 1/self.rate * (self.U_des / self.length)
-
-        u = self.x_hat[0]
-        v = self.x_hat[1]
-        r = self.x_hat[5]
-        
-        # Mass matrix
-        M_RB = self.vessel_data['M_RB']
-        M_A = self.vessel_data['M_A']
-        D_l = self.vessel_data['Dl']
-        K = self.vessel_data['K']
-        M_inv = self.vessel_data['M_inv']
-
-        # Cross Flow Drag coefficients
-        Xuu = self.vessel_data['X_u_au']
-        Yvv = self.vessel_data['Y_v_av']
-        Yvr = self.vessel_data['Y_v_ar']
-        Yrv = self.vessel_data['Y_r_av']
-        Yrr = self.vessel_data['Y_r_ar']
-        Nvv = self.vessel_data['N_v_av']
-        Nvr = self.vessel_data['N_v_ar']
-        Nrv = self.vessel_data['N_r_av']
-        Nrr = self.vessel_data['N_r_ar']
-
-        # Rudder and Propeller coefficients
-        Yd = self.vessel_data['Y_d']
-        Nd = self.vessel_data['N_d']
-        # Xn = self.vessel_data['X_n']
-
         T_rud = self.vessel_data['T_rud']
         T_prop = self.vessel_data['T_prop']
-
-        M = M_RB + M_A
-        v_vec = self.x_hat[0:6]
-
-        Nmat, F_damp = self.N_matrix(v_vec, M, D_l, Xuu, Yvv, Yvr, Yrv, Yrr, Nvv, Nvr, Nrv, Nrr)
-
-        dF_damp_dv = np.zeros((6,6))
-        for i in range(6):
-            v2_vec = v_vec
-            v1_vec = v_vec
-
-            dx = 0.001
-
-            v2_vec[i] = v2_vec[i] + dx
-            v1_vec[i] = v1_vec[i] - dx
-
-            _, F2_damp = self.N_matrix(v2_vec, M, D_l, Xuu, Yvv, Yvr, Yrv, Yrr, Nvv, Nvr, Nrv, Nrr)
-            _, F1_damp = self.N_matrix(v1_vec, M, D_l, Xuu, Yvv, Yvr, Yrv, Yrr, Nvv, Nvr, Nrv, Nrr)
-
-            dF_damp_dv[:, i] = (F2_damp - F1_damp) / (2 * dx)
-
-        if not self.euler_angle_flag:
-            deul_dq = kin.deul_dquat(self.x_hat[9:13])
-            H_mat = np.zeros((6, 7))
-            H_mat[0:3][:, 0:3] = np.eye(3)
-            H_mat[3:6][:, 3:7] = deul_dq
-
+        
+        h = 1/self.rate * (self.U_des / self.length)
         Amat = np.zeros((n, n))
-
-        if self.euler_angle_flag:
-            Amat[0:6][:, 0:6] = - M_inv @ dF_damp_dv
-            Amat[0:6][:, 6:12] = - M_inv @ K
-            Amat[6:9][:, 0:3] = kin.eul_to_rotm(self.x_hat[9:12])
-            Amat[9:12][:, 3:6] = kin.eul_rate_matrix(self.x_hat[9:12])
-        else:
-            Amat[0:6][:, 0:6] = - M_inv @ dF_damp_dv
-            Amat[0:6][:, 6:13] = - M_inv @ K @ H_mat
-            Amat[6:9][:, 0:3] = kin.quat_to_rotm(self.x_hat[9:13])
-            Amat[9:13][:, 3:6] = kin.quat_rate_matrix(self.x_hat[9:13])
-
-        if self.euler_angle_flag:
-            rud_indx = 12
-            prop_indx = 13
-        else:
-            rud_indx = 13
-            prop_indx = 14
         
-        wp = self.vessel_data['wp']
-        tp = self.vessel_data['tp']
-        D_prop = self.vessel_data['D_prop']
-        pow_coeff = self.vessel_data['pow_coeff']
-
-        Xn = 2 * (1 - tp) * (D_prop ** 2) * ((1 - wp) * D_prop * pow_coeff[1] + 2 * self.x_hat[prop_indx] * (D_prop ** 2) * pow_coeff[2])
+        Amat[0:3][:, 12:15] = np.eye(3) 
+        Amat[6:9][:, 0:3] = np.eye(3)
+        Amat[9:12][:, 3:6] = np.eye(3)
         
-        Amat[0:6][:, rud_indx:rud_indx+2] = M_inv @ np.array([
-            [0, Xn],
-            [Yd, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [Nd, 0]
-        ])
+        # deltad_max = 3 * np.pi / 180 * np.sqrt(self.length * self.scale / self.g) / self.Fn
+        # T_rud = 1 / (4 * deltad_max)
+        # T_prop = T_rud
         
         Amat[rud_indx, rud_indx] = -1/T_rud
         Amat[prop_indx, prop_indx] = -1/T_prop
 
         Bmat = np.zeros((n, p))
-        Bmat[rud_indx, 0] = 1/T_rud
-        Bmat[prop_indx, 1] = 1/T_prop
 
         Ad = scipy.linalg.expm(Amat * h)
         
@@ -771,92 +650,37 @@ class GNC():
             Bd = Bmat
         
         Ed = np.zeros((n, 6))
-        Ed[0:6][:, 0:6] = M_inv
+        Ed[3:6][:, 0:3] = np.eye(3)
+        Ed[12:15][:, 3:6] = np.eye(3) 
+        
+        # Ed[0:6][:, 0:6] = M_inv
 
-        sig_process = np.array([1, 1, 1e-2, 1e-2, 1e-2, 1]) * 1e-4
+        sig_process = np.array([1, 1, 1, 10, 10, 10]) * 1e-4
         Qd = np.diag(sig_process ** 2)
+        u = np.zeros(2)
 
         try:
-            xd_hat1 = self.vessel_ode(0, self.x_hat, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
-            xd_hat2 = self.vessel_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat1, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
-            xd_hat3 = self.vessel_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat2, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
-            xd_hat4 = self.vessel_ode(h, self.x_hat + h * xd_hat3, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
 
-            new_state = self.x_hat + (h / 6) * (xd_hat1 + 2 * xd_hat2 + 2 * xd_hat3 + xd_hat4)
-
-            # sol = solve_ivp(self.vessel_ode, (0, h), self.x_hat, args=(self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag))
-            # new_state = np.array(sol.y)[:,-1]
+            diff = Ad @ self.x_hat + Bd @ u - self.x_hat
             
-            if np.any(np.isnan(new_state)):
-                raise ValueError('NaN found in new state')
+            self.x_hat += diff 
             
-            if not self.euler_angle_flag:
-                old_quat = self.x_hat[9:13]
-
-            diff = new_state - self.x_hat
-
             if self.euler_angle_flag:
                 
                 for i in range(3):
                     diff[9 + i] = kin.ssa(diff[9 + i])
 
-                thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, 0.1, 0.1, 0.1, 0.6, 40])
-                # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
             else:
-                thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, np.inf, np.inf, np.inf, np.inf, 0.6, 40])
-                # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
-            
-            new_state = np.where(np.abs(diff) > thresh, self.x_hat + np.sign(diff) * thresh, new_state)
-            self.x_hat = new_state
-            
-            if not self.euler_angle_flag:
-                self.x_hat[9:13] = self.x_hat[9:13] / np.linalg.norm(self.x_hat[9:13])
-                
-                quat_diff = kin.quat_multiply(old_quat, kin.quat_conjugate(self.x_hat[9:13]))
-                if quat_diff[0] < 0:
-                    self.x_hat[9:13] = -self.x_hat[9:13]
+                pass 
             
             self.x_hat[rud_indx] = kin.clip(self.x_hat[rud_indx], 35 * np.pi / 180)
             self.x_hat[prop_indx] = kin.clip(self.x_hat[prop_indx], 800.0 * self.length / (self.U_des * 60.0))
             
             self.P_hat = Ad @ self.P_hat @ Ad.T + Ed @ Qd @ Ed.T
-            
-            pass
+        
         except Exception as e:
             print('Predictor Diverges: ', e)
             pass        
-
-    def N_matrix(self, v_vec, M, D_l, Xuu, Yvv, Yvr, Yrv, Yrr, Nvv, Nvr, Nrv, Nrr):
-
-            u = v_vec[0]
-            v = v_vec[1]
-            r = v_vec[5]
-
-            v1 = v_vec[0:3]
-            v2 = v_vec[3:6]
-
-            D_nl = -np.array([
-                [Xuu * np.abs(u), 0, 0, 0, 0, 0],
-                [0, Yvv * np.abs(v) + Yvr * np.abs(r), 0, 0, 0, Yrv * np.abs(v) + Yrr * np.abs(r)],
-                [0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0],
-                [0, Nvv * np.abs(v) + Nvr * np.abs(r), 0, 0, 0, Nrv * np.abs(v) + Nrr * np.abs(r)],
-            ])
-            
-            M11 = M[0:3][:, 0:3]
-            M12 = M[0:3][:, 3:6]
-            M21 = M[3:6][:, 0:3]
-            M22 = M[3:6][:, 3:6]
-
-            C = np.zeros((6, 6))
-            C[0:3][:, 3:6] = -kin.Smat(M11 @ v1 + M12 @ v2)
-            C[3:6][:, 0:3] = -kin.Smat(M11 @ v1 + M12 @ v2)
-            C[3:6][:, 3:6] = -kin.Smat(M21 @ v1 + M22 @ v2)
-
-            N_mat = C + D_l + D_nl
-
-            return N_mat, N_mat @ v_vec
 
     def guidance(self):
         # self.terminate_flag = True
@@ -925,7 +749,12 @@ class GNC():
 
         U = np.linalg.norm(self.x_hat[0:2])
         
-        r = self.x_hat[5]
+        Theta_n_b = self.x_hat[9:12]
+        J2_n_b = kin.eul_rate_matrix(Theta_n_b)
+        J2_n_b_inv = np.linalg.inv(J2_n_b)
+        ang_vel = J2_n_b_inv @ self.x_hat[3:6] 
+        r = ang_vel[2]
+        
 
         if self.euler_angle_flag:
             eul = self.x_hat[9:12]
@@ -973,11 +802,10 @@ class GNC():
         # Useful when trying to analyze data collected through RF mode
         
         if self.euler_angle_flag:
-            rud_indx = 12
-            prop_indx = 13
+            rud_indx = 15
+            prop_indx = 16
         else:
-            rud_indx = 13
-            prop_indx = 14
+            pass 
         
         # self.u_cmd = np.array([self.x_hat[rud_indx], self.x_hat[prop_indx]])
 
