@@ -126,8 +126,8 @@ class Vessel_Pub_Sub():
         gps_cov = np.diag(gps_rms ** 2)
 
         state = sh.world.vessels[self.vessel_id].current_state
-        llh0 = np.array([12.993661, 80.239402, 0])
-        ned = state[6:9] + kin.quat_to_rotm(state[9:13]) @ loc 
+        llh0 = sh.world.gps_datum
+        ned = state[6:9] + kin.quat_to_rotm(state[9:13]) @ loc
         ned = ned + np.random.multivariate_normal(np.zeros(3), gps_cov)
         llh = kin.ned_to_llh(ned, llh0)
 

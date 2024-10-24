@@ -12,6 +12,7 @@ module_path = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator'
 sys.path.append(os.path.abspath(module_path))
 
 import module_kinematics as kin
+import module_kinematic_kf as kkf
 import warnings
 import scipy
 from scipy.integrate import solve_ivp
@@ -67,7 +68,8 @@ class GNC():
                 vessel_data=None,
                 vessel_ode=None,
                 euler_angle_flag=False,
-                gnc_flag='gnc'):
+                gnc_flag='gnc',
+                kinematic_kf_flag=True):
         
         self.topic_prefix = topic_prefix
         self.rate = int(rate)
@@ -97,16 +99,28 @@ class GNC():
         self.vessel_data = vessel_data
         self.vessel_ode = vessel_ode
         self.euler_angle_flag = euler_angle_flag
-
-        if self.euler_angle_flag:
-            self.x_hat = np.zeros(14)
-            self.P_hat = np.eye(14)
-            self.u_cmd = np.zeros(2)
+        self.kinematic_kf_flag =  kinematic_kf_flag
+        
+        if self.kinematic_kf_flag:
+            if self.euler_angle_flag:
+                self.x_hat = np.zeros(17)
+                self.P_hat = np.eye(17)
+                self.u_cmd = np.zeros(2)
+            else:
+                self.x_hat = np.zeros(18)
+                self.x_hat[9] = 1.0
+                self.P_hat = np.eye(18)
+                self.u_cmd = np.zeros(2)
         else:
-            self.x_hat = np.zeros(15)
-            self.x_hat[9] = 1.0
-            self.P_hat = np.eye(15)
-            self.u_cmd = np.zeros(2)
+            if self.euler_angle_flag:
+                self.x_hat = np.zeros(14)
+                self.P_hat = np.eye(14)
+                self.u_cmd = np.zeros(2)
+            else:
+                self.x_hat = np.zeros(15)
+                self.x_hat[9] = 1.0
+                self.P_hat = np.eye(15)
+                self.u_cmd = np.zeros(2)
         
         self.node = Node(f'GNC_{self.topic_prefix}')
         
@@ -199,7 +213,11 @@ class GNC():
         self.sensor_measurements[sensor_id] = msg
 
         if self.euler_angle_flag:
-            q = 6; p = 2; n = 14
+            
+            if self.kinematic_kf_flag:
+                q = 6; p = 2; n = 17
+            else:
+                q = 6; p = 2; n = 14
 
             y = np.zeros(q)
             quat = np.zeros(4)
@@ -217,7 +235,11 @@ class GNC():
             y[3:6] = eul
 
         else:
-            q = 7; p = 2; n = 15
+
+            if self.kinematic_kf_flag:
+                q = 7; p = 2; n = 18
+            else:
+                q = 7; p = 2; n = 15
 
             y = np.zeros(q)
 
@@ -303,9 +325,15 @@ class GNC():
         q = 3; p = 2; 
         
         if self.euler_angle_flag:
-            n = 14
+            if self.kinematic_kf_flag:
+                n = 17
+            else:
+                n = 14
         else:
-            n = 15
+            if self.kinematic_kf_flag:
+                n = 18
+            else:
+                n = 15
 
         y = np.zeros(q)
 
@@ -383,9 +411,15 @@ class GNC():
         q = 3; p = 2; 
         
         if self.euler_angle_flag:
-            n = 14
+            if self.kinematic_kf_flag:
+                n = 17
+            else:
+                n = 14
         else:
-            n = 15
+            if self.kinematic_kf_flag:
+                n = 18
+            else:
+                n = 15
 
         y = np.zeros(q)
 
@@ -459,9 +493,15 @@ class GNC():
         q = 2; p = 2; 
         
         if self.euler_angle_flag:
-            n = 14
+            if self.kinematic_kf_flag:
+                n = 17
+            else:
+                n = 14
         else:
-            n = 15
+            if self.kinematic_kf_flag:
+                n = 18
+            else:
+                n = 15
 
         y = np.zeros(q)
 
@@ -579,15 +619,15 @@ class GNC():
             rud_indx = 13
             prop_indx = 14
         
-        # print(f"Linear Velocity (m/s)    : {self.x_hat[0] * self.U_des:.4f}, {self.x_hat[1] * self.U_des:.4f}, {self.x_hat[2] * self.U_des:.4f}")
-        # print(f"Angular Velocity (rad/s) : {self.x_hat[3] * self.U_des / self.length:.4f}, {self.x_hat[4] * self.U_des / self.length:.4f}, {self.x_hat[5] * self.U_des / self.length:.4f}")
-        # print(f"Linear Position (m)      : {self.x_hat[6] * self.length:.4f}, {self.x_hat[7] * self.length:.4f}, {self.x_hat[8] * self.length:.4f}")
-        # print(f"Orientation (deg)        : {eul[0]:.2f}, {eul[1]:.2f}, {eul[2]:.2f}")
-        # print(f"Unit quaternion          : {quat[0]:.2f}, {quat[1]:.2f}, {quat[2]:.2f}, {quat[3]:.2f}")
-        # print(f"Rudder angle (deg)       : {self.x_hat[rud_indx] * 180 / np.pi:.2f}")
-        # print(f"Propeller Speed (RPM)    : {self.x_hat[prop_indx] * 60 * self.U_des / self.length:.2f}")
-        # print(f"Goal Waypoint (m)        : {self.goal_waypoint[0]:.2f}, {self.goal_waypoint[1]:.2f}, {self.goal_waypoint[2]:.2f} ")
-        # print(f"Distance to Goal (m)     : {np.linalg.norm(self.goal_waypoint - self.x_hat[6:9] * self.length):.2f}")
+        print(f"Linear Velocity (m/s)    : {self.x_hat[0] * self.U_des:.4f}, {self.x_hat[1] * self.U_des:.4f}, {self.x_hat[2] * self.U_des:.4f}")
+        print(f"Angular Velocity (rad/s) : {self.x_hat[3] * self.U_des / self.length:.4f}, {self.x_hat[4] * self.U_des / self.length:.4f}, {self.x_hat[5] * self.U_des / self.length:.4f}")
+        print(f"Linear Position (m)      : {self.x_hat[6] * self.length:.4f}, {self.x_hat[7] * self.length:.4f}, {self.x_hat[8] * self.length:.4f}")
+        print(f"Orientation (deg)        : {eul[0]:.2f}, {eul[1]:.2f}, {eul[2]:.2f}")
+        print(f"Unit quaternion          : {quat[0]:.2f}, {quat[1]:.2f}, {quat[2]:.2f}, {quat[3]:.2f}")
+        print(f"Rudder angle (deg)       : {self.x_hat[rud_indx] * 180 / np.pi:.2f}")
+        print(f"Propeller Speed (RPM)    : {self.x_hat[prop_indx] * 60 * self.U_des / self.length:.2f}")
+        print(f"Goal Waypoint (m)        : {self.goal_waypoint[0]:.2f}, {self.goal_waypoint[1]:.2f}, {self.goal_waypoint[2]:.2f} ")
+        print(f"Distance to Goal (m)     : {np.linalg.norm(self.goal_waypoint - self.x_hat[6:9] * self.length):.2f}")
         # print(f"Score                    : {100 - self.score:.2f}")
 
         # print(f"Covariance               : {np.sqrt(self.P_hat[0, 0]):.2f}, {np.sqrt(self.P_hat[1,1]):.2f}, {np.sqrt(self.P_hat[2,2]):.2f}")
@@ -595,16 +635,22 @@ class GNC():
         # print(f"                         : {np.sqrt(self.P_hat[6,6]):.2f}, {np.sqrt(self.P_hat[7,7]):.2f}, {np.sqrt(self.P_hat[8,8]):.2f}")
         # print(f"                         : {np.sqrt(self.P_hat[9,9]):.2f}, {np.sqrt(self.P_hat[10,10]):.2f}, {np.sqrt(self.P_hat[11,11]):.2f}, {np.sqrt(self.P_hat[12,12]):.2f}")
         # print(f"                         : {np.sqrt(self.P_hat[13,13]):.2f}, {np.sqrt(self.P_hat[14,14]):.2f}")
-        # print(f'\n\n')
+        print(f'\n\n')
     
     # Extended Kalman Filter state correction based on measurements
 
     def state_corrector(self, y, Cd, Dd, Rd, y_hat=None, sensor=None):
         
         if self.euler_angle_flag:
-            n = 14
+            if self.kinematic_kf_flag:
+                n = 17
+            else:
+                n = 14
         else:
-            n = 15
+            if self.kinematic_kf_flag:
+                n = 18
+            else:
+                n = 15
         try:
             
             #########################################################################################
@@ -631,22 +677,30 @@ class GNC():
 
             # DO NOT EDIT THE FOLLOWING LINES (THIS IS NEEDED TO KEEP THE UPDATES STABLE)
 
-            if self.euler_angle_flag:
-                thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, 0.1, 0.1, 0.1, 0.6, 40])
-                # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+            if self.kinematic_kf_flag:
+                if self.euler_angle_flag:
+                    thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, 0.1, 0.1, 0.1, 0.6, 40, np.inf, np.inf, np.inf])
+                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                else:
+                    thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, np.inf, np.inf, np.inf, np.inf, 0.6, 40, np.inf, np.inf, np.inf])
+                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
             else:
-                thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, np.inf, np.inf, np.inf, np.inf, 0.6, 40])
-                # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                if self.euler_angle_flag:
+                    thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, 0.1, 0.1, 0.1, 0.6, 40])
+                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                else:
+                    thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, np.inf, np.inf, np.inf, np.inf, 0.6, 40])
+                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
             
             x_hat_corr = np.where(np.abs(x_hat_corr) > thresh, np.sign(x_hat_corr) * thresh, x_hat_corr)            
             self.x_hat = self.x_hat + x_hat_corr
             
-            # if not self.euler_angle_flag:
-            #     self.x_hat[9:13] = self.x_hat[9:13] / np.linalg.norm(self.x_hat[9:13])
+            if not self.euler_angle_flag:
+                self.x_hat[9:13] = self.x_hat[9:13] / np.linalg.norm(self.x_hat[9:13])
 
-            #     quat_diff = kin.quat_multiply(old_quat, kin.quat_conjugate(self.x_hat[9:13]))
-            #     if quat_diff[0] < 0:
-            #         self.x_hat[9:13] = -self.x_hat[9:13]
+                quat_diff = kin.quat_multiply(old_quat, kin.quat_conjugate(self.x_hat[9:13]))
+                if quat_diff[0] < 0:
+                    self.x_hat[9:13] = -self.x_hat[9:13]
             
             if self.euler_angle_flag:
                 rud_indx = 12
@@ -668,81 +722,17 @@ class GNC():
 
     def state_predictor(self):
         
-        if self.euler_angle_flag:
-            n = 14; p = 2
+        if self.kinematic_kf_flag:
+            if self.euler_angle_flag:
+                n = 17; p = 2
+            else:
+                n = 18; p = 2
         else:
-            n = 15; p = 2
+            if self.euler_angle_flag:
+                n = 14; p = 2
+            else:
+                n = 15; p = 2
         
-        h = 1/self.rate * (self.U_des / self.length)
-
-        u = self.x_hat[0]
-        v = self.x_hat[1]
-        r = self.x_hat[5]
-        
-        # Mass matrix
-        M_RB = self.vessel_data['M_RB']
-        M_A = self.vessel_data['M_A']
-        D_l = self.vessel_data['Dl']
-        K = self.vessel_data['K']
-        M_inv = self.vessel_data['M_inv']
-
-        # Cross Flow Drag coefficients
-        Xuu = self.vessel_data['X_u_au']
-        Yvv = self.vessel_data['Y_v_av']
-        Yvr = self.vessel_data['Y_v_ar']
-        Yrv = self.vessel_data['Y_r_av']
-        Yrr = self.vessel_data['Y_r_ar']
-        Nvv = self.vessel_data['N_v_av']
-        Nvr = self.vessel_data['N_v_ar']
-        Nrv = self.vessel_data['N_r_av']
-        Nrr = self.vessel_data['N_r_ar']
-
-        # Rudder and Propeller coefficients
-        Yd = self.vessel_data['Y_d']
-        Nd = self.vessel_data['N_d']
-        # Xn = self.vessel_data['X_n']
-
-        T_rud = self.vessel_data['T_rud']
-        T_prop = self.vessel_data['T_prop']
-
-        M = M_RB + M_A
-        v_vec = self.x_hat[0:6]
-
-        Nmat, F_damp = self.N_matrix(v_vec, M, D_l, Xuu, Yvv, Yvr, Yrv, Yrr, Nvv, Nvr, Nrv, Nrr)
-
-        dF_damp_dv = np.zeros((6,6))
-        for i in range(6):
-            v2_vec = v_vec
-            v1_vec = v_vec
-
-            dx = 0.001
-
-            v2_vec[i] = v2_vec[i] + dx
-            v1_vec[i] = v1_vec[i] - dx
-
-            _, F2_damp = self.N_matrix(v2_vec, M, D_l, Xuu, Yvv, Yvr, Yrv, Yrr, Nvv, Nvr, Nrv, Nrr)
-            _, F1_damp = self.N_matrix(v1_vec, M, D_l, Xuu, Yvv, Yvr, Yrv, Yrr, Nvv, Nvr, Nrv, Nrr)
-
-            dF_damp_dv[:, i] = (F2_damp - F1_damp) / (2 * dx)
-
-        if not self.euler_angle_flag:
-            deul_dq = kin.deul_dquat(self.x_hat[9:13])
-            H_mat = np.zeros((6, 7))
-            H_mat[0:3][:, 0:3] = np.eye(3)
-            H_mat[3:6][:, 3:7] = deul_dq
-
-        Amat = np.zeros((n, n))
-
-        if self.euler_angle_flag:
-            Amat[0:6][:, 0:6] = - M_inv @ dF_damp_dv
-            Amat[0:6][:, 6:12] = - M_inv @ K
-            Amat[6:9][:, 0:3] = kin.eul_to_rotm(self.x_hat[9:12])
-            Amat[9:12][:, 3:6] = kin.eul_rate_matrix(self.x_hat[9:12])
-        else:
-            Amat[0:6][:, 0:6] = - M_inv @ dF_damp_dv
-            Amat[0:6][:, 6:13] = - M_inv @ K @ H_mat
-            Amat[6:9][:, 0:3] = kin.quat_to_rotm(self.x_hat[9:13])
-            Amat[9:13][:, 3:6] = kin.quat_rate_matrix(self.x_hat[9:13])
 
         if self.euler_angle_flag:
             rud_indx = 12
@@ -751,49 +741,186 @@ class GNC():
             rud_indx = 13
             prop_indx = 14
         
-        wp = self.vessel_data['wp']
-        tp = self.vessel_data['tp']
-        D_prop = self.vessel_data['D_prop']
-        pow_coeff = self.vessel_data['pow_coeff']
+        h = 1/self.rate * (self.U_des / self.length)
 
-        Xn = 2 * (1 - tp) * (D_prop ** 2) * ((1 - wp) * D_prop * pow_coeff[1] + 2 * self.x_hat[prop_indx] * (D_prop ** 2) * pow_coeff[2])
-        
-        Amat[0:6][:, rud_indx:rud_indx+2] = M_inv @ np.array([
-            [0, Xn],
-            [Yd, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [Nd, 0]
-        ])
-        
-        Amat[rud_indx, rud_indx] = -1/T_rud
-        Amat[prop_indx, prop_indx] = -1/T_prop
+        if self.kinematic_kf_flag:
 
-        Bmat = np.zeros((n, p))
-        Bmat[rud_indx, 0] = 1/T_rud
-        Bmat[prop_indx, 1] = 1/T_prop
+            T_rud = self.vessel_data['T_rud']
+            T_prop = self.vessel_data['T_prop']
 
-        Ad = scipy.linalg.expm(Amat * h)
-        
+            v_nb_b = self.x_hat[0:3]
+            w_nb_b = self.x_hat[3:6]
+            r_nb_n = self.x_hat[6:9]
+            a_nb_b = self.x_hat[-3:]
+            
+            if self.euler_angle_flag:
+                Theta_nb = self.x_hat[9:12]
+                q_b_n = kin.eul_to_quat(Theta_nb)
+                R_b_n = kin.eul_to_rotm(Theta_nb)
+            else:
+                q_b_n = self.x_hat[9:13]
+                Theta_nb = kin.quat_to_eul(q_b_n)
+                R_b_n = kin.quat_to_rotm(q_b_n)
+            
+            Amat = np.zeros((n,n))
+            Bmat = np.zeros((n, p))
+
+            Amat[0:3][:, 0:3] = -kin.Smat(w_nb_b)
+            Amat[0:3][:, 3:6] = kin.Smat(v_nb_b)
+            Amat[0:3][:, -3:] = np.eye(3)
+            Amat[6:9][:, 0:3] = R_b_n
+            Amat[rud_indx, rud_indx] = -1/T_rud
+            Amat[prop_indx, prop_indx] = -1/T_prop
+            
+            if self.euler_angle_flag:
+                Amat[6:9][:, 9:12] = kkf.d_by_dTheta_nb_R_b_n_v_nb_b(Theta_nb, v_nb_b)
+                Amat[9:12][:, 3:6] = kin.eul_rate_matrix(Theta_nb)
+                Amat[9:12][:, 9:12] = kkf.d_by_dTheta_nb_J2_w_nb_b(Theta_nb, w_nb_b)
+                Amat[14:][:, 3:6] = kin.Smat(a_nb_b)
+                Amat[14:][:, 14:] = -kin.Smat(w_nb_b)
+            else:
+                Amat[6:9][:, 9:12] = kkf.d_by_dq_b_n_R_b_n_v_nb_b(q_b_n, v_nb_b)
+                Amat[9:12][:, 3:6] = kin.quat_rate_matrix(Theta_nb)
+                Amat[9:12][:, 9:12] = kkf.d_by_dq_b_n_J2_w_nb_b(q_b_n, w_nb_b)
+                Amat[15:][:, 3:6] = kin.Smat(a_nb_b)
+                Amat[15:][:, 15:] = -kin.Smat(w_nb_b)
+            
+
+            Bmat = np.zeros((n, p))
+            Bmat[rud_indx, 0] = 1/T_rud
+            Bmat[prop_indx, 1] = 1/T_prop
+
+            Ad = scipy.linalg.expm(Amat * h)
+            
+            try:
+                Bd = np.linalg.inv(Ad) @ (Ad - np.eye(n)) @ Bmat
+            except:
+                Bd = Bmat
+            
+            Ed = np.zeros((n, 6))
+            Ed[3:6][:, 0:3] = R_b_n
+            Ed[-3:][:, -3:] = R_b_n
+            
+            sig_process = np.array([1, 1, 1e-2, 1e-2, 1e-2, 1]) * 1e-4
+            Qd = np.diag(sig_process ** 2)
+            
+        else:
+
+            u = self.x_hat[0]
+            v = self.x_hat[1]
+            r = self.x_hat[5]
+            
+            # Mass matrix
+            M_RB = self.vessel_data['M_RB']
+            M_A = self.vessel_data['M_A']
+            D_l = self.vessel_data['Dl']
+            K = self.vessel_data['K']
+            M_inv = self.vessel_data['M_inv']
+
+            # Cross Flow Drag coefficients
+            Xuu = self.vessel_data['X_u_au']
+            Yvv = self.vessel_data['Y_v_av']
+            Yvr = self.vessel_data['Y_v_ar']
+            Yrv = self.vessel_data['Y_r_av']
+            Yrr = self.vessel_data['Y_r_ar']
+            Nvv = self.vessel_data['N_v_av']
+            Nvr = self.vessel_data['N_v_ar']
+            Nrv = self.vessel_data['N_r_av']
+            Nrr = self.vessel_data['N_r_ar']
+
+            # Rudder and Propeller coefficients
+            Yd = self.vessel_data['Y_d']
+            Nd = self.vessel_data['N_d']
+            # Xn = self.vessel_data['X_n']
+
+            T_rud = self.vessel_data['T_rud']
+            T_prop = self.vessel_data['T_prop']
+
+            M = M_RB + M_A
+            v_vec = self.x_hat[0:6]
+
+            Nmat, F_damp = self.N_matrix(v_vec, M, D_l, Xuu, Yvv, Yvr, Yrv, Yrr, Nvv, Nvr, Nrv, Nrr)
+
+            dF_damp_dv = np.zeros((6,6))
+            for i in range(6):
+                v2_vec = v_vec
+                v1_vec = v_vec
+
+                dx = 0.001
+
+                v2_vec[i] = v2_vec[i] + dx
+                v1_vec[i] = v1_vec[i] - dx
+
+                _, F2_damp = self.N_matrix(v2_vec, M, D_l, Xuu, Yvv, Yvr, Yrv, Yrr, Nvv, Nvr, Nrv, Nrr)
+                _, F1_damp = self.N_matrix(v1_vec, M, D_l, Xuu, Yvv, Yvr, Yrv, Yrr, Nvv, Nvr, Nrv, Nrr)
+
+                dF_damp_dv[:, i] = (F2_damp - F1_damp) / (2 * dx)
+
+            if not self.euler_angle_flag:
+                deul_dq = kin.deul_dquat(self.x_hat[9:13])
+                H_mat = np.zeros((6, 7))
+                H_mat[0:3][:, 0:3] = np.eye(3)
+                H_mat[3:6][:, 3:7] = deul_dq
+
+            Amat = np.zeros((n, n))
+
+            if self.euler_angle_flag:
+                Amat[0:6][:, 0:6] = - M_inv @ dF_damp_dv
+                Amat[0:6][:, 6:12] = - M_inv @ K
+                Amat[6:9][:, 0:3] = kin.eul_to_rotm(self.x_hat[9:12])
+                Amat[9:12][:, 3:6] = kin.eul_rate_matrix(self.x_hat[9:12])
+            else:
+                Amat[0:6][:, 0:6] = - M_inv @ dF_damp_dv
+                Amat[0:6][:, 6:13] = - M_inv @ K @ H_mat
+                Amat[6:9][:, 0:3] = kin.quat_to_rotm(self.x_hat[9:13])
+                Amat[9:13][:, 3:6] = kin.quat_rate_matrix(self.x_hat[9:13])
+            
+            wp = self.vessel_data['wp']
+            tp = self.vessel_data['tp']
+            D_prop = self.vessel_data['D_prop']
+            pow_coeff = self.vessel_data['pow_coeff']
+
+            Xn = 2 * (1 - tp) * (D_prop ** 2) * ((1 - wp) * D_prop * pow_coeff[1] + 2 * self.x_hat[prop_indx] * (D_prop ** 2) * pow_coeff[2])
+            
+            Amat[0:6][:, rud_indx:rud_indx+2] = M_inv @ np.array([
+                [0, Xn],
+                [Yd, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [Nd, 0]
+            ])
+            
+            Amat[rud_indx, rud_indx] = -1/T_rud
+            Amat[prop_indx, prop_indx] = -1/T_prop
+
+            Bmat = np.zeros((n, p))
+            Bmat[rud_indx, 0] = 1/T_rud
+            Bmat[prop_indx, 1] = 1/T_prop
+
+            Ad = scipy.linalg.expm(Amat * h)
+            
+            try:
+                Bd = np.linalg.inv(Ad) @ (Ad - np.eye(n)) @ Bmat
+            except:
+                Bd = Bmat
+            
+            Ed = np.zeros((n, 6))
+            Ed[0:6][:, 0:6] = M_inv
+
+            sig_process = np.array([1, 1, 1e-2, 1e-2, 1e-2, 1]) * 1e-4
+            Qd = np.diag(sig_process ** 2)
+
         try:
-            Bd = np.linalg.inv(Ad) @ (Ad - np.eye(n)) @ Bmat
-        except:
-            Bd = Bmat
-        
-        Ed = np.zeros((n, 6))
-        Ed[0:6][:, 0:6] = M_inv
+            if self.kinematic_kf_flag:
+                new_state = Ad @ self.x_hat + Bd @ self.u_cmd
+            else:
+                xd_hat1 = self.vessel_ode(0, self.x_hat, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat2 = self.vessel_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat1, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat3 = self.vessel_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat2, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat4 = self.vessel_ode(h, self.x_hat + h * xd_hat3, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
 
-        sig_process = np.array([1, 1, 1e-2, 1e-2, 1e-2, 1]) * 1e-4
-        Qd = np.diag(sig_process ** 2)
-
-        try:
-            xd_hat1 = self.vessel_ode(0, self.x_hat, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
-            xd_hat2 = self.vessel_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat1, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
-            xd_hat3 = self.vessel_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat2, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
-            xd_hat4 = self.vessel_ode(h, self.x_hat + h * xd_hat3, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
-
-            new_state = self.x_hat + (h / 6) * (xd_hat1 + 2 * xd_hat2 + 2 * xd_hat3 + xd_hat4)
+                new_state = self.x_hat + (h / 6) * (xd_hat1 + 2 * xd_hat2 + 2 * xd_hat3 + xd_hat4)
 
             # sol = solve_ivp(self.vessel_ode, (0, h), self.x_hat, args=(self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag))
             # new_state = np.array(sol.y)[:,-1]
@@ -811,21 +938,29 @@ class GNC():
                 for i in range(3):
                     diff[9 + i] = kin.ssa(diff[9 + i])
 
-                thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, 0.1, 0.1, 0.1, 0.6, 40])
-                # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                if self.kinematic_kf_flag:
+                    thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, 0.1, 0.1, 0.1, 0.6, 40, np.inf, np.inf, np.inf])
+                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                else:
+                    thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, 0.1, 0.1, 0.1, 0.6, 40])
+                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
             else:
-                thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, np.inf, np.inf, np.inf, np.inf, 0.6, 40])
-                # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                if self.kinematic_kf_flag:
+                    thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, np.inf, np.inf, np.inf, np.inf, 0.6, 40, np.inf, np.inf, np.inf])
+                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                else:
+                    thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, np.inf, np.inf, np.inf, np.inf, 0.6, 40])
+                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
             
             new_state = np.where(np.abs(diff) > thresh, self.x_hat + np.sign(diff) * thresh, new_state)
             self.x_hat = new_state
             
-            # if not self.euler_angle_flag:
-            #     self.x_hat[9:13] = self.x_hat[9:13] / np.linalg.norm(self.x_hat[9:13])
+            if not self.euler_angle_flag:
+                self.x_hat[9:13] = self.x_hat[9:13] / np.linalg.norm(self.x_hat[9:13])
                 
-            #     quat_diff = kin.quat_multiply(old_quat, kin.quat_conjugate(self.x_hat[9:13]))
-            #     if quat_diff[0] < 0:
-            #         self.x_hat[9:13] = -self.x_hat[9:13]
+                quat_diff = kin.quat_multiply(old_quat, kin.quat_conjugate(self.x_hat[9:13]))
+                if quat_diff[0] < 0:
+                    self.x_hat[9:13] = -self.x_hat[9:13]
             
             self.x_hat[rud_indx] = kin.clip(self.x_hat[rud_indx], 35 * np.pi / 180)
             self.x_hat[prop_indx] = kin.clip(self.x_hat[prop_indx], 800.0 * self.length / (self.U_des * 60.0))

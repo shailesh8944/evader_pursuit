@@ -13,6 +13,7 @@ class World():
     vessels = []                        # list to store objects of class 'Vessel'
     nvessels = 0                        # number of vessels in the world
     size = np.zeros(3)                  # Initialization of Size of the world (X-Y-Z)
+    gps_datum = None                    # GPS datum for the simulation (read from the inputs.yml file)
     node = None
 
     waves = None
@@ -35,6 +36,7 @@ class World():
             sh.current_time = 0
             sh.dt = data['time_step']
             self.nvessels = data['nagents']
+            self.gps_datum = np.array(data['gps_datum'])
             agent_count = 0
             
             for agent in data['agents'][0:self.nvessels]:
