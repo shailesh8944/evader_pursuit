@@ -57,6 +57,9 @@ class GNC():
     current_time = 0.0
     score = 0.0
 
+    g = 9.80665
+    rho = 1000
+
     def __init__(self, topic_prefix, 
                 rate=10, 
                 sensors=[], 
@@ -69,8 +72,12 @@ class GNC():
                 vessel_ode=None,
                 euler_angle_flag=False,
                 gnc_flag='gnc',
-                kinematic_kf_flag=True):
+                kinematic_kf_flag=True,
+                gravity=9.80665,
+                density=1000):
         
+        self.g = gravity
+        self.rho = density
         self.topic_prefix = topic_prefix
         self.rate = int(rate)
         self.sensors = sensors
@@ -215,7 +222,7 @@ class GNC():
         if self.euler_angle_flag:
             
             if self.kinematic_kf_flag:
-                q = 6; p = 2; n = 17
+                q = 9; p = 2; n = 17
             else:
                 q = 6; p = 2; n = 14
 
@@ -237,7 +244,7 @@ class GNC():
         else:
 
             if self.kinematic_kf_flag:
-                q = 7; p = 2; n = 18
+                q = 10; p = 2; n = 18
             else:
                 q = 7; p = 2; n = 15
 
@@ -251,6 +258,23 @@ class GNC():
             y[5] = msg.orientation.y
             y[6] = msg.orientation.z
         
+        if self.kinematic_kf_flag:
+            a_ni_i = np.array([
+                msg.linear_acceleration.x,
+                msg.linear_acceleration.y,
+                msg.linear_acceleration.z
+            ])
+
+            q_i_n = np.array([
+                msg.orientation.w,
+                msg.orientation.x,
+                msg.orientation.y,
+                msg.orientation.z
+            ])
+
+            a_ni_n = kin.quat_to_rotm(q_i_n) @ a_ni_i - np.array([0, 0, -self.g])
+            a_ni_i = kin.quat_to_rotm(q_i_n).T @ a_ni_n
+        
         # The following old code seems wrong as sensor_orientation is specified in terms of Euler angles Theta_bi, which leads to the q_i_b
         # This is consistent with Euler angles Theta_nb leading to quaternion q_b_n
 
@@ -258,14 +282,24 @@ class GNC():
         # R_b_i = kin.quat_to_rotm(q_b_i)
         # R_i_b = R_b_i.T
 
+        r_bi_b = np.array(self.sensors[sensor_id]['sensor_location'])
         q_i_b = np.array(self.sensors[sensor_id]['sensor_orientation'])
         R_i_b = kin.quat_to_rotm(q_i_b)
         q_b_i = kin.quat_conjugate(q_i_b)
+        R_b_i = R_i_b.T
 
         # Measurement Noise
         Rd = np.eye(q)
         Rd[0:3][:, 0:3] = msg.angular_velocity_covariance.reshape((3, 3)) / ( (self.U_des / self.length) ** 2)
         
+        if np.abs(np.linalg.det(Rd[0:3][:, 0:3])) < 1e-3:
+            
+            # These values are based on maximum value from run_01 of sbg turntable test
+            # https://github.com/MarineAutonomy/sbg_turntable/blob/main/ros2_ws/data/2024_09_08/run_01_output_csv/run_01.mat
+            Rd[0:3][:, 0:3] = np.diag(np.array([0.01, 0.01, 0.01]) ** 2)
+            
+            # raise ValueError('Covariance of Angular Velocity Measurement is Singular')
+
         if self.euler_angle_flag:
             Rd[3:6][:, 3:6] = msg.orientation_covariance.reshape((3, 3))
 
@@ -274,6 +308,17 @@ class GNC():
             G = kin.dquat_deul(y[3:7])
             Cq = G @ Ceul @ G.T
             Rd[3:7][:, 3:7] = (Cq + Cq.T) / 2.0
+
+        if self.kinematic_kf_flag:
+            Rd[-3:][:, -3:] = msg.linear_acceleration_covariance.reshape((3, 3)) / ( self.U_des ** 2 / self.length )
+            
+            if np.abs(np.linalg.det(Rd[-3:][:, -3:])) < 1e-3:
+
+                # These values are based on maximum value from run_01 of sbg turntable test
+                # https://github.com/MarineAutonomy/sbg_turntable/blob/main/ros2_ws/data/2024_09_08/run_01_output_csv/run_01.mat                
+                Rd[-3:][:, -3:] = np.diag(np.array([0.15, 0.15, 0.15]) ** 2)
+
+                # raise ValueError('Covariance of Linear Acceleration Measurement is Singular')
 
         # Feed forward matrix
         Dd = np.zeros((q, p))
@@ -315,6 +360,10 @@ class GNC():
             ])
             # The above is the matrix [A] corresponding to "quaternion product" {q1} * {q2} = [A]{q1}
 
+        if self.kinematic_kf_flag:
+            w_nb_b = self.x_hat[3:6]
+            Cd[-3:][:, -3:] = R_b_i
+            Cd[-3:][:, 3:6] = kkf.d_by_dw_nb_b_a_ni_i(w_nb_b, r_bi_b, q_i_b)
         ################################################################################
 
         self.state_corrector(y, Cd, Dd, Rd, sensor='IMU')
@@ -679,18 +728,18 @@ class GNC():
 
             if self.kinematic_kf_flag:
                 if self.euler_angle_flag:
-                    thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, 0.1, 0.1, 0.1, 0.6, 40, np.inf, np.inf, np.inf])
-                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                    # thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, 0.1, 0.1, 0.1, 0.6, 40, np.inf, np.inf, np.inf])
+                    thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
                 else:
-                    thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, np.inf, np.inf, np.inf, np.inf, 0.6, 40, np.inf, np.inf, np.inf])
-                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                    # thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, np.inf, np.inf, np.inf, np.inf, 0.6, 40, np.inf, np.inf, np.inf])
+                    thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
             else:
                 if self.euler_angle_flag:
-                    thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, 0.1, 0.1, 0.1, 0.6, 40])
-                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                    # thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, 0.1, 0.1, 0.1, 0.6, 40])
+                    thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
                 else:
-                    thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, np.inf, np.inf, np.inf, np.inf, 0.6, 40])
-                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                    # thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, np.inf, np.inf, np.inf, np.inf, 0.6, 40])
+                    thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
             
             x_hat_corr = np.where(np.abs(x_hat_corr) > thresh, np.sign(x_hat_corr) * thresh, x_hat_corr)            
             self.x_hat = self.x_hat + x_hat_corr
@@ -698,9 +747,9 @@ class GNC():
             if not self.euler_angle_flag:
                 self.x_hat[9:13] = self.x_hat[9:13] / np.linalg.norm(self.x_hat[9:13])
 
-                quat_diff = kin.quat_multiply(old_quat, kin.quat_conjugate(self.x_hat[9:13]))
-                if quat_diff[0] < 0:
-                    self.x_hat[9:13] = -self.x_hat[9:13]
+                # quat_diff = kin.quat_multiply(old_quat, kin.quat_conjugate(self.x_hat[9:13]))
+                # if quat_diff[0] < 0:
+                #     self.x_hat[9:13] = -self.x_hat[9:13]
             
             if self.euler_angle_flag:
                 rud_indx = 12
@@ -713,7 +762,7 @@ class GNC():
             self.x_hat[prop_indx] = kin.clip(self.x_hat[prop_indx], 800.0 * self.length / (self.U_des * 60.0))
 
             self.P_hat = (np.eye(n) - K @ Cd) @ self.P_hat @ (np.eye(n) - K @ Cd).T + K @ Rd @ K.T
-
+            
         except Exception as e:
             print('Corrector diverges: ', e)
             pass
@@ -801,7 +850,7 @@ class GNC():
             Ed[3:6][:, 0:3] = R_b_n
             Ed[-3:][:, -3:] = R_b_n
             
-            sig_process = np.array([1, 1, 1e-2, 1e-2, 1e-2, 1]) * 1e-4
+            sig_process = np.array([1, 1, 1, 10, 10, 10]) * 1e-4
             Qd = np.diag(sig_process ** 2)
             
         else:
@@ -939,18 +988,18 @@ class GNC():
                     diff[9 + i] = kin.ssa(diff[9 + i])
 
                 if self.kinematic_kf_flag:
-                    thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, 0.1, 0.1, 0.1, 0.6, 40, np.inf, np.inf, np.inf])
-                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                    # thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, 0.1, 0.1, 0.1, 0.6, 40, np.inf, np.inf, np.inf])
+                    thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
                 else:
-                    thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, 0.1, 0.1, 0.1, 0.6, 40])
-                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                    # thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, 0.1, 0.1, 0.1, 0.6, 40])
+                    thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
             else:
                 if self.kinematic_kf_flag:
-                    thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, np.inf, np.inf, np.inf, np.inf, 0.6, 40, np.inf, np.inf, np.inf])
-                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                    # thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, np.inf, np.inf, np.inf, np.inf, 0.6, 40, np.inf, np.inf, np.inf])
+                    thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
                 else:
-                    thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, np.inf, np.inf, np.inf, np.inf, 0.6, 40])
-                    # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+                    # thresh = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 1, 1, np.inf, np.inf, np.inf, np.inf, 0.6, 40])
+                    thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
             
             new_state = np.where(np.abs(diff) > thresh, self.x_hat + np.sign(diff) * thresh, new_state)
             self.x_hat = new_state

@@ -14,18 +14,12 @@ start_propeller_cmd: 0.0
 free_floating: True
 
 design_froude_number: 0.14
-COG: [-0.053437, 0, 0.046530]
-gyration_radii: [[0.176633, 0, 0.049865], [0, 0.787670, 0.0], [0.049865, 0, 0.787444]]
+COG: [1.02582147e-01, -2.76137864e-07, -2.00000000e-02]
+gyration_radii: [[0.21185524, 0.0, 0.0450414 ], [0.0, 0.72791862, 0.0], [0.0450414 , 0.0, 0.72790643]]
 
 cross_flow_model: True
 
 propeller_diameter: 0.1066
-
-# Full scale values for reference
-# COG: [-2.615, 0.0, 2.277]
-# gyration_radii: [[8.643628256, 0.0, 2.440154708], [0, 38.54500504, 0.0], [2.440154708, 0.0, 38.53394607]]
-# cross_flow_model: True
-# propeller_diameter: 5.2165
 
 sensors:
   -
@@ -49,7 +43,7 @@ sensors:
   - 
     sensor_type: encoders
     publish_rate: 10
-    topic: /kurmaa_00/encoders
+    topic: /kurma_00/encoders
 
 ode: kvlcc2_ode
 

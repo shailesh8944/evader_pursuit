@@ -67,7 +67,10 @@ class GNC():
                 vessel_data=None,
                 vessel_ode=None,
                 euler_angle_flag=False,
-                gnc_flag='gnc'):
+                gnc_flag='gnc',
+                kinematic_kf_flag=True,
+                gravity=9.80665,
+                density=1000):
         
         self.topic_prefix = topic_prefix
         self.rate = int(rate)
@@ -434,9 +437,9 @@ class GNC():
         q = 2; p = 2; 
         
         if self.euler_angle_flag:
-            n = 14
+            n = 17
         else:
-            n = 15
+            n = 18
 
         y = np.zeros(q)
 
@@ -462,11 +465,11 @@ class GNC():
         Cd = np.zeros((q, n))
 
         if self.euler_angle_flag:
-            Cd[0, 12] = 1
-            Cd[1, 13] = 1
+            Cd[0, 15] = 1
+            Cd[1, 16] = 1
         else:
-            Cd[0, 13] = 1
-            Cd[1, 14] = 1
+            Cd[0, 16] = 1
+            Cd[1, 17] = 1
 
         ################################################################################
 
@@ -496,12 +499,12 @@ class GNC():
 
         # Predict EKF state estimate
         self.state_predictor()
-        print(f"JUST AFTER PREDICTION  x : {self.x_hat[6] * self.length}  y : {self.x_hat[7] * self.length} ")
+        # print(f"JUST AFTER PREDICTION  x : {self.x_hat[6] * self.length}  y : {self.x_hat[7] * self.length} ")
         self.imu_corrector() 
-        print(f"AFTER IMU CORRECTION  x : {self.x_hat[6] * self.length}  y : {self.x_hat[7] * self.length} ")
+        # print(f"AFTER IMU CORRECTION  x : {self.x_hat[6] * self.length}  y : {self.x_hat[7] * self.length} ")
         self.gnss_corrector() 
-        print(f"AFTER GNSS CORRECTOR   x : {self.x_hat[6] * self.length}  y : {self.x_hat[7] * self.length} ")
-        print(f"GNSS MEASUREMENT  x : {self.gnss_measurement[0] * self.length}  y : {self.gnss_measurement[1] * self.length} ")
+        # print(f"AFTER GNSS CORRECTOR   x : {self.x_hat[6] * self.length}  y : {self.x_hat[7] * self.length} ")
+        # print(f"GNSS MEASUREMENT  x : {self.gnss_measurement[0] * self.length}  y : {self.gnss_measurement[1] * self.length} ")
 
         current_time = self.node.get_clock().now()
 

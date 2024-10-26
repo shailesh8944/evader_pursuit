@@ -8,8 +8,8 @@ import yaml
 import json
 import threading
 # from class_gnc_ref import GNC
-from class_gnc_new import GNC
-# from class_navigation import GNC
+# from class_gnc_new import GNC
+from class_navigation import GNC
 from class_bridge import WebSocketROSBridge_Encoder
 from rclpy.executors import MultiThreadedExecutor
 from class_vessel import Vessel
@@ -114,7 +114,9 @@ def main():
                         vessel_ode=vessel.ode,
                         euler_angle_flag=True,
                         gnc_flag="gnc",                 ###### ------> Change 'nav' to 'gnc' for guidance, control and actuation
-                        kinematic_kf_flag=True))        
+                        kinematic_kf_flag=True,
+                        gravity=inp_data['gravity'],
+                        density=inp_data['density']))
         count += 1
 
     # ros_thread_instance = threading.Thread(target=ros_thread, args=(ros_nodes,))

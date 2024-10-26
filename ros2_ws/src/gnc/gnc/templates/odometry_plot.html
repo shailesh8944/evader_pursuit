@@ -107,6 +107,8 @@
             topic: document.getElementById('odomTopicSelect').value
         };
 
+        // console.log(odom_params);
+
         const enc_params = {
             topic: document.getElementById('encTopicSelect').value
         };
@@ -158,7 +160,7 @@
             fetch(odom_url)
             .then(response => response.json())
             .then(data => {
-                console.log(data);
+                // console.log(data);
                 
                 if (selectedChart === "XY") {
                     

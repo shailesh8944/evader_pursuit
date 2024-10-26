@@ -79,13 +79,13 @@ class Vessel_Pub_Sub():
         imu.header.stamp = current_time.to_msg()
         imu.header.frame_id = self.topic_prefix + f'_imu_{id:02d}_frame'
 
-        eul_rms = np.array([1, 1, 1]) * 1e-3 # * np.pi / 180
+        eul_rms = np.array([1, 1, 1]) * 1e-2 # * np.pi / 180
         eul_cov = np.diag(eul_rms ** 2)
 
         ang_vel_rms = np.array([1, 1, 1], dtype=np.float64) * 1e-2
         ang_vel_cov = np.diag(ang_vel_rms ** 2)
 
-        lin_acc_rms = np.array([1, 1, 1], dtype=np.float64) * 1e-2
+        lin_acc_rms = np.array([1, 1, 1], dtype=np.float64) * 1.5e-1
         lin_acc_cov = np.diag(lin_acc_rms ** 2)
 
         imu.orientation_covariance = eul_cov.flatten()

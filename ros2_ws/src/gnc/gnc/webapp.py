@@ -19,6 +19,9 @@ sys.path.append(os.path.abspath(module_path))
 import module_kinematics as kin
 
 app = Flask(__name__, static_folder='static')
+node = None
+odom_topic = None
+encoders_topic = None
 trajectory = []
 encoders = []
 TOPIC_TYPES = ['Imu', 'NavSatFix', 'Odometry', 'Actuator']
@@ -64,9 +67,9 @@ def stop_process_with_failsafe(process, timeout=5):
     return None
 
 def odometry_callback(msg):
-    global trajectory, t0
+    global trajectory, node
 
-    t = np.float64(msg.header.stamp.sec + msg.header.stamp.nanosec * 1.0e-9) - t0
+    t = np.float64(msg.header.stamp.sec + msg.header.stamp.nanosec * 1.0e-9) - node.t0
 
     position = msg.pose.pose.position
     
@@ -77,6 +80,7 @@ def odometry_callback(msg):
     vel = msg.twist.twist.linear
     
     ang_vel = msg.twist.twist.angular
+    # logging.info(f'{t}, {vel.x}, {vel.y}, {vel.z}, {ang_vel.x}, {ang_vel.y}, {ang_vel.z}, {position.x}, {position.y}, {position.z}, {eul[0]}, {eul[1]}, {eul[2]}')
     
     trajectory.append([
             t,
@@ -87,63 +91,77 @@ def odometry_callback(msg):
         ])
 
 def encoders_callback(msg):
-    global encoders, t0
+    global encoders, node
 
-    t = np.float64(msg.header.stamp.sec + msg.header.stamp.nanosec * 1.0e-9) - t0
+    t = np.float64(msg.header.stamp.sec + msg.header.stamp.nanosec * 1.0e-9) - node.t0
 
     rudder = msg.rudder
     propeller = msg.propeller
     
     encoders.append([t, rudder, propeller])
 
-class OdometrySubscriber(Node):
+class OdometrySubscriber():
     odom_topic = None
     encoders_topic = None
+    node = None
 
-    def __init__(self):
-        super().__init__('webapp_subscriber')
-        
-        global odom_topic, encoders_topic
+    def __init__(self, odom_topic, encoders_topic):
+        # super().__init__('webapp_subscriber')
+        self.node = Node('webapp_subscriber')
         
         self.odom_topic = odom_topic
         self.encoders_topic = encoders_topic
 
-        self.odom_subscription = self.create_subscription(
+        self.odom_subscription = self.node.create_subscription(
             Odometry,
-            odom_topic,
+            self.odom_topic,
             odometry_callback,
             10
         )
-        self.encoders_subscription = self.create_subscription(
+        self.encoders_subscription = self.node.create_subscription(
             Actuator,
-            encoders_topic,
+            self.encoders_topic,
             encoders_callback,
             10
         )
-    def update_subscriber(self):
-        self.odom_subscription.destroy()  # Clear existing callback group
-        self.encoders_subscription.destroy()  # Clear existing callback group
-        
-        global odom_topic, encoders_topic
+        now = self.node.get_clock().now().to_msg()
+        self.t0 = now.sec + now.nanosec * 1.0e-9
+    
+    def update_subscriber(self, odom_topic, encoders_topic):
+        try:
+            logging.info(f'Shifting odometry topic from {self.odom_topic} to {odom_topic}')
+            logging.info(f'Shifting encoders topic from {self.encoders_topic} to {encoders_topic}')
+            
+            # Update the topics
+            self.odom_topic = odom_topic
+            self.encoders_topic = encoders_topic
+            
+            if self.odom_subscription.topic != self.odom_topic or self.encoders_subscription.topic != self.encoders_topic:
+                self.odom_subscription.destroy()
+                self.encoders_subscription.destroy()
 
-        logging.info(f'Shifting odometry topic from {self.odom_topic} to {odom_topic}')
-        logging.info(f'Shifting encoders topic from {self.encoders_topic} to {encoders_topic}')
-        
-        self.odom_subscription = self.create_subscription(
-            Odometry,
-            odom_topic,
-            odometry_callback,
-            10
-        )
-        self.encoders_subscription = self.create_subscription(
-            Actuator,
-            encoders_topic,
-            encoders_callback,
-            10
-        )
+                # Create new subscriptions
+                self.odom_subscription = self.node.create_subscription(
+                    Odometry,
+                    self.odom_topic,
+                    odometry_callback,
+                    10
+                )
+                self.encoders_subscription = self.node.create_subscription(
+                    Actuator,
+                    self.encoders_topic,
+                    encoders_callback,
+                    10
+                )
 
-        self.odom_topic = odom_topic
-        self.encoders_topic = encoders_topic
+            logging.info('Subscribers updated successfully.')
+            logging.info(f'Updated odometry topic: {self.odom_topic}')
+            logging.info(f'Updated encoder topic: {self.encoders_topic}')
+
+        except Exception as e:
+            logging.error("Failed to update subscribers")
+            logging.error(f"{e}")
+
 
 def flask_thread():
     app.run(host='0.0.0.0', port=8500)
@@ -170,26 +188,26 @@ def odometry():
 
 @app.route('/get_trajectory', methods=['GET'])
 def get_trajectory():
-    global trajectory, odom_topic, node
+    global trajectory, odom_topic, encoders_topic, node
     topic = request.args.get('topic')
     if topic == odom_topic or topic == '':        
         return jsonify(trajectory)
     else:
         # odom_topic = topic
         # trajectory = []  # Reset the trajectory variable
-        # node.update_subscriber()
+        # node.update_subscriber(odom_topic, encoders_topic)
         return jsonify(trajectory)
 
 @app.route('/get_encoders', methods=['GET'])
 def get_encoders():
-    global encoders, encoders_topic, node
+    global encoders, odom_topic, encoders_topic, node
     topic = request.args.get('topic')
     if topic == encoders_topic or topic == '':
         return jsonify(encoders)
     else:
         # encoders_topic = topic
         # encoders = []  # Reset the encoders variable
-        # node.update_subscriber()        
+        # node.update_subscriber(odom_topic, encoders_topic)
         return jsonify(encoders)
 
 @app.route('/get_state')
@@ -417,19 +435,18 @@ def reset_ros2():
     return jsonify({'message': f'Reset {package} - {launch_file} successfully', 'pid': new_process.pid}), 200
 
 def main():
-    global node, t0, odom_topic, encoders_topic
 
-    odom_topic = '/makara_00/odometry'  # Default selected topic
+    global node, odom_topic, encoders_topic
+
+    odom_topic = '/makara_00/odometry_sim'  # Default selected topic
     encoders_topic = '/makara_00/encoders'  # Default selected topic
-
+    
     rclpy.init()
-    node = OdometrySubscriber()
-    now = node.get_clock().now().to_msg()
-    t0 = now.sec + now.nanosec * 1.0e-9
+    node = OdometrySubscriber(odom_topic, encoders_topic)
     
     start_flask()
-    
-    rclpy.spin(node)
+
+    rclpy.spin(node.node)
     rclpy.shutdown()
 
 if __name__ == '__main__':

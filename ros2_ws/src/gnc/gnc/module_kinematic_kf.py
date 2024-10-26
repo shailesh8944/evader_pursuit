@@ -1,5 +1,11 @@
 import numpy as np
 
+import sys
+import os
+module_path = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator'
+sys.path.append(os.path.abspath(module_path))
+import module_kinematics as kin
+
 def d_by_dTheta_nb_R_b_n_v_nb_b(Theta_nb, v_nb_b):
 
     phi = Theta_nb[0]
@@ -154,6 +160,36 @@ def d_by_dq_b_n_J2_w_nb_b(q_b_n, w_nb_b):
 
     return derivative_mat
 
+def d_by_dw_nb_b_a_ni_i(w_nb_b, r_bi_b, q_i_b):
+    w1 = w_nb_b[0]
+    w2 = w_nb_b[1]
+    w3 = w_nb_b[2]
 
+    R_b_i = kin.quat_to_rotm(q_i_b)    
+
+    d_by_dw1_S2_w_nb_b = np.array([
+        [0, w2, w3],
+        [w2, -2*w1, 0],
+        [w3, 0, -2*w1]
+    ])
+
+    d_by_dw2_S2_w_nb_b = np.array([
+        [-2*w2, w1, 0],
+        [w1, 0, w3],
+        [0, w3, -2*w2]
+    ])
+
+    d_by_dw3_S2_w_nb_b = np.array([
+        [-2*w3, 0, w1],
+        [0, -2*w3, w2],
+        [w1, w2, 0]
+    ])
+
+    derivative_mat = np.zeros((3,3))
+    derivative_mat[:, 0] = R_b_i @ d_by_dw1_S2_w_nb_b @ r_bi_b
+    derivative_mat[:, 1] = R_b_i @ d_by_dw2_S2_w_nb_b @ r_bi_b
+    derivative_mat[:, 2] = R_b_i @ d_by_dw3_S2_w_nb_b @ r_bi_b
+
+    return derivative_mat
 
     
