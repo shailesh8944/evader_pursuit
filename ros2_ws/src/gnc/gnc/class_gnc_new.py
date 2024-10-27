@@ -965,7 +965,16 @@ class GNC():
 
         try:
             if self.kinematic_kf_flag:
-                new_state = Ad @ self.x_hat + Bd @ self.u_cmd
+                
+                # new_state = Ad @ self.x_hat + Bd @ self.u_cmd
+
+                xd_hat1 = kkf.kinematic_ode(0, self.x_hat, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat2 = kkf.kinematic_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat1, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat3 = kkf.kinematic_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat2, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat4 = kkf.kinematic_ode(h, self.x_hat + h * xd_hat3, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
+
+                new_state = self.x_hat + (h / 6) * (xd_hat1 + 2 * xd_hat2 + 2 * xd_hat3 + xd_hat4)
+
             else:
                 xd_hat1 = self.vessel_ode(0, self.x_hat, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
                 xd_hat2 = self.vessel_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat1, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)

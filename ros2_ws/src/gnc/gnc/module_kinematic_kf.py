@@ -192,4 +192,73 @@ def d_by_dw_nb_b_a_ni_i(w_nb_b, r_bi_b, q_i_b):
 
     return derivative_mat
 
+def kinematic_ode(t, ss, delta_c, n_c, options, euler_angle_flag=True):    
+
+    deltad_max = options['deltad_max']
+    if deltad_max is None:
+        deltad_max = 3 * np.pi / 180 * (options['L'] / options['U_des'])
     
+
+    T_rud = options['T_rud']
+    T_prop = options['T_prop']
+
+    nd_max = options['nd_max']
+    if nd_max is None:
+        nd_max = 100
+
+    v_nb_b = ss[0:3]
+    w_nb_b = ss[3:6]
+    r_nb_n = ss[6:9]
+    
+    if euler_angle_flag:
+        Theta_nb = ss[9:12]
+        R_b_n = kin.eul_to_rotm(Theta_nb)
+        q_b_n = kin.rotm_to_quat(R_b_n)
+    else:
+        q_b_n = ss[9:13]
+        Theta_nb = kin.quat_to_eul(quat)
+        R_b_n = kin.quat_to_rotm(q_b_n)
+    
+    if euler_angle_flag:
+        n = 17
+        rud_indx = 12
+        prop_indx = 13
+    else:
+        n = 18
+        rud_indx = 13
+        prop_indx = 14
+    
+    delta = ss[rud_indx]
+    n_prop = ss[prop_indx]
+
+    a_nb_b = ss[-3:]
+
+    ssd = np.zeros(n)
+
+    ssd[0:3] = a_nb_b - np.cross(w_nb_b, v_nb_b)
+    ssd[6:9] = R_b_n @ v_nb_b    
+
+    if euler_angle_flag:
+        ssd[9:12] = kin.eul_rate_matrix(Theta_nb) @ w_nb_b
+    else:
+        ssd[9:13] = kin.quat_rate_matrix(q_b_n) @ w_nb_b
+    
+    # Rudder dynamics
+    deltad = (delta_c - delta) / T_rud
+    deltad_max = deltad_max
+    # Rudder rate saturation
+    if np.abs(deltad) > deltad_max:
+        deltad = np.sign(deltad) * deltad_max
+
+    # Propeller dynamics
+    nd_prop = (n_c - n_prop) / T_prop
+    # Propeller speed rate saturation
+    if np.abs(nd_prop) > nd_max:
+        nd_prop = np.sign(nd_prop) * nd_max
+
+    ssd[rud_indx] = deltad
+    ssd[prop_indx] = nd_prop
+
+    ssd[-3:] = - np.cross(w_nb_b, a_nb_b)
+
+    return ssd
