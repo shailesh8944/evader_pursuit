@@ -438,8 +438,8 @@ def main():
 
     global node, odom_topic, encoders_topic
 
-    odom_topic = '/makara_00/odometry_sim'  # Default selected topic
-    encoders_topic = '/makara_00/encoders'  # Default selected topic
+    odom_topic = '/kurma_00/odometry_sim'  # Default selected topic
+    encoders_topic = '/kurma_00/encoders'  # Default selected topic
     
     rclpy.init()
     node = OdometrySubscriber(odom_topic, encoders_topic)

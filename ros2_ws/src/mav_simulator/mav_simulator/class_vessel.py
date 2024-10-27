@@ -379,18 +379,34 @@ class Vessel():
         
         pow_coeff = self.ode_options['pow_coeff']
 
-        wp = 0.355              # Effective Wake Fraction of the Propeller (taken from KCS)
-        tp = 0.207              # Thrust Deduction Factor (taken from KCS)
-        xp_R = -0.46104         # Rudder stock location based on geometry (calculated from Rhino)
-        tR = 1 - 0.75           # Steering resistance deduction factor - taken from KCS - value modified
-        aH = 0.0                # Rudder force increase factor - taken from KCS - value modified
-        xp_H = xp_R             # Longitudinal coordinate of acting point of the additional lateral force -  taken from KCS - value modified (same as rudder stock)
-        eta = 0.6               # Ratio of propeller diameter to height of rudder in slipstream
-        eps = 1.0               # Ratio of (1 - wR) / (1 - wP)
-        X_by_Dp = 0.766797661   # Full scale X/D = 4.0/5.2165
-        lp_R = -0.75            # Effective longitudinal coordinate of rudder position (taken from KCS - value modified)
-        gamma_R1 = 0.6          # gamma_R for b_p > 0 (formula from from KCS structure - values modified)
-        gamma_R2 = 0.3          # gamma_R for b_p < 0 (formula from from KCS structure - values modified)
+        if self.name == 'makara':
+            wp = 0.355              # Effective Wake Fraction of the Propeller (taken from KCS)
+            tp = 0.207              # Thrust Deduction Factor (taken from KCS)
+            xp_R = -0.46104         # Rudder stock location based on geometry (calculated from Rhino)
+            tR = 1 - 0.75           # Steering resistance deduction factor - taken from KCS - value modified
+            aH = 0.0                # Rudder force increase factor - taken from KCS - value modified
+            xp_H = xp_R             # Longitudinal coordinate of acting point of the additional lateral force -  taken from KCS - value modified (same as rudder stock)
+            eta = 0.6               # Ratio of propeller diameter to height of rudder in slipstream
+            eps = 1.0               # Ratio of (1 - wR) / (1 - wP)
+            X_by_Dp = 0.766797661   # Full scale X/D = 4.0/5.2165
+            lp_R = -0.75            # Effective longitudinal coordinate of rudder position (taken from KCS - value modified)
+            gamma_R1 = 0.6          # gamma_R for b_p > 0 (formula from from KCS structure - values modified)
+            gamma_R2 = 0.3          # gamma_R for b_p < 0 (formula from from KCS structure - values modified)
+        
+        elif self.name == 'kurma':
+
+            wp = 0.355              # Effective Wake Fraction of the Propeller (taken from KCS)
+            tp = 0.220              # Thrust Deduction Factor (taken from KVLCC2 MMG Paper)
+            xp_R = -0.5             # Rudder stock location based on geometry (calculated from Rhino)
+            tR = 0.387              # Steering resistance deduction factor - taken from KVLCC2 MMG Paper
+            aH = 0.312              # Rudder force increase factor - taken from KVLCC2 MMG Paper
+            xp_H = -0.464           # Longitudinal coordinate of acting point of the additional lateral force -  taken from KVLCC2 MMG Paper
+            eta = 0.6               # Ratio of propeller diameter to height of rudder in slipstream
+            eps = 1.09              # Ratio of (1 - wR) / (1 - wP)
+            X_by_Dp = 0.766797661   # Full scale X/D = 4.0/5.2165
+            lp_R = -0.710           # Effective longitudinal coordinate of rudder position (taken from KVLCC2 MMG Paper)
+            gamma_R1 = 0.640        # gamma_R for b_p > 0 (formula from from KVLCC2 MMG Paper)
+            gamma_R2 = 0.395        # gamma_R for b_p < 0 (formula from from KVLCC2 MMG Paper)
         
         self.ode_options['wp'] = wp
         self.ode_options['tp'] = tp

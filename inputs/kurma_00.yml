@@ -30,7 +30,7 @@ sensors:
     topic: /kurma_00/imu
   - 
     sensor_type: GPS
-    sensor_location: [0.0, 0.0, 0.0]            # With respect to BODY frame
+    sensor_location: [1.0, 0.0, 0.0]            # With respect to BODY frame
     sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
     publish_rate: 1
     topic: /kurma_00/gps
