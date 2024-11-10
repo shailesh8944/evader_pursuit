@@ -21,6 +21,22 @@ cross_flow_model: True
 
 propeller_diameter: 0.1066
 
+# Choose guidance from the following:
+# - none
+# - ilos
+guidance: none
+
+# Choose controller from the following:
+# - pid
+# - turning_circle_{delta_deg}_{rpm}_{exec_lead_time}
+# - zigzag_{psi_deg}_{delta_deg}_{rpm}_{exec_lead_time}
+# - straight_{rpm}
+control: straight_400
+
+euler_angle_flag: True
+kinematic_kf_flag: False
+
+
 sensors:
   -
     sensor_type: IMU
@@ -34,12 +50,12 @@ sensors:
     sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
     publish_rate: 1
     topic: /kurma_00/gps
-  # - 
-  #   sensor_type: UWB
-  #   sensor_location: [0.0, 0.0, 0.0]            # With respect to BODY frame
-  #   sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
-  #   publish_rate: 1
-  #   topic: /kurma_00/uwb
+  - 
+    sensor_type: UWB
+    sensor_location: [0.0, 0.0, 0.0]            # With respect to BODY frame
+    sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
+    publish_rate: 1
+    topic: /kurma_00/uwb
   - 
     sensor_type: encoders
     publish_rate: 10
@@ -47,18 +63,33 @@ sensors:
 
 ode: kvlcc2_ode
 
-waypoint_type: XYZ
+odometry_topic:
+  - /kurma_00/odometry
+  - /kurma_00/encoders_odometry
+
+# waypoint_type: XYZ
+# waypoints:
+#   - [0.0, 0.0, 0.0]
+#   - [20.0, 0.0, 0.0]
+#   - [20.0, 40.0, 0.0]
+#   - [60.0, 40.0, 0.0]
+#   - [60.0, 0.0, 0.0]
+#   - [20.0, 0.0, 0.0]
+
+waypoint_type: GPS
 waypoints:
-  # - [7.5, 1.0, 0.0]
-  # - [7.5, 8.0, 0.0]
-  # - [20.0, 8.0, 0.0]
-  # - [20.0, 1.0, 0.0]
-  # - [7.5, 1.0, 0.0]
-  # - [7.5, 5.0, 0.0]
-  # - [7.5, 5.0, 0.0]
-  - [0.0, 0.0, 0.0]
-  - [20.0, 0.0, 0.0]
-  - [20.0, 40.0, 0.0]
-  - [60.0, 40.0, 0.0]
-  - [60.0, 0.0, 0.0]
-  - [20.0, 0.0, 0.0]
+  - [12.99321637029749, 80.23926435259567, 94.0]
+  - [12.993474596073083, 80.239544014243251, 94.0]
+  - [12.993474595646719, 80.239151711306278, 94.0]
+  - [12.993859299919567, 80.239151710569502, 94.0]
+  - [12.993859300345942 , 80.239544014110436, 94.0]
+  - [12.993474596073083 , 80.239544014243251, 94.0]
+
+# waypoint_type: GPS
+# waypoints:
+#   - [12.99321637029749, 80.23926435259567, 94.0]
+#   - [12.993474596073083, 80.239544014243251, 94.0]
+#   - [12.993859300345942 , 80.239544014110436, 94.0]
+#   - [12.993859299919567, 80.239151710569502, 94.0]
+#   - [12.993474595646719, 80.239151711306278, 94.0]
+#   - [12.993474596073083 , 80.239544014243251, 94.0]

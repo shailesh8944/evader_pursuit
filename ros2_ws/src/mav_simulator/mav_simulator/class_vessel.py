@@ -34,6 +34,15 @@ class Vessel():
 
     grid = None
     sensors = []
+
+    waypoints = None
+    waypoints_type = None
+
+    guidance = None
+    control = None
+
+    euler_angle_flag = True
+    kinematic_kf_flag = False
     
     def __init__(self, vessel_data, vessel_id=None):
 
@@ -230,6 +239,31 @@ class Vessel():
 
         self.Up_int = 0
 
+        if 'guidance' in data:
+            self.guidance = data['guidance']
+            
+            if self.guidance == 'none':
+                self.guidance = None
+
+            if self.guidance == 'ilos':
+                if 'waypoints' not in data:
+                    raise ValueError('Waypoints need to be defined for ILOS guidance')
+                self.waypoints = np.array(data['waypoints'])
+                
+                if 'waypoints_type' not in data:
+                    self.waypoints_type = 'XYZ'
+                else:
+                    self.waypoints_type = data['waypoints_type']
+        
+        if 'control' in data:
+            self.control = data['control']
+        
+        if 'euler_angle_flag' in data:
+            self.euler_angle_flag = data['euler_angle_flag']            
+        
+        if 'kinematic_kf_flag' in data:
+            self.kinematic_kf_flag = data['kinematic_kf_flag']
+        
         
     def create_model(self):        
         self.grid = Grid(self.geometry_file, self.start_location, self.start_orientation, self.scale)
@@ -318,9 +352,9 @@ class Vessel():
         A[2:5][:, 2:5] = np.diag(np.array([A33_wn, A44_wn, A55_wn]))
 
         # Full scale natural periods for horizontal modes
-        Tn1 = 120 
-        Tn2 = 120
-        Tn6 = 120
+        Tn1 = np.inf 
+        Tn2 = np.inf
+        Tn6 = np.inf
 
         # Damping ratio being assumed in the modes
         zeta1 = 0.1

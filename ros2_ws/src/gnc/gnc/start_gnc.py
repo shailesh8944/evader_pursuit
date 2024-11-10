@@ -7,9 +7,8 @@ import asyncio
 import yaml
 import json
 import threading
-# from class_gnc_ref import GNC
-from class_gnc_new import GNC
-# from class_navigation import GNC
+from class_navigation import Navigation
+from class_guidance_control import Guidance_Control
 from class_bridge import WebSocketROSBridge_Encoder
 from rclpy.executors import MultiThreadedExecutor
 from class_vessel import Vessel
@@ -87,12 +86,26 @@ def main():
             name = agent_data["name"]
             sensors = agent_data["sensors"]
 
+            if "odometry_topic" in agent_data:
+                odom_topics = agent_data["odometry_topic"]
+            else:
+                odom_topics = None
+
         else:
 
             name = agent["name"]
             sensors = agent["sensors"]
 
+            if "odometry_topic" in agent:
+                odom_topics = agent["odometry_topic"]
+            else:
+                odom_topics = None
+
+
         topic_prefix = f'{name.strip()}_{count:02d}'
+
+        if count == 0:
+            topic_prefix_first_agent = topic_prefix
         
         sensor_count = 0
         if sensors is not None:
@@ -104,26 +117,29 @@ def main():
         vessel = Vessel(vessel_data=agent)
         vessels.append(vessel)
         
-        ros_nodes.append(GNC(topic_prefix=topic_prefix, 
-                        rate=1/inp_data['time_step'], 
-                        sensors=sensors, 
-                        gps_datum=np.array(inp_data['gps_datum']),
-                        waypoints=np.array(agent_data['waypoints']),
-                        waypoint_type=agent_data['waypoint_type'],
-                        vessel_data=vessel.ode_options,
-                        vessel_ode=vessel.ode,
-                        euler_angle_flag=True,
-                        gnc_flag="gnc",                 ###### ------> Change 'nav' to 'gnc' for guidance, control and actuation
-                        kinematic_kf_flag=True,
-                        gravity=inp_data['gravity'],
-                        density=inp_data['density']))
+        ros_nodes.append(Navigation(topic_prefix=topic_prefix, 
+            rate=1/inp_data['time_step'],
+            sensors=sensors, 
+            gps_datum=np.array(inp_data['gps_datum']),
+            odom_topics=odom_topics,
+            vessel=vessel,
+            gravity=inp_data['gravity'],
+            density=inp_data['density']))
+        
+        ros_nodes.append(Guidance_Control(topic_prefix=topic_prefix, 
+            rate=1/inp_data['time_step'], 
+            gps_datum=np.array(inp_data['gps_datum']),            
+            vessel=vessel,            
+            odom_topics=odom_topics,            
+            gravity=inp_data['gravity'],
+            density=inp_data['density']))
         count += 1
 
     # ros_thread_instance = threading.Thread(target=ros_thread, args=(ros_nodes,))
     # ros_thread_instance.start()
 
     if inp_data['HIL_flag']:
-        bridge = WebSocketROSBridge_Encoder(node= ros_nodes[0].node, websocket_url=f"ws://{inp_data['raspi_ip'].strip()}:9003", topic_prefix='makara_00')
+        bridge = WebSocketROSBridge_Encoder(node= ros_nodes[0].node, websocket_url=f"ws://{inp_data['raspi_ip'].strip()}:9003", topic_prefix=topic_prefix_first_agent)
         websocket_encoder_thread_instance = threading.Thread(target=bridge.run)
         websocket_encoder_thread_instance.start()
     

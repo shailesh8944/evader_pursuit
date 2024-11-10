@@ -2,7 +2,7 @@
 #raspi_ip: 192.168.0.10   # 192.168.0.10
 jetson_ip: 0.0.0.0  # 192.168.0.27
 raspi_ip: 0.0.0.0   # 192.168.0.10
-HIL_flag: True
+HIL_flag: False
 
 density: 1000
 gravity: 9.80665
@@ -13,7 +13,7 @@ gps_datum: [12.99300425860631, 80.23913114094384, 94.0]
 
 world_size: [100, 100, Inf]
 nagents: 1
-time_step: 0.1
+time_step: 1
 
 # waves:
 #   -
