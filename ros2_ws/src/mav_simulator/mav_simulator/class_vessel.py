@@ -510,8 +510,8 @@ class Vessel():
 
         Rn = self.U_des * self.length * 1e6
         Cf = 0.075 / ((np.log10(Rn) - 2) ** 2)
-        Cr = 0.0
-        k = 0.1
+        Cr = 0.1 * Cf
+        k = 0.0
         Ct = Cr + Cf * (1 + k)
 
         self.ode_options['X_u_au'] = -self.grid.WettedArea * Ct / (self.length ** 2)

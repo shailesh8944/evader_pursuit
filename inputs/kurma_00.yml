@@ -24,14 +24,14 @@ propeller_diameter: 0.1066
 # Choose guidance from the following:
 # - none
 # - ilos
-guidance: none
+guidance: ilos
 
 # Choose controller from the following:
 # - pid
 # - turning_circle_{delta_deg}_{rpm}_{exec_lead_time}
 # - zigzag_{psi_deg}_{delta_deg}_{rpm}_{exec_lead_time}
 # - straight_{rpm}
-control: straight_400
+control: pid_550
 
 euler_angle_flag: True
 kinematic_kf_flag: False
@@ -67,7 +67,7 @@ odometry_topic:
   - /kurma_00/odometry
   - /kurma_00/encoders_odometry
 
-# waypoint_type: XYZ
+# waypoints_type: XYZ
 # waypoints:
 #   - [0.0, 0.0, 0.0]
 #   - [20.0, 0.0, 0.0]
@@ -76,7 +76,7 @@ odometry_topic:
 #   - [60.0, 0.0, 0.0]
 #   - [20.0, 0.0, 0.0]
 
-waypoint_type: GPS
+waypoints_type: GPS
 waypoints:
   - [12.99321637029749, 80.23926435259567, 94.0]
   - [12.993474596073083, 80.239544014243251, 94.0]
@@ -85,7 +85,7 @@ waypoints:
   - [12.993859300345942 , 80.239544014110436, 94.0]
   - [12.993474596073083 , 80.239544014243251, 94.0]
 
-# waypoint_type: GPS
+# waypoints_type: GPS
 # waypoints:
 #   - [12.99321637029749, 80.23926435259567, 94.0]
 #   - [12.993474596073083, 80.239544014243251, 94.0]

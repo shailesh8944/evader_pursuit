@@ -18,7 +18,7 @@ import scipy
 from scipy.integrate import solve_ivp
 import multiprocessing
 
-class Navigation():
+class GNC():
     # This class creates a ROS2 node and initiates the callbacks for
     # IMU, GPS, UWB sensors and encoders. The class also initiates 
     # a publisher on /<vessel_name>_<vessel_id>/actuator_cmd based
@@ -64,8 +64,15 @@ class Navigation():
                 rate=10, 
                 sensors=[], 
                 gps_datum=np.array([12.99300425860631, 80.23913114094384, 94.0]),
-                odom_topics=None,
-                vessel=None,
+                length=3.147,
+                Fn=0.20,
+                waypoint_type='XYZ',
+                waypoints=None,
+                vessel_data=None,
+                vessel_ode=None,
+                euler_angle_flag=False,
+                gnc_flag='gnc',
+                kinematic_kf_flag=True,
                 gravity=9.80665,
                 density=1000):
         
@@ -74,24 +81,33 @@ class Navigation():
         self.topic_prefix = topic_prefix
         self.rate = int(rate)
         self.sensors = sensors
-        self.llh0 = gps_datum        
+        self.llh0 = gps_datum
+        self.gnc_flag = gnc_flag
+        
+        self.length = length
+        self.Fn = Fn
+        self.U_des = self.Fn * np.sqrt(9.80665 * self.length)
 
-        self.vessel = vessel
-        self.length = vessel.length
-        self.Fn = vessel.Fn
-        self.U_des = self.Fn * np.sqrt(self.g * self.length)
-
-        if odom_topics is not None:
-            self.odom_topic = odom_topics[0]
-            self.enc_topic = odom_topics[1]
+        # Convert GPS waypoints to NED waypoints
+        if waypoint_type == 'GPS':
+            waypoints_xyz = np.zeros_like(waypoints)
+            
+            for i in range(waypoints.shape[0]):
+                waypoints_xyz[i, :] = kin.llh_to_ned(waypoints[i, :], self.llh0)
+            
+            self.waypoints = waypoints_xyz 
+            print(self.waypoints)       
         else:
-            self.odom_topic = f'/{self.topic_prefix}/odometry'
-            self.enc_topic = f'/{self.topic_prefix}/encoders_odometry'
+            self.waypoints = waypoints
 
-        self.vessel_ode_data = self.vessel.ode_options
-        self.vessel_ode = self.vessel.ode
-        self.euler_angle_flag = self.vessel.euler_angle_flag
-        self.kinematic_kf_flag =  self.vessel.kinematic_kf_flag
+        self.current_waypoint = self.waypoints[0]
+        self.goal_waypoint = self.waypoints[1]
+        self.waypoint_index = 0
+
+        self.vessel_data = vessel_data
+        self.vessel_ode = vessel_ode
+        self.euler_angle_flag = euler_angle_flag
+        self.kinematic_kf_flag =  kinematic_kf_flag
         
         if self.kinematic_kf_flag:
             if self.euler_angle_flag:
@@ -114,7 +130,7 @@ class Navigation():
                 self.P_hat = np.eye(15)
                 self.u_cmd = np.zeros(2)
         
-        self.node = Node(f'Navigation_{self.topic_prefix}')
+        self.node = Node(f'GNC_{self.topic_prefix}')
         
         # Allocate ID to each sensor
         for i in range(len(self.sensors)):
@@ -126,15 +142,21 @@ class Navigation():
         # Register the sensors
         if len(self.sensors) != 0:
             self.register_sensors()
+        
+        # Register the actuator
+        if self.gnc_flag == "gnc":
+            self.register_actuator()
 
         # Register odometry publisher
         self.register_odometry()
         
     def register_odometry(self):
-        self.odometry['pub'] = self.node.create_publisher(Odometry, self.odom_topic, self.rate)
-        self.odometry['pub1'] = self.node.create_publisher(Actuator, self.enc_topic, self.rate)
-        self.odometry['sub'] = self.node.create_subscription(Actuator, f'/{self.topic_prefix}/actuator_cmd', self.callback_actuator_cmd, 10)
+        self.odometry['pub'] = self.node.create_publisher(Odometry, f'/{self.topic_prefix}/odometry', self.rate)
         self.odometry['timer'] = self.node.create_timer(1/self.rate, callback=self.publish_odometry)
+
+    def register_actuator(self):
+        self.actuator['pub'] = self.node.create_publisher(Actuator, f'/{self.topic_prefix}/actuator_cmd', self.rate)
+        self.actuator['timer'] = self.node.create_timer(1/self.rate, callback=self.publish_actuator)
 
     def register_sensors(self):
         for i in range(len(self.sensors)):
@@ -146,28 +168,28 @@ class Navigation():
                 topic_imu = self.sensors[i]['topic']
                 arg_imu = i
                 callback_imu = lambda x: self.imu_callback(x, arg_imu)
-                h = self.node.create_subscription(Imu, topic_imu, callback_imu, 10)
+                h = self.node.create_subscription(Imu, topic_imu, callback_imu, 1)
 
             elif sensor_type == "GPS":
                 
                 topic_gps = self.sensors[i]['topic']
                 arg_gps = i
                 callback_gps = lambda x: self.gps_callback(x, arg_gps)
-                h = self.node.create_subscription(NavSatFix, topic_gps, callback_gps, 10)
+                h = self.node.create_subscription(NavSatFix, topic_gps, callback_gps, 1)
 
             elif sensor_type == "UWB":
 
                 topic_uwb = self.sensors[i]['topic']
                 arg_uwb = i
                 callback_uwb = lambda x: self.uwb_callback(x, arg_uwb)
-                h = self.node.create_subscription(PoseWithCovarianceStamped, topic_uwb, callback_uwb, 10)
+                h = self.node.create_subscription(PoseWithCovarianceStamped, topic_uwb, callback_uwb, 1)
 
             elif sensor_type == "encoders":
 
                 topic_encoders = self.sensors[i]['topic']
                 arg_encoders = i
                 callback_encoders = lambda x: self.encoders_callback(x, arg_encoders)
-                h = self.node.create_subscription(Actuator, topic_encoders, callback_encoders, 10)
+                h = self.node.create_subscription(Actuator, topic_encoders, callback_encoders, 1)
 
             else:
 
@@ -193,10 +215,6 @@ class Navigation():
             jacob[:, i] = (f2 - f1) / (2 * eps)
         
         return jacob
-
-    def callback_actuator_cmd(self, msg):
-        self.u_cmd[0] = msg.rudder * np.pi / 180
-        self.u_cmd[1] = msg.propeller / 60 * (self.length / self.U_des)
 
     def imu_callback(self, msg, sensor_id):
 
@@ -516,7 +534,8 @@ class Navigation():
         ################################################################################
 
         self.state_corrector(y, Cd, Dd, Rd)
-            
+        
+    
     def encoders_callback(self, msg, sensor_id):
         
         self.sensor_measurements[sensor_id] = msg
@@ -568,7 +587,30 @@ class Navigation():
 
         self.state_corrector(y, Cd, Dd, Rd)
 
+    def publish_actuator(self):
+
+        current_time = self.node.get_clock().now()
+
+        # Create Actuator message
+        act = Actuator()
+        act.header.stamp = current_time.to_msg()
+        
+        act.rudder = self.rudder_cmd * 180.0 / np.pi
+        act.propeller = self.propeller_cmd * 60 * self.U_des / self.length
+
+        # act.rudder = 35.0
+        # act.propeller = 750.0
+
+        self.actuator['pub'].publish(act)
+
+        self.actuator_cmd = f'{act.rudder:.2f}, {act.propeller:.2f}'
+    
     def publish_odometry(self):
+        
+        # Compute guidance and contorl
+        if self.gnc_flag == "gnc":
+            self.guidance()
+            self.control()
 
         # Predict EKF state estimate
         self.state_predictor()
@@ -609,31 +651,11 @@ class Navigation():
         twist_cov[3:6][:, 3:6] = self.P_hat[3:6][:, 3:6] * ((self.U_des / self.length) ** 2)
         odo.twist.covariance = twist_cov.flatten()
 
-
-        if self.euler_angle_flag:
-            rud_indx = 12
-            prop_indx = 13
-        else:
-            rud_indx = 13
-            prop_indx = 14
-
-        # Create Actuator message
-        enc = Actuator()
-        enc.header.stamp = current_time.to_msg()
-        enc.rudder = self.x_hat[rud_indx] * 180.0 / np.pi
-        enc.propeller = self.x_hat[prop_indx] * 60 * self.U_des / self.length
-        
-        enc_cov = self.P_hat[rud_indx:prop_indx+1][:, rud_indx:prop_indx+1]
-        enc_cov[0, 1] = enc_cov[0, 1] * (self.U_des / self.length)
-        enc_cov[1, 0] = enc_cov[1, 0] * (self.U_des / self.length)
-        enc_cov[1, 1] = enc_cov[1, 1] * (self.U_des / self.length)**2
-        enc.covariance = enc_cov.flatten()
-
         self.odometry['pub'].publish(odo)
-        self.odometry['pub1'].publish(enc)
 
         if not self.terminate_flag:
             dt = (1 / self.rate) * self.U_des / self.length
+            # self.score = self.score + np.abs(self.y_p_e) * dt + np.abs(self.x_hat[13] / (35 * np.pi / 180)) * dt
             self.current_time += dt
 
         if self.euler_angle_flag:
@@ -641,24 +663,31 @@ class Navigation():
             quat = kin.eul_to_quat(eul, deg=True)
         else:
             quat = self.x_hat[9:13]
-            eul = kin.quat_to_eul(quat, deg=True)
+            eul = kin.quat_to_eul(quat, deg=True)            
         
-        # print(f"Linear Velocity (m/s)    : {self.x_hat[0] * self.U_des:.4f}, {self.x_hat[1] * self.U_des:.4f}, {self.x_hat[2] * self.U_des:.4f}")
-        # print(f"Angular Velocity (rad/s) : {self.x_hat[3] * self.U_des / self.length:.4f}, {self.x_hat[4] * self.U_des / self.length:.4f}, {self.x_hat[5] * self.U_des / self.length:.4f}")
-        # print(f"Linear Position (m)      : {self.x_hat[6] * self.length:.4f}, {self.x_hat[7] * self.length:.4f}, {self.x_hat[8] * self.length:.4f}")
-        # print(f"Orientation (deg)        : {eul[0]:.2f}, {eul[1]:.2f}, {eul[2]:.2f}")
-        # print(f"Unit quaternion          : {quat[0]:.2f}, {quat[1]:.2f}, {quat[2]:.2f}, {quat[3]:.2f}")
-        # print(f"Rudder angle (deg)       : {self.x_hat[rud_indx] * 180 / np.pi:.2f}")
-        # print(f"Propeller Speed (RPM)    : {self.x_hat[prop_indx] * 60 * self.U_des / self.length:.2f}")
-        # print(f"Goal Waypoint (m)        : {self.goal_waypoint[0]:.2f}, {self.goal_waypoint[1]:.2f}, {self.goal_waypoint[2]:.2f} ")
-        # print(f"Distance to Goal (m)     : {np.linalg.norm(self.goal_waypoint - self.x_hat[6:9] * self.length):.2f}")
+        if self.euler_angle_flag:
+            rud_indx = 12
+            prop_indx = 13
+        else:
+            rud_indx = 13
+            prop_indx = 14
+        
+        print(f"Linear Velocity (m/s)    : {self.x_hat[0] * self.U_des:.4f}, {self.x_hat[1] * self.U_des:.4f}, {self.x_hat[2] * self.U_des:.4f}")
+        print(f"Angular Velocity (rad/s) : {self.x_hat[3] * self.U_des / self.length:.4f}, {self.x_hat[4] * self.U_des / self.length:.4f}, {self.x_hat[5] * self.U_des / self.length:.4f}")
+        print(f"Linear Position (m)      : {self.x_hat[6] * self.length:.4f}, {self.x_hat[7] * self.length:.4f}, {self.x_hat[8] * self.length:.4f}")
+        print(f"Orientation (deg)        : {eul[0]:.2f}, {eul[1]:.2f}, {eul[2]:.2f}")
+        print(f"Unit quaternion          : {quat[0]:.2f}, {quat[1]:.2f}, {quat[2]:.2f}, {quat[3]:.2f}")
+        print(f"Rudder angle (deg)       : {self.x_hat[rud_indx] * 180 / np.pi:.2f}")
+        print(f"Propeller Speed (RPM)    : {self.x_hat[prop_indx] * 60 * self.U_des / self.length:.2f}")
+        print(f"Goal Waypoint (m)        : {self.goal_waypoint[0]:.2f}, {self.goal_waypoint[1]:.2f}, {self.goal_waypoint[2]:.2f} ")
+        print(f"Distance to Goal (m)     : {np.linalg.norm(self.goal_waypoint - self.x_hat[6:9] * self.length):.2f}")
         # print(f"Score                    : {100 - self.score:.2f}")
 
         # print(f"Covariance               : {np.sqrt(self.P_hat[0, 0]):.2f}, {np.sqrt(self.P_hat[1,1]):.2f}, {np.sqrt(self.P_hat[2,2]):.2f}")
         # print(f"                         : {np.sqrt(self.P_hat[3,3]):.2f}, {np.sqrt(self.P_hat[4,4]):.2f}, {np.sqrt(self.P_hat[5,5]):.2f}")
         # print(f"                         : {np.sqrt(self.P_hat[6,6]):.2f}, {np.sqrt(self.P_hat[7,7]):.2f}, {np.sqrt(self.P_hat[8,8]):.2f}")
         # print(f"                         : {np.sqrt(self.P_hat[9,9]):.2f}, {np.sqrt(self.P_hat[10,10]):.2f}, {np.sqrt(self.P_hat[11,11]):.2f}, {np.sqrt(self.P_hat[12,12]):.2f}")
-        # print(f"                         : {np.sqrt(self.P_hat[rud_indx,rud_indx]):.6f}, {np.sqrt(self.P_hat[prop_indx,prop_indx]):.6f}")
+        # print(f"                         : {np.sqrt(self.P_hat[13,13]):.2f}, {np.sqrt(self.P_hat[14,14]):.2f}")
         print(f'\n\n')
     
     # Extended Kalman Filter state correction based on measurements
@@ -677,6 +706,9 @@ class Navigation():
                 n = 15
         try:
             
+            #########################################################################################
+            # WRITE YOUR CODE HERE TO UPDATE THE STATE AFTER MEASUREMENT
+            #########################################################################################
             K = self.P_hat @ Cd.T @ np.linalg.inv(Cd @ self.P_hat @ Cd.T + Rd)
 
             if y_hat is None:
@@ -690,28 +722,27 @@ class Navigation():
                     innovation[i + 3] = kin.ssa(innovation[i + 3]) 
                 
             x_hat_corr = K @ innovation
-
-            # if sensor is not None:
-            #     print(y, Cd @ self.x_hat, x_hat_corr[-1], self.x_hat[-1], self.P_hat[-1, -1], Rd[1,1])
             
             if not self.euler_angle_flag:
                 old_quat = self.x_hat[9:13]
+
+            #########################################################################################
 
             # DO NOT EDIT THE FOLLOWING LINES (THIS IS NEEDED TO KEEP THE UPDATES STABLE)
 
             if self.kinematic_kf_flag:
                 if self.euler_angle_flag:
-                    thresh = np.array([0.5, 0.5, 0.5, 0.1, 0.1, 0.1, 10, 10, 10, 0.1, 0.1, 0.1, 0.6, 40, np.inf, np.inf, np.inf])
+                    thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, 0.1, 0.1, 0.1, 0.6, 40, np.inf, np.inf, np.inf])
                     # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
                 else:
-                    thresh = np.array([0.5, 0.5, 0.5, 0.1, 0.1, 0.1, 10, 10, 10, np.inf, np.inf, np.inf, np.inf, 0.6, 40, np.inf, np.inf, np.inf])
+                    thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, np.inf, np.inf, np.inf, np.inf, 0.6, 40, np.inf, np.inf, np.inf])
                     # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
             else:
                 if self.euler_angle_flag:
-                    thresh = np.array([0.5, 0.5, 0.5, 0.1, 0.1, 0.1, 10, 10, 10, 0.1, 0.1, 0.1, 0.6, 40])
+                    thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, 0.1, 0.1, 0.1, 0.6, 40])
                     # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
                 else:
-                    thresh = np.array([0.5, 0.5, 0.5, 0.1, 0.1, 0.1, 10, 10, 10, np.inf, np.inf, np.inf, np.inf, 0.6, 40])
+                    thresh = np.array([0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 10, 10, 10, np.inf, np.inf, np.inf, np.inf, 0.6, 40])
                     # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
             
             x_hat_corr = np.where(np.abs(x_hat_corr) > thresh, np.sign(x_hat_corr) * thresh, x_hat_corr)            
@@ -767,8 +798,8 @@ class Navigation():
 
         if self.kinematic_kf_flag:
 
-            T_rud = self.vessel_ode_data['T_rud']
-            T_prop = self.vessel_ode_data['T_prop']
+            T_rud = self.vessel_data['T_rud']
+            T_prop = self.vessel_data['T_prop']
 
             v_nb_b = self.x_hat[0:3]
             w_nb_b = self.x_hat[3:6]
@@ -833,30 +864,30 @@ class Navigation():
             r = self.x_hat[5]
             
             # Mass matrix
-            M_RB = self.vessel_ode_data['M_RB']
-            M_A = self.vessel_ode_data['M_A']
-            D_l = self.vessel_ode_data['Dl']
-            K = self.vessel_ode_data['K']
-            M_inv = self.vessel_ode_data['M_inv']
+            M_RB = self.vessel_data['M_RB']
+            M_A = self.vessel_data['M_A']
+            D_l = self.vessel_data['Dl']
+            K = self.vessel_data['K']
+            M_inv = self.vessel_data['M_inv']
 
             # Cross Flow Drag coefficients
-            Xuu = self.vessel_ode_data['X_u_au']
-            Yvv = self.vessel_ode_data['Y_v_av']
-            Yvr = self.vessel_ode_data['Y_v_ar']
-            Yrv = self.vessel_ode_data['Y_r_av']
-            Yrr = self.vessel_ode_data['Y_r_ar']
-            Nvv = self.vessel_ode_data['N_v_av']
-            Nvr = self.vessel_ode_data['N_v_ar']
-            Nrv = self.vessel_ode_data['N_r_av']
-            Nrr = self.vessel_ode_data['N_r_ar']
+            Xuu = self.vessel_data['X_u_au']
+            Yvv = self.vessel_data['Y_v_av']
+            Yvr = self.vessel_data['Y_v_ar']
+            Yrv = self.vessel_data['Y_r_av']
+            Yrr = self.vessel_data['Y_r_ar']
+            Nvv = self.vessel_data['N_v_av']
+            Nvr = self.vessel_data['N_v_ar']
+            Nrv = self.vessel_data['N_r_av']
+            Nrr = self.vessel_data['N_r_ar']
 
             # Rudder and Propeller coefficients
-            Yd = self.vessel_ode_data['Y_d']
-            Nd = self.vessel_ode_data['N_d']
-            # Xn = self.vessel_ode_data['X_n']
+            Yd = self.vessel_data['Y_d']
+            Nd = self.vessel_data['N_d']
+            # Xn = self.vessel_data['X_n']
 
-            T_rud = self.vessel_ode_data['T_rud']
-            T_prop = self.vessel_ode_data['T_prop']
+            T_rud = self.vessel_data['T_rud']
+            T_prop = self.vessel_data['T_prop']
 
             M = M_RB + M_A
             v_vec = self.x_hat[0:6]
@@ -897,10 +928,10 @@ class Navigation():
                 Amat[6:9][:, 0:3] = kin.quat_to_rotm(self.x_hat[9:13])
                 Amat[9:13][:, 3:6] = kin.quat_rate_matrix(self.x_hat[9:13])
             
-            wp = self.vessel_ode_data['wp']
-            tp = self.vessel_ode_data['tp']
-            D_prop = self.vessel_ode_data['D_prop']
-            pow_coeff = self.vessel_ode_data['pow_coeff']
+            wp = self.vessel_data['wp']
+            tp = self.vessel_data['tp']
+            D_prop = self.vessel_data['D_prop']
+            pow_coeff = self.vessel_data['pow_coeff']
 
             Xn = 2 * (1 - tp) * (D_prop ** 2) * ((1 - wp) * D_prop * pow_coeff[1] + 2 * self.x_hat[prop_indx] * (D_prop ** 2) * pow_coeff[2])
             
@@ -938,22 +969,22 @@ class Navigation():
                 
                 # new_state = Ad @ self.x_hat + Bd @ self.u_cmd
 
-                xd_hat1 = kkf.kinematic_ode(0, self.x_hat, self.u_cmd[0], self.u_cmd[1], self.vessel_ode_data, euler_angle_flag=self.euler_angle_flag)
-                xd_hat2 = kkf.kinematic_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat1, self.u_cmd[0], self.u_cmd[1], self.vessel_ode_data, euler_angle_flag=self.euler_angle_flag)
-                xd_hat3 = kkf.kinematic_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat2, self.u_cmd[0], self.u_cmd[1], self.vessel_ode_data, euler_angle_flag=self.euler_angle_flag)
-                xd_hat4 = kkf.kinematic_ode(h, self.x_hat + h * xd_hat3, self.u_cmd[0], self.u_cmd[1], self.vessel_ode_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat1 = kkf.kinematic_ode(0, self.x_hat, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat2 = kkf.kinematic_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat1, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat3 = kkf.kinematic_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat2, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat4 = kkf.kinematic_ode(h, self.x_hat + h * xd_hat3, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
 
                 new_state = self.x_hat + (h / 6) * (xd_hat1 + 2 * xd_hat2 + 2 * xd_hat3 + xd_hat4)
 
             else:
-                xd_hat1 = self.vessel_ode(0, self.x_hat, self.u_cmd[0], self.u_cmd[1], self.vessel_ode_data, euler_angle_flag=self.euler_angle_flag)
-                xd_hat2 = self.vessel_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat1, self.u_cmd[0], self.u_cmd[1], self.vessel_ode_data, euler_angle_flag=self.euler_angle_flag)
-                xd_hat3 = self.vessel_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat2, self.u_cmd[0], self.u_cmd[1], self.vessel_ode_data, euler_angle_flag=self.euler_angle_flag)
-                xd_hat4 = self.vessel_ode(h, self.x_hat + h * xd_hat3, self.u_cmd[0], self.u_cmd[1], self.vessel_ode_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat1 = self.vessel_ode(0, self.x_hat, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat2 = self.vessel_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat1, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat3 = self.vessel_ode(0.5 * h, self.x_hat + 0.5 * h * xd_hat2, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
+                xd_hat4 = self.vessel_ode(h, self.x_hat + h * xd_hat3, self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag)
 
                 new_state = self.x_hat + (h / 6) * (xd_hat1 + 2 * xd_hat2 + 2 * xd_hat3 + xd_hat4)
 
-            # sol = solve_ivp(self.vessel_ode, (0, h), self.x_hat, args=(self.u_cmd[0], self.u_cmd[1], self.vessel_ode_data, euler_angle_flag=self.euler_angle_flag))
+            # sol = solve_ivp(self.vessel_ode, (0, h), self.x_hat, args=(self.u_cmd[0], self.u_cmd[1], self.vessel_data, euler_angle_flag=self.euler_angle_flag))
             # new_state = np.array(sol.y)[:,-1]
             
             if np.any(np.isnan(new_state)):
@@ -1034,3 +1065,133 @@ class Navigation():
             N_mat = C + D_l + D_nl
 
             return N_mat, N_mat @ v_vec
+
+    def guidance(self):
+        # self.terminate_flag = True
+        
+        # Waypoint switching
+        if np.linalg.norm(self.x_hat[6:9] - self.goal_waypoint / self.length) < 3 and self.terminate_flag is False:
+            
+            self.waypoint_index += 1
+
+            if self.waypoint_index == self.waypoints.shape[0] - 1:
+                self.terminate_flag = True
+
+            else:                
+                self.current_waypoint = self.waypoints[self.waypoint_index]
+                self.goal_waypoint = self.waypoints[self.waypoint_index + 1]
+
+        # Guidance mechanism
+        pi_p = np.arctan2(self.goal_waypoint[1] - self.current_waypoint[1], 
+                        self.goal_waypoint[0] - self.current_waypoint[0])
+
+        R_n_p = np.array([[np.cos(pi_p), -np.sin(pi_p)], [np.sin(pi_p), np.cos(pi_p)]])
+        
+        x_n_i = self.current_waypoint[0:2] / self.length
+        x_g_i = self.goal_waypoint[0:2] / self.length
+        x_n = self.x_hat[6:8]
+
+        # Along track distance of goal
+        xy_g_e = R_n_p.T @ (x_g_i - x_n_i)
+        x_g_e = xy_g_e[0]
+
+        # Along and cross track distance of ship
+        xy_p_e = R_n_p.T @ (x_n - x_n_i)
+        self.x_p_e = xy_p_e[0]
+        self.y_p_e = xy_p_e[1]
+
+        # Look ahead distance
+        Delta = 2
+        kappa = 0.05
+
+        dt = (1 / self.rate) * self.U_des / self.length
+
+        #####################################################################################
+        # WRITE YOUR CODE HERE TO DETERMINE THE DESIRED HEADING FROM ILOS GUIDANCE LAW
+        #####################################################################################
+        
+        # Update the value of self.y_p_int (for ILOS guidance)
+        yd_p_int = Delta * self.y_p_e / (Delta **2 + (self.y_p_e + kappa * self.y_p_int) ** 2)
+        self.y_p_int = self.y_p_int + dt * yd_p_int
+
+        # Compute the desired heading angle using self.y_p_e and self.y_p_int
+        if self.x_p_e < x_g_e:
+            self.psi_des = pi_p - np.arctan(self.y_p_e / Delta + kappa * self.y_p_int / Delta)
+        else:
+            self.psi_des = pi_p - np.pi + np.arctan(self.y_p_e / Delta + kappa * self.y_p_int / Delta)
+        
+
+        #####################################################################################
+
+        # Calculating the u_err_int (for PI controller for propeller)
+        U = np.linalg.norm(self.x_hat[0:2])
+        ud_err_int = (1 - U)
+        self.u_err_int = self.u_err_int + dt * ud_err_int
+        
+
+    def control(self):
+
+        U = np.linalg.norm(self.x_hat[0:2])
+        
+        r = self.x_hat[5]
+
+        if self.euler_angle_flag:
+            eul = self.x_hat[9:12]
+        else:
+            eul = kin.quat_to_eul(self.x_hat[9:13])
+        
+        psi = eul[2]
+
+        if not self.terminate_flag:
+            
+            #####################################################################################
+            # WRITE YOUR CODE HERE FOR THE CONTROL LAW (HINT: REMEMBER SMALLEST SIGNED ANGLE)
+            #####################################################################################
+
+            Kp_R = 4
+            Kd_R = 2
+
+            rudder_cmd = 0.0
+            rudder_cmd = Kp_R * kin.ssa(self.psi_des - psi) - Kd_R * r
+            rudder_cmd = kin.clip(rudder_cmd, 35 * np.pi / 180)
+
+            #####################################################################################
+
+            # NO NEED TO TUNE THE PROPELLER CONTROL LAW
+            Kp_P = 100
+            Ki_P = 10
+
+            propeller_cmd = Kp_P * (1 - U) + Ki_P * self.u_err_int
+            propeller_cmd = kin.clip(propeller_cmd, 800.0 * self.length / (self.U_des * 60.0))
+
+            self.rudder_cmd =  rudder_cmd
+            self.propeller_cmd = propeller_cmd
+
+        else:
+            curr_time = self.node.get_clock().now()
+            now_msg = curr_time.to_msg()  # Convert to a builtin_interfaces.msg.Time message
+            secs = now_msg.sec
+            nsecs = now_msg.nanosec
+            tim = secs + nsecs / 1e9
+            # print(f'{30 * np.sin(tim * 0.01):.2f}')
+            self.rudder_cmd = 0.0 * np.pi / 180.0
+            self.propeller_cmd = 0.0 * self.length / (self.U_des * 60.0)
+        
+        # Uncomment the following lines to only do localization without any control
+        # Useful when trying to analyze data collected through RF mode
+        
+        if self.euler_angle_flag:
+            rud_indx = 12
+            prop_indx = 13
+        else:
+            rud_indx = 13
+            prop_indx = 14
+        
+        # self.u_cmd = np.array([self.x_hat[rud_indx], self.x_hat[prop_indx]])
+
+        # Uncomment the following line to do localization along with guidance and control
+        # Useful when trying to analyze data collected in autonomous mode. 
+        # This should be the default.
+
+        self.u_cmd = np.array([self.rudder_cmd, self.propeller_cmd])
+

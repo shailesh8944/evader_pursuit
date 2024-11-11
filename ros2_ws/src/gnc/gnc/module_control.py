@@ -167,10 +167,10 @@ def pid(gc, rudder_flag=True, prop_flag=True, rudder_default=0.0, prop_default=0
     
     u_cmd = np.array([rudder_cmd, propeller_cmd])
 
-    if not rudder_flag:
+    if not rudder_flag and not gc.terminate_flag:
         u_cmd[0] = kin.clip(rudder_default, 35) * np.pi / 180
     
-    if not prop_flag:
+    if not prop_flag and not gc.terminate_flag:
         u_cmd[1] = kin.clip(prop_default, 800.0) * gc.length / (gc.U_des * 60.0)
 
     return u_cmd

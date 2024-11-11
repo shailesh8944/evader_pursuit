@@ -53,7 +53,7 @@ sensors:
 
 ode: onrt_ode
 
-waypoint_type: XYZ
+waypoints_type: XYZ
 waypoints:
   - [40.0, 0.0, 0.0]
   - [100.0, 0.0, 0.0]

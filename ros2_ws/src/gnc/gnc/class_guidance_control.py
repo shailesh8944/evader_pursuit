@@ -151,8 +151,12 @@ class Guidance_Control():
 
     def control_call(self):
 
-        if self.control == 'pid':
-            u_cmd = con.pid(self, rudder_flag=True, prop_flag=True, rudder_default=0.0, prop_default=0.0)
+        if 'pid' in self.control:
+            if self.control == 'pid':
+                u_cmd = con.pid(self, rudder_flag=True, prop_flag=True, rudder_default=0.0, prop_default=0.0)
+            else:
+                prop_default = np.float64(self.control.split('_')[1])
+                u_cmd = con.pid(self, rudder_flag=True, prop_flag=False, rudder_default=0.0, prop_default=prop_default)
         
         if 'straight' in self.control:            
             prop_default = np.float64(self.control.split('_')[1])
@@ -205,6 +209,32 @@ class Guidance_Control():
         self.actuator['pub'].publish(act)
 
         self.actuator_cmd = f'{act.rudder:.2f}, {act.propeller:.2f}'
+
+        if self.guidance is not None:
+
+            if self.euler_angle_flag:
+                eul = self.x_hat[9:12] * 180 / np.pi
+                quat = kin.eul_to_quat(eul, deg=True)
+            else:
+                quat = self.x_hat[9:13]
+                eul = kin.quat_to_eul(quat, deg=True)
+            
+            if self.euler_angle_flag:
+                rud_indx = 12
+                prop_indx = 13
+            else:
+                rud_indx = 13
+                prop_indx = 14
+
+            print(f"Linear Velocity (m/s)    : {self.x_hat[0] * self.U_des:.4f}, {self.x_hat[1] * self.U_des:.4f}, {self.x_hat[2] * self.U_des:.4f}")
+            print(f"Angular Velocity (rad/s) : {self.x_hat[3] * self.U_des / self.length:.4f}, {self.x_hat[4] * self.U_des / self.length:.4f}, {self.x_hat[5] * self.U_des / self.length:.4f}")
+            print(f"Linear Position (m)      : {self.x_hat[6] * self.length:.4f}, {self.x_hat[7] * self.length:.4f}, {self.x_hat[8] * self.length:.4f}")
+            print(f"Orientation (deg)        : {eul[0]:.2f}, {eul[1]:.2f}, {eul[2]:.2f}")
+            print(f"Unit quaternion          : {quat[0]:.2f}, {quat[1]:.2f}, {quat[2]:.2f}, {quat[3]:.2f}")
+            print(f"Rudder angle (deg)       : {self.x_hat[rud_indx] * 180 / np.pi:.2f}")
+            print(f"Propeller Speed (RPM)    : {self.x_hat[prop_indx] * 60 * self.U_des / self.length:.2f}")
+            print(f"Goal Waypoint (m)        : {self.goal_waypoint[0]:.2f}, {self.goal_waypoint[1]:.2f}, {self.goal_waypoint[2]:.2f} ")
+            print(f"Distance to Goal (m)     : {np.linalg.norm(self.goal_waypoint - self.x_hat[6:9] * self.length):.2f}")
 
     def odometry_callback(self, msg):
         # Update x_hat based on odometry message
