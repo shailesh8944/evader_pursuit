@@ -214,7 +214,7 @@ class Vessel():
         ode = data['ode']
 
         if ode == 'kcs_ode':
-            self.ode = dyn.kcs_ode
+            self.ode = dyn.onrt_ode # The ODE structure does not change, only parameter values change
         elif ode == 'onrt_ode':
             self.ode = dyn.onrt_ode
         elif ode == 'kvlcc2_ode':
@@ -278,6 +278,10 @@ class Vessel():
             hydra_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/HydRA/Output_Archive/matlab/ONRT_hydra.json'
             pow_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/pow.json'
 
+        elif self.name == 'matsya':
+            hydra_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/KCS/HydRA/Output_Archive/matlab/KCS_hydra.json'
+            pow_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/KCS/pow.json'
+        
         elif self.name == 'kurma':
             hydra_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/KVLCC2/HydRA/Output_Archive/matlab/KVLCC2_hydra.json'
             pow_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/KVLCC2/pow.json'
@@ -403,6 +407,10 @@ class Vessel():
             self.ode_options['rudder_area'] = 0.002415163
             self.ode_options['rudder_aspect_ratio'] = 1.25
 
+        elif self.name == 'matsya':
+            self.ode_options['rudder_area'] = 0.0026689453125
+            self.ode_options['rudder_aspect_ratio'] = 1.8287037037037
+
         elif self.name == 'kurma':
             self.ode_options['rudder_area'] = 0.0026689453125
             self.ode_options['rudder_aspect_ratio'] = 1.8287037037037
@@ -424,6 +432,21 @@ class Vessel():
             eps = 1.0               # Ratio of (1 - wR) / (1 - wP)
             X_by_Dp = 0.766797661   # Full scale X/D = 4.0/5.2165
             lp_R = -0.75            # Effective longitudinal coordinate of rudder position (taken from KCS - value modified)
+            gamma_R1 = 0.6          # gamma_R for b_p > 0 (formula from from KCS structure - values modified)
+            gamma_R2 = 0.3          # gamma_R for b_p < 0 (formula from from KCS structure - values modified)
+
+        elif self.name == 'matsya':
+
+            wp = 0.355              # Effective Wake Fraction of the Propeller (taken from KCS)
+            tp = 0.207              # Thrust Deduction Factor (taken from KCS)
+            xp_R = -0.5             # Rudder stock location based on geometry (calculated from Rhino)
+            tR = 0.250              # Steering resistance deduction factor - taken from KCS - value modified
+            aH = 0.0                # Rudder force increase factor - taken from KCS - value modified
+            xp_H = xp_R             # Longitudinal coordinate of acting point of the additional lateral force -  taken from KCS - value modified (same as rudder stock)
+            eta = 0.6               # Ratio of propeller diameter to height of rudder in slipstream
+            eps = 1.0               # Ratio of (1 - wR) / (1 - wP)
+            X_by_Dp = 0.766797661   # Full scale X/D = 4.0/5.2165
+            lp_R = -0.750           # Effective longitudinal coordinate of rudder position (taken from KCS - value modified)
             gamma_R1 = 0.6          # gamma_R for b_p > 0 (formula from from KCS structure - values modified)
             gamma_R2 = 0.3          # gamma_R for b_p < 0 (formula from from KCS structure - values modified)
         
@@ -492,7 +515,7 @@ class Vessel():
         A[:, 0] = v_grid * np.abs(v_grid)
         A[:, 1] = v_grid * np.abs(r_grid)
         A[:, 2] = r_grid * np.abs(v_grid)
-        A[:, 3] = r_grid * np.abs(r_grid)        
+        A[:, 3] = r_grid * np.abs(r_grid)
 
         b[:, 0] = Y_grid
         b[:, 1] = N_grid
@@ -510,11 +533,16 @@ class Vessel():
 
         Rn = self.U_des * self.length * 1e6
         Cf = 0.075 / ((np.log10(Rn) - 2) ** 2)
-        Cr = 0.1 * Cf
+        Cr = 0.0
         k = 0.0
         Ct = Cr + Cf * (1 + k)
 
         self.ode_options['X_u_au'] = -self.grid.WettedArea * Ct / (self.length ** 2)
+
+        for key, value in self.ode_options.items():
+            if key.startswith(("X_", "Y_", "N_")):
+                print(f"{key}: {value}")
+        # exit()
 
     def hoerner(self):
 

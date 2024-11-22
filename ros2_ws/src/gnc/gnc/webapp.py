@@ -1,30 +1,43 @@
 import rclpy
 import numpy as np
-from rclpy.node import Node
-from nav_msgs.msg import Odometry
-from interfaces.msg import Actuator
-from geometry_msgs.msg import Point
 from flask import Flask, render_template, jsonify, request
-import threading
-import logging
-from logging.handlers import RotatingFileHandler
-import subprocess
-import time
-from datetime import datetime
+from flask_socketio import SocketIO, emit
+from rclpy.executors import MultiThreadedExecutor
+from class_odometry_subscriber import OdometrySubscriber
+
 import sys
-import signal
 import os
 module_path = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator'
 sys.path.append(os.path.abspath(module_path))
 import module_kinematics as kin
 
+import threading
+import logging
+import subprocess
+import time
+from datetime import datetime
+import signal
+import yaml
+
 app = Flask(__name__, static_folder='static')
-node = None
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+inp_fpath = '/workspaces/mavlab/inputs/inputs.yml'
+with open(inp_fpath) as stream:
+    inp_data = yaml.safe_load(stream)  # content from inputs.yml stored in data
+llh0 = np.array(inp_data['gps_datum'])
+geofence = None
+if 'geofence' in inp_data:
+    geofence = inp_data['geofence']
+
+ros_thread_instance = None
+stop_ros_thread_flag = threading.Event()
+
 odom_topic = None
 encoders_topic = None
 trajectory = []
 encoders = []
-TOPIC_TYPES = ['Imu', 'NavSatFix', 'Odometry', 'Actuator']
+TOPIC_TYPES = ['Imu', 'NavSatFix', 'Odometry', 'Actuator', 'Bool']
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -32,6 +45,21 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Dictionary to keep track of active ROS 2 launch processes
 ros2_processes = {}
 process_lock = threading.Lock()  # Lock for thread-safe access to ros2_processes
+
+# def launch_ros2_webapp_subscriber(odom_topic, encoders_topic):
+
+#     launch_file = 'webapp_subscriber_launch.py'
+#     package = 'gnc'
+#     command = ['ros2', 'launch', package, launch_file, f'odom_topic:={odom_topic}', f'encoders_topic:={encoders_topic}']
+
+#     try:
+#         # Start the ROS 2 launch process
+#         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+#         logging.info(f'Launched {launch_file} from package {package} with PID {process.pid}')
+#         return process
+#     except Exception as e:
+#         logging.error(f'Failed to launch {launch_file} from package {package}: {str(e)}')
+#         return str(e)
 
 def launch_ros2_node(package, launch_file):
 
@@ -66,113 +94,22 @@ def stop_process_with_failsafe(process, timeout=5):
         return f'Failed to terminate process: {str(e)}'
     return None
 
-def odometry_callback(msg):
-    global trajectory, node
-
-    t = np.float64(msg.header.stamp.sec + msg.header.stamp.nanosec * 1.0e-9) - node.t0
-
-    position = msg.pose.pose.position
-    
-    orientation = msg.pose.pose.orientation
-    quat = np.array([orientation.w, orientation.x, orientation.y, orientation.z])
-    eul = kin.quat_to_eul(quat, deg=True)
-    
-    vel = msg.twist.twist.linear
-    
-    ang_vel = msg.twist.twist.angular
-    # logging.info(f'{t}, {vel.x}, {vel.y}, {vel.z}, {ang_vel.x}, {ang_vel.y}, {ang_vel.z}, {position.x}, {position.y}, {position.z}, {eul[0]}, {eul[1]}, {eul[2]}')
-    
-    trajectory.append([
-            t,
-            vel.x, vel.y, vel.z,
-            ang_vel.x, ang_vel.y, ang_vel.z,
-            position.x, position.y, position.z,
-            eul[0], eul[1], eul[2]
-        ])
-
-def encoders_callback(msg):
-    global encoders, node
-
-    t = np.float64(msg.header.stamp.sec + msg.header.stamp.nanosec * 1.0e-9) - node.t0
-
-    rudder = msg.rudder
-    propeller = msg.propeller
-    
-    encoders.append([t, rudder, propeller])
-
-class OdometrySubscriber():
-    odom_topic = None
-    encoders_topic = None
-    node = None
-
-    def __init__(self, odom_topic, encoders_topic):
-        # super().__init__('webapp_subscriber')
-        self.node = Node('webapp_subscriber')
-        
-        self.odom_topic = odom_topic
-        self.encoders_topic = encoders_topic
-
-        self.odom_subscription = self.node.create_subscription(
-            Odometry,
-            self.odom_topic,
-            odometry_callback,
-            10
-        )
-        self.encoders_subscription = self.node.create_subscription(
-            Actuator,
-            self.encoders_topic,
-            encoders_callback,
-            10
-        )
-        now = self.node.get_clock().now().to_msg()
-        self.t0 = now.sec + now.nanosec * 1.0e-9
-    
-    def update_subscriber(self, odom_topic, encoders_topic):
-        try:
-            logging.info(f'Shifting odometry topic from {self.odom_topic} to {odom_topic}')
-            logging.info(f'Shifting encoders topic from {self.encoders_topic} to {encoders_topic}')
-            
-            # Update the topics
-            self.odom_topic = odom_topic
-            self.encoders_topic = encoders_topic
-            
-            if self.odom_subscription.topic != self.odom_topic or self.encoders_subscription.topic != self.encoders_topic:
-                self.odom_subscription.destroy()
-                self.encoders_subscription.destroy()
-
-                # Create new subscriptions
-                self.odom_subscription = self.node.create_subscription(
-                    Odometry,
-                    self.odom_topic,
-                    odometry_callback,
-                    10
-                )
-                self.encoders_subscription = self.node.create_subscription(
-                    Actuator,
-                    self.encoders_topic,
-                    encoders_callback,
-                    10
-                )
-
-            logging.info('Subscribers updated successfully.')
-            logging.info(f'Updated odometry topic: {self.odom_topic}')
-            logging.info(f'Updated encoder topic: {self.encoders_topic}')
-
-        except Exception as e:
-            logging.error("Failed to update subscribers")
-            logging.error(f"{e}")
-
-
 def flask_thread():
-    app.run(host='0.0.0.0', port=8500)
+    # app.run(host='0.0.0.0', port=8500)
+    socketio.run(app, host='0.0.0.0', port=8500)
 
 def start_flask():
-    app_thread = threading.Thread(target=flask_thread)
-    app_thread.start()
+    # app_thread = threading.Thread(target=flask_thread)
+    # app_thread.start()
+    flask_thread()
 
 @app.route('/')
 def home():
     return render_template('index.html')
+
+@app.route('/map')
+def map():
+    return render_template('map.html')
 
 @app.route('/odometry_plot')
 def odometry_plot():
@@ -188,42 +125,59 @@ def odometry():
 
 @app.route('/get_trajectory', methods=['GET'])
 def get_trajectory():
-    global trajectory, odom_topic, encoders_topic, node
+    global node_reference, odom_topic, encoders_topic, stop_ros_thread_flag, ros_thread_instance
     topic = request.args.get('topic')
-    if topic == odom_topic or topic == '':        
-        return jsonify(trajectory)
+    if topic == odom_topic or topic == '':
+        return jsonify(node_reference.trajectory)
     else:
-        # odom_topic = topic
-        # trajectory = []  # Reset the trajectory variable
-        # node.update_subscriber(odom_topic, encoders_topic)
-        return jsonify(trajectory)
+        odom_topic = topic
+        
+        stop_ros_thread_flag.set()
+        ros_thread_instance.join()
+
+        # Reset stop flag for new thread
+        stop_ros_thread_flag = threading.Event()
+
+        # Start a new thread
+        ros_thread_instance = threading.Thread(target=ros_thread, args=(odom_topic, encoders_topic,))
+        ros_thread_instance.start()
+        
+        return jsonify(node_reference.trajectory)
 
 @app.route('/get_encoders', methods=['GET'])
 def get_encoders():
-    global encoders, odom_topic, encoders_topic, node
+    global node_reference, odom_topic, encoders_topic, stop_ros_thread_flag, ros_thread_instance
     topic = request.args.get('topic')
     if topic == encoders_topic or topic == '':
-        return jsonify(encoders)
+        return jsonify(node_reference.encoders)
     else:
-        # encoders_topic = topic
-        # encoders = []  # Reset the encoders variable
-        # node.update_subscriber(odom_topic, encoders_topic)
-        return jsonify(encoders)
+        encoders_topic = topic
+        
+        stop_ros_thread_flag.set()
+        ros_thread_instance.join()
+
+        # Reset stop flag for new thread
+        stop_ros_thread_flag = threading.Event()
+
+        # Start a new thread
+        ros_thread_instance = threading.Thread(target=ros_thread, args=(odom_topic, encoders_topic,))
+        ros_thread_instance.start()
+
+        return jsonify(node_reference.encoders)
 
 @app.route('/get_state')
 def get_state():
-    global trajectory
-    global encoders
+    global node_reference
     dict = {}
-    dict['odometry'] = trajectory[-1]
-    dict['encoders'] = encoders[-1]
+    dict['odometry'] = node_reference.trajectory[-1]
+    dict['encoders'] = node_reference.encoders[-1]
     return jsonify(dict)
 
 @app.route('/reset', methods=['POST'])
 def reset():
-    global trajectory, encoders
-    trajectory = []  # Reset the trajectory variable
-    encoders = []  # Reset the encoders variable
+    global node_reference
+    node_reference.trajectory = []  # Reset the trajectory variable
+    node_reference.encoders = []  # Reset the encoders variable
     return 'Trajectory and encoders variables reset'
 
 def has_active_publisher(topic):
@@ -434,20 +388,61 @@ def reset_ros2():
 
     return jsonify({'message': f'Reset {package} - {launch_file} successfully', 'pid': new_process.pid}), 200
 
+@socketio.on('get_state')
+def get_state_websocket():
+
+    global node_reference, geofence
+
+    if node_reference.trajectory and node_reference.encoders:
+        dict = {}
+        dict['odometry'] = node_reference.trajectory[-1]
+        dict['encoders'] = node_reference.encoders[-1]
+        dict['gps'] = kin.ned_to_llh(node_reference.trajectory[-1][7:10], llh0)[0:2].tolist()
+        dict['geofence'] = geofence
+        emit('state', dict)
+    else:
+        logging.info('No data available yet')        
+        emit('message', {'data': 'No data available'})
+
+def ros_thread(odom_topic, encoders_topic):
+
+    global stop_ros_thread_flag, node_reference
+
+    rclpy.init()
+
+    ros_nodes = []
+    ros_nodes.append(OdometrySubscriber(odom_topic, encoders_topic))
+
+    executor = MultiThreadedExecutor()
+    for node in ros_nodes:
+        executor.add_node(node.node)
+    
+    node_reference = ros_nodes[0]
+
+    try:
+        while not stop_ros_thread_flag.is_set():
+            executor.spin_once()  # Spin once to allow checking the stop flag 
+        # executor.spin()
+
+    finally:
+        executor.shutdown()
+        
+        for node in ros_nodes:
+            node.node.destroy_node()
+        
+        rclpy.shutdown()
+
 def main():
 
-    global node, odom_topic, encoders_topic
+    global odom_topic, encoders_topic, ros_thread_instance
 
-    odom_topic = '/kurma_00/odometry_sim'  # Default selected topic
-    encoders_topic = '/kurma_00/encoders'  # Default selected topic
+    odom_topic = '/matsya_00/odometry_sim'  # Default selected topic
+    encoders_topic = '/matsya_00/encoders'  # Default selected topic
     
-    rclpy.init()
-    node = OdometrySubscriber(odom_topic, encoders_topic)
+    ros_thread_instance = threading.Thread(target=ros_thread, args=(odom_topic, encoders_topic,))
+    ros_thread_instance.start()
     
     start_flask()
-
-    rclpy.spin(node.node)
-    rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

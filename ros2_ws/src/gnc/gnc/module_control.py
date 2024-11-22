@@ -18,19 +18,19 @@ def fixed(gc, rudder_default=0.0, prop_default=0.0):
     rudder_cmd = kin.clip(rudder_cmd, 35)
 
     propeller_cmd = prop_default
-    propeller_cmd = kin.clip(propeller_cmd, 800.0)
+    propeller_cmd = kin.clip(propeller_cmd, 1000.0)
 
     u_cmd = np.array([rudder_cmd  * np.pi / 180, propeller_cmd * gc.length / (gc.U_des * 60.0)])
 
     return u_cmd
 
-def turning_circle(gc, rudder_default=35.0, prop_default=800.0, exec_lead_time=30.0):
+def turning_circle(gc, rudder_default=35.0, prop_default=1000.0, exec_lead_time=30.0):
     
     rudder_cmd = rudder_default
     rudder_cmd = kin.clip(rudder_cmd, 35)
 
     propeller_cmd = prop_default
-    propeller_cmd = kin.clip(propeller_cmd, 800.0)
+    propeller_cmd = kin.clip(propeller_cmd, 1000.0)
 
     if gc.current_time < exec_lead_time * gc.U_des / gc.length:
         u_cmd = fixed(gc, rudder_default=0.0, prop_default=propeller_cmd)
@@ -39,7 +39,7 @@ def turning_circle(gc, rudder_default=35.0, prop_default=800.0, exec_lead_time=3
 
     return u_cmd
 
-def spiral(gc, delta_start=0.0, delta_step=5.0, delta_end=35.0, switch_time=300, prop_default=800.0, exec_lead_time=30.0):
+def spiral(gc, delta_start=0.0, delta_step=5.0, delta_end=35.0, switch_time=300, prop_default=1000.0, exec_lead_time=30.0):
     
     t = gc.current_time
 
@@ -55,7 +55,7 @@ def spiral(gc, delta_start=0.0, delta_step=5.0, delta_end=35.0, switch_time=300,
     rudder_cmd = kin.clip(rudder_cmd, 35)
 
     propeller_cmd = prop_default
-    propeller_cmd = kin.clip(propeller_cmd, 800.0)
+    propeller_cmd = kin.clip(propeller_cmd, 1000.0)
 
     if gc.current_time < exec_lead_time * gc.U_des / gc.length:
         u_cmd = fixed(gc, rudder_default=0.0, prop_default=propeller_cmd)
@@ -64,7 +64,7 @@ def spiral(gc, delta_start=0.0, delta_step=5.0, delta_end=35.0, switch_time=300,
 
     return u_cmd
 
-def modified_spiral(gc, delta_start=0.0, delta_step=5.0, delta_end=35.0, switch_time=300, prop_default=800.0, exec_lead_time=30.0):
+def modified_spiral(gc, delta_start=0.0, delta_step=5.0, delta_end=35.0, switch_time=300, prop_default=1000.0, exec_lead_time=30.0):
     
     t = gc.current_time
     
@@ -87,7 +87,7 @@ def modified_spiral(gc, delta_start=0.0, delta_step=5.0, delta_end=35.0, switch_
     rudder_cmd = kin.clip(rudder_cmd, 35)
 
     propeller_cmd = prop_default
-    propeller_cmd = kin.clip(propeller_cmd, 800.0)
+    propeller_cmd = kin.clip(propeller_cmd, 1000.0)
 
     if gc.current_time < exec_lead_time * gc.U_des / gc.length:
         u_cmd = fixed(gc, rudder_default=0.0, prop_default=propeller_cmd)
@@ -96,13 +96,13 @@ def modified_spiral(gc, delta_start=0.0, delta_step=5.0, delta_end=35.0, switch_
 
     return u_cmd
 
-def zigzag(gc, psi_switch=20.0, delta_switch=10.0, prop_default=800.0, exec_lead_time=30.0):
+def zigzag(gc, psi_switch=20.0, delta_switch=10.0, prop_default=1000.0, exec_lead_time=30.0):
     
     rudder_cmd = delta_switch
     rudder_cmd = kin.clip(rudder_cmd, 35)
 
     propeller_cmd = prop_default
-    propeller_cmd = kin.clip(propeller_cmd, 800.0)
+    propeller_cmd = kin.clip(propeller_cmd, 1000.0)
 
     if gc.euler_angle_flag:
         eul = gc.x_hat[9:12] * 180 / np.pi        
@@ -158,7 +158,7 @@ def pid(gc, rudder_flag=True, prop_flag=True, rudder_default=0.0, prop_default=0
         Ki_P = 10
 
         propeller_cmd = Kp_P * (1 - U) + Ki_P * gc.u_err_int
-        propeller_cmd = kin.clip(propeller_cmd, 800.0 * gc.length / (gc.U_des * 60.0))
+        propeller_cmd = kin.clip(propeller_cmd, 1000.0 * gc.length / (gc.U_des * 60.0))
 
     else:
 
@@ -171,6 +171,6 @@ def pid(gc, rudder_flag=True, prop_flag=True, rudder_default=0.0, prop_default=0
         u_cmd[0] = kin.clip(rudder_default, 35) * np.pi / 180
     
     if not prop_flag and not gc.terminate_flag:
-        u_cmd[1] = kin.clip(prop_default, 800.0) * gc.length / (gc.U_des * 60.0)
+        u_cmd[1] = kin.clip(prop_default, 1000.0) * gc.length / (gc.U_des * 60.0)
 
     return u_cmd

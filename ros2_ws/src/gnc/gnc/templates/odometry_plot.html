@@ -160,7 +160,7 @@
             fetch(odom_url)
             .then(response => response.json())
             .then(data => {
-                // console.log(data);
+                console.log(data);
                 
                 if (selectedChart === "XY") {
                     
@@ -385,7 +385,7 @@
 
     setInterval(function() {
         var selectedChart = document.getElementById('chartSelect').value;
-        updateChart(selectedChart);        
+        updateChart(selectedChart);
     }, 1000);
 
 </script>

@@ -5,3 +5,6 @@ websockets
 setuptools==58.2.0
 websocket-client
 flask
+flask-socketio
+matplotlib
+jupyter

@@ -13,7 +13,29 @@ gps_datum: [12.99300425860631, 80.23913114094384, 94.0]
 
 world_size: [100, 100, Inf]
 nagents: 1
-time_step: 0.1
+time_step: 0.25
+
+geofence:
+  - [12.993496, 80.239007]
+  - [12.993500, 80.238903]
+  - [12.993485, 80.238829]
+  - [12.993359, 80.238699]
+  - [12.993547, 80.238437]
+  - [12.993716, 80.238475]
+  - [12.994077, 80.239559]
+  - [12.993809, 80.239807]
+  - [12.993271, 80.240646]
+  - [12.993050, 80.240423]
+  - [12.993193, 80.239274]
+  - [12.993044, 80.239217]
+  - [12.993054, 80.239120]
+  - [12.993335, 80.239098]
+  - [12.993496, 80.239007] 
+
+static_obstacle:
+  - [12.993637, 80.239380, 94.0]
+  - [12.993633, 80.238615, 94.0]
+  - [12.993358, 80.239979, 94.0]
 
 # waves:
 #   -
@@ -29,6 +51,7 @@ time_step: 0.1
 
 agents:
   # - '/workspaces/mavlab/inputs/makara_hwd.yml'
-  - '/workspaces/mavlab/inputs/kurma_00.yml'
+  # - '/workspaces/mavlab/inputs/kurma_00.yml'
+  - '/workspaces/mavlab/inputs/matsya_00.yml'
   # - '/workspaces/mavlab/inputs/makara_00.yml'
   # - '/workspaces/mavlab/inputs/makara_01.yml'

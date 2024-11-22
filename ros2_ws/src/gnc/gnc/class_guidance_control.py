@@ -1,6 +1,6 @@
 import numpy as np
 from rclpy.node import Node
-from std_msgs.msg import Float64
+from std_msgs.msg import Float64, Bool
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, PointCloud2, Image, LaserScan, NavSatFix, NavSatStatus
 from geometry_msgs.msg import Point, Vector3, Pose, Quaternion, Twist, PoseWithCovarianceStamped
@@ -13,6 +13,9 @@ sys.path.append(os.path.abspath(module_path))
 
 import module_kinematics as kin
 import module_control as con
+from class_geofence import GeoFence
+from class_static_obstacle import StaticObstacle
+
 import warnings
 import scipy
 from scipy.integrate import solve_ivp
@@ -38,9 +41,18 @@ class Guidance_Control():
 
     current_time = 0.0
 
+    geofences = []
+    static_obstacles = []
+    
+    geo_grad = np.zeros(2)
+    geo_active = False
+
+
     def __init__(self, topic_prefix, 
                 rate=10, 
-                gps_datum=np.array([12.99300425860631, 80.23913114094384, 94.0]),                
+                gps_datum=np.array([12.99300425860631, 80.23913114094384, 94.0]),
+                geofence=None,
+                static_obstacles=None,                
                 vessel=None,                
                 odom_topics=None,
                 gravity=9.80665,
@@ -84,6 +96,40 @@ class Guidance_Control():
             self.waypoints = waypoints_xyz
         else:
             self.waypoints = waypoints
+        
+        if static_obstacles is not None:
+            for i in range(len(static_obstacles)):
+                obstacle_llh = np.zeros(3)
+
+                obstacle_llh[0] = static_obstacles[i][0]
+                obstacle_llh[1] = static_obstacles[i][1]
+                obstacle_llh[2] = static_obstacles[i][2]
+
+                obstacle_xyz = kin.llh_to_ned(obstacle_llh, self.llh0)
+                x0 = obstacle_xyz[0]
+                y0 = obstacle_xyz[1]
+                z0 = obstacle_xyz[2]
+
+                self.static_obstacles.append(StaticObstacle(x0, y0, z0, id=i))
+
+        if geofence is not None:            
+            for i in range(len(geofence)-1):
+
+                geofence_0 = np.zeros(3)
+                geofence_1 = np.zeros(3)
+
+                geofence_0[0] = geofence[i][0]; geofence_0[1] = geofence[i][1]
+                geofence_1[0] = geofence[i + 1][0]; geofence_1[1] = geofence[i + 1][1]
+
+                geofence_0[2] = self.llh0[2]; geofence_1[2] = self.llh0[2]
+
+                geofence_0_xyz = kin.llh_to_ned(geofence_0, self.llh0)
+                geofence_1_xyz = kin.llh_to_ned(geofence_1, self.llh0)
+                
+                x0 = geofence_0_xyz[0]; y0 = geofence_0_xyz[1]
+                x1 = geofence_1_xyz[0]; y1 = geofence_1_xyz[1]
+
+                self.geofences.append(GeoFence(x0, y0, x1, y1, id=i))
 
         self.guidance = self.vessel.guidance
         self.control = self.vessel.control
@@ -106,6 +152,8 @@ class Guidance_Control():
         self.odometry['sub_enc'] = self.node.create_subscription(Actuator, self.enc_topic, self.encoder_callback, 10)
 
         self.actuator['pub'] = self.node.create_publisher(Actuator, f'/{self.topic_prefix}/actuator_cmd', self.rate)
+        self.actuator['pub_geo'] = self.node.create_publisher(Bool, f'/{self.topic_prefix}/geofence_flag', self.rate)
+        self.actuator['pub_static_obs'] = self.node.create_publisher(Bool, f'/{self.topic_prefix}/static_obstacle_flag', self.rate)
         self.actuator['timer'] = self.node.create_timer(1/self.rate, callback=self.publish_actuator)        
 
     def guidance_call(self):
@@ -149,55 +197,121 @@ class Guidance_Control():
         if self.guidance == 'ilos':
             self.ilos_guidance()
 
-    def control_call(self):
+    def control_call(self, override=False):
 
-        if 'pid' in self.control:
-            if self.control == 'pid':
-                u_cmd = con.pid(self, rudder_flag=True, prop_flag=True, rudder_default=0.0, prop_default=0.0)
-            else:
+        if override:
+            
+            u_cmd = con.pid(self, rudder_flag=True, prop_flag=True, rudder_default=0.0, prop_default=0.0)
+            self.rudder_cmd = u_cmd[0]
+            self.propeller_cmd = u_cmd[1]
+
+        else:
+            
+            if 'pid' in self.control:
+                if self.control == 'pid':
+                    u_cmd = con.pid(self, rudder_flag=True, prop_flag=True, rudder_default=0.0, prop_default=0.0)
+                else:
+                    prop_default = np.float64(self.control.split('_')[1])
+                    self.psi_des = np.float64(self.control.split('_')[2]) * np.pi / 180
+                    u_cmd = con.pid(self, rudder_flag=True, prop_flag=False, rudder_default=0.0, prop_default=prop_default)
+            
+            if 'straight' in self.control:            
                 prop_default = np.float64(self.control.split('_')[1])
-                u_cmd = con.pid(self, rudder_flag=True, prop_flag=False, rudder_default=0.0, prop_default=prop_default)
-        
-        if 'straight' in self.control:            
-            prop_default = np.float64(self.control.split('_')[1])
-            u_cmd = con.fixed(self, rudder_default=0.0, prop_default=prop_default)
-        
-        if 'turning_circle' in self.control:
-            rudder_default = np.float64(self.control.split('_')[2])
-            prop_default = np.float64(self.control.split('_')[3])
-            exec_lead = np.float64(self.control.split('_')[4])
-            u_cmd = con.turning_circle(self, rudder_default=rudder_default, prop_default=prop_default, exec_lead_time=exec_lead)
-        
-        if 'zigzag' in self.control:            
-            psi_switch = np.float64(self.control.split('_')[1])
-            delta_switch = np.float64(self.control.split('_')[2])
-            prop_default = np.float64(self.control.split('_')[3])
-            exec_lead_time = np.float64(self.control.split('_')[4])
-            u_cmd = con.zigzag(self, psi_switch, delta_switch, prop_default, exec_lead_time)
+                u_cmd = con.fixed(self, rudder_default=0.0, prop_default=prop_default)
+            
+            if 'turning_circle' in self.control:
+                rudder_default = np.float64(self.control.split('_')[2])
+                prop_default = np.float64(self.control.split('_')[3])
+                exec_lead = np.float64(self.control.split('_')[4])
+                u_cmd = con.turning_circle(self, rudder_default=rudder_default, prop_default=prop_default, exec_lead_time=exec_lead)
+            
+            if 'zigzag' in self.control:            
+                psi_switch = np.float64(self.control.split('_')[1])
+                delta_switch = np.float64(self.control.split('_')[2])
+                prop_default = np.float64(self.control.split('_')[3])
+                exec_lead_time = np.float64(self.control.split('_')[4])
+                u_cmd = con.zigzag(self, psi_switch, delta_switch, prop_default, exec_lead_time)
 
-        if 'modified_spiral' in self.control:
-            delta_start = np.float64(self.control.split('_')[2])
-            delta_step = np.float64(self.control.split('_')[3])
-            delta_end = np.float64(self.control.split('_')[4])
-            switch_time = np.float64(self.control.split('_')[5])
-            prop_default = np.float64(self.control.split('_')[6])
-            exec_lead_time = np.float64(self.control.split('_')[7])
-            u_cmd = con.modified_spiral(self, delta_start, delta_step, delta_end, switch_time, prop_default, exec_lead_time)
+            if 'modified_spiral' in self.control:
+                delta_start = np.float64(self.control.split('_')[2])
+                delta_step = np.float64(self.control.split('_')[3])
+                delta_end = np.float64(self.control.split('_')[4])
+                switch_time = np.float64(self.control.split('_')[5])
+                prop_default = np.float64(self.control.split('_')[6])
+                exec_lead_time = np.float64(self.control.split('_')[7])
+                u_cmd = con.modified_spiral(self, delta_start, delta_step, delta_end, switch_time, prop_default, exec_lead_time)
 
-        self.rudder_cmd = u_cmd[0]
-        self.propeller_cmd = u_cmd[1]
+            self.rudder_cmd = u_cmd[0]
+            self.propeller_cmd = u_cmd[1]
 
 
     def publish_actuator(self):
 
         self.current_time += self.dt
 
-        if self.guidance is not None:
-            self.guidance_call()
+        self.static_obs_grad = np.zeros(3)
+        self.static_obs_active = False
 
-        self.control_call()
+        if self.static_obstacles:
+            curr_loc = self.x_hat[6:9] * self.length
+            agent_x = curr_loc[0]
+            agent_y = curr_loc[1]
+            agent_z = curr_loc[2]
+
+            for static_obstacle in self.static_obstacles:
+                static_obstacle_active, static_obstacle_grad = static_obstacle.calc_static_obstacle_grad(agent_x, agent_y, agent_z)
+
+                self.static_obs_active = self.static_obs_active or static_obstacle_active
+                self.static_obs_grad = self.static_obs_grad + static_obstacle_grad
+        
+        self.geo_grad = np.zeros(2)
+        self.geo_active = False
+
+        if self.geofences:
+            curr_loc = self.x_hat[6:8] * self.length
+            agent_x = curr_loc[0]
+            agent_y = curr_loc[1]
+            
+            for geofence in self.geofences:
+                geofence_active, geofence_grad = geofence.calc_geofence_grad(agent_x, agent_y)
+
+                self.geo_active = self.geo_active or geofence_active
+                self.geo_grad = self.geo_grad + geofence_grad
+        
+
+        #==========================================================
+        # Note that Geofence will override static obstacle guidance
+        #==========================================================
+        if self.geo_active:
+            
+            self.psi_des = np.arctan2(self.geo_grad[1], self.geo_grad[0])
+            self.control_call(override=True)
+
+        else:
+
+            if self.static_obs_active:
+
+                self.psi_des = np.arctan2(self.static_obs_grad[1], self.static_obs_grad[0])
+                self.control_call(override=True)
+
+            else:
+
+                if self.guidance is not None:
+                    self.guidance_call()
+
+            self.control_call(override=False)
 
         current_time = self.node.get_clock().now()
+
+        # Create Boolean message of active geofence
+        msg = Bool()
+        msg.data = self.geo_active
+        self.actuator['pub_geo'].publish(msg)
+
+        # Create Boolean message of active static obstacle
+        msg = Bool()
+        msg.data = self.static_obs_active and (not self.geo_active)
+        self.actuator['pub_static_obs'].publish(msg)
 
         # Create Actuator message
         act = Actuator()
@@ -210,31 +324,34 @@ class Guidance_Control():
 
         self.actuator_cmd = f'{act.rudder:.2f}, {act.propeller:.2f}'
 
+        if self.euler_angle_flag:
+            eul = self.x_hat[9:12] * 180 / np.pi
+            quat = kin.eul_to_quat(eul, deg=True)
+        else:
+            quat = self.x_hat[9:13]
+            eul = kin.quat_to_eul(quat, deg=True)
+        
+        if self.euler_angle_flag:
+            rud_indx = 12
+            prop_indx = 13
+        else:
+            rud_indx = 13
+            prop_indx = 14
+        
+        print(f"Linear Velocity (m/s)    : {self.x_hat[0] * self.U_des:.4f}, {self.x_hat[1] * self.U_des:.4f}, {self.x_hat[2] * self.U_des:.4f}")
+        print(f"Angular Velocity (rad/s) : {self.x_hat[3] * self.U_des / self.length:.4f}, {self.x_hat[4] * self.U_des / self.length:.4f}, {self.x_hat[5] * self.U_des / self.length:.4f}")
+        print(f"Linear Position (m)      : {self.x_hat[6] * self.length:.4f}, {self.x_hat[7] * self.length:.4f}, {self.x_hat[8] * self.length:.4f}")
+        print(f"Orientation (deg)        : {eul[0]:.2f}, {eul[1]:.2f}, {eul[2]:.2f}")
+        print(f"Unit quaternion          : {quat[0]:.2f}, {quat[1]:.2f}, {quat[2]:.2f}, {quat[3]:.2f}")
+        print(f"Rudder angle (deg)       : {self.x_hat[rud_indx] * 180 / np.pi:.2f}")
+        print(f"Propeller Speed (RPM)    : {self.x_hat[prop_indx] * 60 * self.U_des / self.length:.2f}")
+
         if self.guidance is not None:
 
-            if self.euler_angle_flag:
-                eul = self.x_hat[9:12] * 180 / np.pi
-                quat = kin.eul_to_quat(eul, deg=True)
-            else:
-                quat = self.x_hat[9:13]
-                eul = kin.quat_to_eul(quat, deg=True)
-            
-            if self.euler_angle_flag:
-                rud_indx = 12
-                prop_indx = 13
-            else:
-                rud_indx = 13
-                prop_indx = 14
-
-            print(f"Linear Velocity (m/s)    : {self.x_hat[0] * self.U_des:.4f}, {self.x_hat[1] * self.U_des:.4f}, {self.x_hat[2] * self.U_des:.4f}")
-            print(f"Angular Velocity (rad/s) : {self.x_hat[3] * self.U_des / self.length:.4f}, {self.x_hat[4] * self.U_des / self.length:.4f}, {self.x_hat[5] * self.U_des / self.length:.4f}")
-            print(f"Linear Position (m)      : {self.x_hat[6] * self.length:.4f}, {self.x_hat[7] * self.length:.4f}, {self.x_hat[8] * self.length:.4f}")
-            print(f"Orientation (deg)        : {eul[0]:.2f}, {eul[1]:.2f}, {eul[2]:.2f}")
-            print(f"Unit quaternion          : {quat[0]:.2f}, {quat[1]:.2f}, {quat[2]:.2f}, {quat[3]:.2f}")
-            print(f"Rudder angle (deg)       : {self.x_hat[rud_indx] * 180 / np.pi:.2f}")
-            print(f"Propeller Speed (RPM)    : {self.x_hat[prop_indx] * 60 * self.U_des / self.length:.2f}")
             print(f"Goal Waypoint (m)        : {self.goal_waypoint[0]:.2f}, {self.goal_waypoint[1]:.2f}, {self.goal_waypoint[2]:.2f} ")
             print(f"Distance to Goal (m)     : {np.linalg.norm(self.goal_waypoint - self.x_hat[6:9] * self.length):.2f}")
+        
+        print('\n\n')
 
     def odometry_callback(self, msg):
         # Update x_hat based on odometry message

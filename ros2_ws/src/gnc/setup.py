@@ -23,7 +23,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'gnc = gnc.start_gnc:main'
+            'nav = gnc.start_navigation:main',
+            'gc = gnc.start_guidance_control:main'
         ],
     },
 )

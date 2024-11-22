@@ -60,6 +60,10 @@ class Navigation():
     g = 9.80665
     rho = 1000
 
+    gps_first_measurement_flag = False
+    imu_first_measurement_flag = False
+    filter_start = False
+
     def __init__(self, topic_prefix, 
                 rate=10, 
                 sensors=[], 
@@ -241,20 +245,26 @@ class Navigation():
             y[5] = msg.orientation.y
             y[6] = msg.orientation.z
         
+        w_ni_i = np.array([
+            msg.angular_velocity.x,
+            msg.angular_velocity.y,
+            msg.angular_velocity.z
+        ])
+
+        a_ni_i = np.array([
+            msg.linear_acceleration.x,
+            msg.linear_acceleration.y,
+            msg.linear_acceleration.z
+        ])
+
+        q_i_n = np.array([
+            msg.orientation.w,
+            msg.orientation.x,
+            msg.orientation.y,
+            msg.orientation.z
+        ])
+
         if self.kinematic_kf_flag:
-            a_ni_i = np.array([
-                msg.linear_acceleration.x,
-                msg.linear_acceleration.y,
-                msg.linear_acceleration.z
-            ])
-
-            q_i_n = np.array([
-                msg.orientation.w,
-                msg.orientation.x,
-                msg.orientation.y,
-                msg.orientation.z
-            ])
-
             a_ni_n = kin.quat_to_rotm(q_i_n) @ a_ni_i - np.array([0, 0, -self.g])
             a_ni_i = kin.quat_to_rotm(q_i_n).T @ a_ni_n
         
@@ -319,22 +329,22 @@ class Navigation():
             # The transpose seems to be wrong in the previous version of the code
             # fun = lambda x: kin.rotm_to_eul(kin.eul_to_rotm(x) @ kin.quat_to_rotm(q_b_i).T)
             
-            fun = lambda Theta_ni: kin.rotm_to_eul(kin.eul_to_rotm(Theta_ni) @ kin.quat_to_rotm(q_b_i))
+            fun = lambda Theta_nb: kin.rotm_to_eul(kin.eul_to_rotm(Theta_nb) @ kin.quat_to_rotm(q_i_b))
             jacob = self.jacobian(fun, x0)
             
-            Cd[0:3][:, 3:6] = R_i_b
+            Cd[0:3][:, 3:6] = R_b_i
             Cd[3:6][:, 9:12] = jacob
 
         else:
             # Output matrix
             Cd = np.zeros((q, n))
 
-            qw = q_b_i[0]
-            qx = q_b_i[1]
-            qy = q_b_i[2]
-            qz = q_b_i[3]
+            qw = q_i_b[0]
+            qx = q_i_b[1]
+            qy = q_i_b[2]
+            qz = q_i_b[3]
             
-            Cd[0:3][:, 3:6] = R_i_b
+            Cd[0:3][:, 3:6] = R_b_i
             Cd[3:7][:, 9:13] = np.array([
                 [qw, -qx, -qy, -qz],
                 [qx,  qw,  qz, -qy],
@@ -349,7 +359,21 @@ class Navigation():
             Cd[-3:][:, 3:6] = kkf.d_by_dw_nb_b_a_ni_i(w_nb_b, r_bi_b, q_i_b)
         ################################################################################
 
-        self.state_corrector(y, Cd, Dd, Rd, sensor='IMU')
+        if self.filter_start:
+            self.state_corrector(y, Cd, Dd, Rd, sensor='IMU')
+        else:
+            self.imu_first_measurement_flag = True
+            self.filter_start = self.imu_first_measurement_flag and self.gps_first_measurement_flag
+
+            if self.euler_angle_flag:
+                Theta_nb = kin.quat_to_eul(kin.quat_multiply(q_i_n, q_b_i))
+                self.x_hat[9:12] = Theta_nb                
+            else:
+                q_b_n = kin.quat_multiply(q_i_n, q_b_i)
+                self.x_hat[9:13] = q_b_n
+                        
+            w_nb_b = R_i_b @ w_ni_i
+            self.x_hat[3:6] = w_nb_b / (self.U_des / self.length)
     
     def gps_callback(self, msg, sensor_id):
         self.sensor_measurements[sensor_id] = msg
@@ -402,12 +426,12 @@ class Navigation():
         x_sen = sen_loc[0] / self.length
         y_sen = sen_loc[1] / self.length
         z_sen = sen_loc[2] / self.length
-        r_sen = np.array([x_sen, y_sen, z_sen])
+        r_bg_b = np.array([x_sen, y_sen, z_sen])
 
         if self.euler_angle_flag:
-            eul = self.x_hat[9:12]
-            fun = lambda x: kin.eul_to_rotm(x) @ r_sen
-            jacob = self.jacobian(fun, eul)
+            Theta_nb = self.x_hat[9:12]
+            fun = lambda x: kin.eul_to_rotm(x) @ r_bg_b
+            jacob = self.jacobian(fun, Theta_nb)
 
             Cd[0:3][:, 9:12] = jacob
         
@@ -434,7 +458,18 @@ class Navigation():
 
         ################################################################################
 
-        self.state_corrector(y, Cd, Dd, Rd)
+        if self.filter_start:
+            self.state_corrector(y, Cd, Dd, Rd)
+        else:
+            self.gps_first_measurement_flag = True
+            self.filter_start = self.imu_first_measurement_flag and self.gps_first_measurement_flag
+
+            if self.euler_angle_flag:
+                R_b_n = kin.eul_to_rotm(self.x_hat[9:12])
+            else:
+                R_b_n = kin.quat_to_rotm(self.x_hat[9:13])
+
+            self.x_hat[6:9] = y - R_b_n @ r_bg_b
     
     def uwb_callback(self, msg, sensor_id):
         
@@ -479,16 +514,16 @@ class Navigation():
         x_sen = sen_loc[0] / self.length
         y_sen = sen_loc[1] / self.length
         z_sen = sen_loc[2] / self.length
-        r_sen = np.array([x_sen, y_sen, z_sen])
+        r_bu_b = np.array([x_sen, y_sen, z_sen])
 
         Cd[0, 6] = 1
         Cd[1, 7] = 1
         Cd[2, 8] = 1
 
         if self.euler_angle_flag:
-            eul = self.x_hat[9:12]
-            fun = lambda x: kin.eul_to_rotm(x) @ r_sen
-            jacob = self.jacobian(fun, eul)
+            Theta_nb = self.x_hat[9:12]
+            fun = lambda x: kin.eul_to_rotm(x) @ r_bu_b
+            jacob = self.jacobian(fun, Theta_nb)
 
             Cd[0:3][:, 9:12] = jacob
         
@@ -496,7 +531,7 @@ class Navigation():
             qw = self.x_hat[9]
             qx = self.x_hat[10]
             qy = self.x_hat[11]
-            qz = self.x_hat[12]            
+            qz = self.x_hat[12]
 
             Cd[0, 9]  = -2 * qz * y_sen + 2 * qy * z_sen
             Cd[0, 10] = 2 * qy * y_sen + 2 * qz * z_sen
@@ -515,7 +550,18 @@ class Navigation():
 
         ################################################################################
 
-        self.state_corrector(y, Cd, Dd, Rd)
+        if self.filter_start:
+            self.state_corrector(y, Cd, Dd, Rd)
+        else:
+            self.gps_first_measurement_flag = True
+            self.filter_start = self.imu_first_measurement_flag and self.gps_first_measurement_flag
+
+            if self.euler_angle_flag:
+                R_b_n = kin.eul_to_rotm(self.x_hat[9:12])
+            else:
+                R_b_n = kin.quat_to_rotm(self.x_hat[9:13])
+
+            self.x_hat[6:9] = y - R_b_n @ r_bu_b
             
     def encoders_callback(self, msg, sensor_id):
         
@@ -659,7 +705,7 @@ class Navigation():
         # print(f"                         : {np.sqrt(self.P_hat[6,6]):.2f}, {np.sqrt(self.P_hat[7,7]):.2f}, {np.sqrt(self.P_hat[8,8]):.2f}")
         # print(f"                         : {np.sqrt(self.P_hat[9,9]):.2f}, {np.sqrt(self.P_hat[10,10]):.2f}, {np.sqrt(self.P_hat[11,11]):.2f}, {np.sqrt(self.P_hat[12,12]):.2f}")
         # print(f"                         : {np.sqrt(self.P_hat[rud_indx,rud_indx]):.6f}, {np.sqrt(self.P_hat[prop_indx,prop_indx]):.6f}")
-        print(f'\n\n')
+        # print(f'\n\n')
     
     # Extended Kalman Filter state correction based on measurements
 
@@ -714,7 +760,7 @@ class Navigation():
                     thresh = np.array([0.5, 0.5, 0.5, 0.1, 0.1, 0.1, 10, 10, 10, np.inf, np.inf, np.inf, np.inf, 0.6, 40])
                     # thresh = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
             
-            x_hat_corr = np.where(np.abs(x_hat_corr) > thresh, np.sign(x_hat_corr) * thresh, x_hat_corr)            
+            x_hat_corr = np.where(np.abs(x_hat_corr) > thresh, np.sign(x_hat_corr) * thresh, x_hat_corr)
             self.x_hat = self.x_hat + x_hat_corr
             
             if not self.euler_angle_flag:

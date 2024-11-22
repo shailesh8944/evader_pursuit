@@ -7,11 +7,11 @@ def generate_launch_description():
         Node(
             package='mav_simulator',  # Replace with your package name
             executable='simulate',  # Replace with your script name
-            name='MAVSIM'
+            name='mavsim'
         ),
-        Node(
-            package='gnc',
-            executable='gnc',
-            name='GNC'
-        ),
+        # Node(
+        #     package='gnc',
+        #     executable='gnc',
+        #     name='GNC'
+        # ),
     ])
