@@ -231,6 +231,15 @@ class Guidance_Control():
                 prop_default = np.float64(self.control.split('_')[3])
                 exec_lead_time = np.float64(self.control.split('_')[4])
                 u_cmd = con.zigzag(self, psi_switch, delta_switch, prop_default, exec_lead_time)
+                
+            if 'spiral' in self.control:            
+                delta_start = np.float64(self.control.split('_')[1])
+                delta_step = np.float64(self.control.split('_')[2])
+                delta_end = np.float64(self.control.split('_')[3])
+                switch_time = np.float64(self.control.split('_')[4])
+                prop_default = np.float64(self.control.split('_')[5])
+                exec_lead_time = np.float64(self.control.split('_')[6])
+                u_cmd = con.spiral(self, delta_start, delta_step, delta_end, switch_time, prop_default, exec_lead_time)
 
             if 'modified_spiral' in self.control:
                 delta_start = np.float64(self.control.split('_')[2])

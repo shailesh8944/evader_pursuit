@@ -30,8 +30,10 @@ guidance: ilos
 # - pid
 # - turning_circle_{delta_deg}_{rpm}_{exec_lead_time}
 # - zigzag_{psi_deg}_{delta_deg}_{rpm}_{exec_lead_time}
-# - straight_{rpm}
-control: zigzag_30_30_1000_100000
+# - spiral_{delta_start_deg}_{delta_step_deg}_{delta_end_deg}_{switch_time}_{rpm}_{exec_lead_time}
+# - modified_spiral_{delta_start_deg}_{delta_step_deg}_{delta_end_deg}_{switch_time}_{rpm}_{exec_lead_time}
+# - straight_{rpm}  
+control: pid
 
 euler_angle_flag: True
 kinematic_kf_flag: True
@@ -62,9 +64,9 @@ sensors:
 
 ode: kvlcc2_ode
 
-odometry_topic:
-  - /kurma_00/odometry_new
-  - /kurma_00/encoders_new
+# odometry_topic:
+#   - /kurma_00/odometry_new
+#   - /kurma_00/encoders_new
 
 # waypoints_type: XYZ
 # waypoints:
@@ -75,14 +77,14 @@ odometry_topic:
 #   - [60.0, 0.0, 0.0]
 #   - [20.0, 0.0, 0.0]
 
-waypoints_type: GPS
-waypoints:
-  - [12.99321637029749, 80.23926435259567, 94.0]
-  - [12.993474596073083, 80.239544014243251, 94.0]
-  - [12.993474595646719, 80.239151711306278, 94.0]
-  - [12.993859299919567, 80.239151710569502, 94.0]
-  - [12.993859300345942 , 80.239544014110436, 94.0]
-  - [12.993474596073083 , 80.239544014243251, 94.0]
+# waypoints_type: GPS
+# waypoints:
+#   - [12.99321637029749, 80.23926435259567, 94.0]
+#   - [12.993474596073083, 80.239544014243251, 94.0]
+#   - [12.993474595646719, 80.239151711306278, 94.0]
+#   - [12.993859299919567, 80.239151710569502, 94.0]
+#   - [12.993859300345942 , 80.239544014110436, 94.0]
+#   - [12.993474596073083 , 80.239544014243251, 94.0]
 
 # waypoints_type: GPS
 # waypoints:
@@ -92,6 +94,15 @@ waypoints:
 #   - [12.993859299919567, 80.239151710569502, 94.0]
 #   - [12.993474595646719, 80.239151711306278, 94.0]
 #   - [12.993474596073083 , 80.239544014243251, 94.0]
+
+# waypoints for Straight-line test
+waypoints_type: GPS
+waypoints:
+  - [12.99321637029749, 80.23926435259567, 94.0]
+  - [12.993263434932476, 80.23975574391835, 94.0]
+  - [12.993745606092931, 80.2389711828949, 94.0]
+  - [12.993770903425505, 80.23920339801784, 94.0]
+  - [12.993361952242145, 80.2392468899767, 94.0]
 
 # # Geofence test
 # waypoints_type: GPS
