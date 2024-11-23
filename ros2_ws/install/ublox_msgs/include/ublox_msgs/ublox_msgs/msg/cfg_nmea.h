@@ -1,1 +1,12 @@
-/workspaces/mavlab/ros2_ws/build/ublox_msgs/rosidl_generator_c/ublox_msgs/msg/cfg_nmea.h
+// generated from rosidl_generator_c/resource/idl.h.em
+// with input from ublox_msgs:msg/CfgNMEA.idl
+// generated code does not contain a copyright notice
+
+#ifndef UBLOX_MSGS__MSG__CFG_NMEA_H_
+#define UBLOX_MSGS__MSG__CFG_NMEA_H_
+
+#include "ublox_msgs/msg/detail/cfg_nmea__struct.h"
+#include "ublox_msgs/msg/detail/cfg_nmea__functions.h"
+#include "ublox_msgs/msg/detail/cfg_nmea__type_support.h"
+
+#endif  // UBLOX_MSGS__MSG__CFG_NMEA_H_

@@ -1,1 +1,15 @@
-/workspaces/mavlab/ros2_ws/src/sbg_ros2_driver/msg/SbgStatus.msg
+# SBG Ellipse Messages
+
+std_msgs/Header header
+
+# Time since sensor is powered up (in us)
+uint32 time_stamp
+
+# General status bitmask and enums
+SbgStatusGeneral status_general
+
+# Communication status bitmask and enums.
+SbgStatusCom status_com
+
+# Aiding equipments status bitmask and enums.
+SbgStatusAiding status_aiding

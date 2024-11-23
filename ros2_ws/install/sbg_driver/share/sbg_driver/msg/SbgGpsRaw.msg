@@ -1,1 +1,5 @@
-/workspaces/mavlab/ros2_ws/src/sbg_ros2_driver/msg/SbgGpsRaw.msg
+# SBG Ellipse Messages
+std_msgs/Header header
+
+# Raw Data
+uint8[] data

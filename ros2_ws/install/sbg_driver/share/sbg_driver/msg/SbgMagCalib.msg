@@ -1,1 +1,2 @@
-/workspaces/mavlab/ros2_ws/src/sbg_ros2_driver/msg/SbgMagCalib.msg
+# SBG Ellipse Messages
+std_msgs/Header header

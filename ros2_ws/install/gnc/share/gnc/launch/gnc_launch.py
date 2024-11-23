@@ -6,7 +6,12 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='gnc',  # Replace with your package name
-            executable='gnc',  # Replace with your script name
-            name='GNC'
+            executable='nav',  # Replace with your script name
+            name='nav'
+        ),
+        Node(
+            package='gnc',  # Replace with your package name
+            executable='gc',  # Replace with your script name
+            name='gc'
         ),
     ])

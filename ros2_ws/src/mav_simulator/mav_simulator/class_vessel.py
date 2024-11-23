@@ -492,6 +492,27 @@ class Vessel():
         self.ode_options['N_d'] = - (xp_R + aH * xp_H) * F_N
         self.ode_options['X_n'] = 2 * (1 - tp) * (D_prop ** 2) * ((1 - wp) * D_prop * pow_coeff[1] + 2 * n_prop * (D_prop ** 2) * pow_coeff[2])
         self.ode_options['X_n_n'] = 2 * (1 - tp) * (D_prop ** 2) * (2 * (D_prop ** 2) * pow_coeff[2])
+        
+        if self.name == 'kurma':
+            self.ode_options['R0'] = 0.022
+            self.ode_options['X_v_v'] = -0.040
+            self.ode_options['X_v_r'] = 0.002
+            self.ode_options['X_r_r'] = 0.011
+            self.ode_options['X_v_v_v_v'] = 0.771
+            
+            self.ode_options['Y_v'] = -0.315
+            self.ode_options['Y_R'] = 0.083
+            self.ode_options['Y_v_v_v'] = -1.607
+            self.ode_options['Y_v_v_r'] = 0.379
+            self.ode_options['Y_v_r_r'] = -0.391
+            self.ode_options['Y_r_r_r'] = 0.008
+            
+            self.ode_options['N_v'] = -0.137
+            self.ode_options['N_R'] = -0.049
+            self.ode_options['N_v_v_v'] = -0.03
+            self.ode_options['N_v_v_r'] = -0.294
+            self.ode_options['N_v_r_r'] = 0.055
+            self.ode_options['N_r_r_r'] = -0.013
 
     def cross_flow_drag(self):
         Cd_2D = self.hoerner()

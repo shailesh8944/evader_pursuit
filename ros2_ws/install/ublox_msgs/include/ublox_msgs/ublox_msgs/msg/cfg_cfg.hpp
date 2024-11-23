@@ -1,1 +1,11 @@
-/workspaces/mavlab/ros2_ws/build/ublox_msgs/rosidl_generator_cpp/ublox_msgs/msg/cfg_cfg.hpp
+// generated from rosidl_generator_cpp/resource/idl.hpp.em
+// generated code does not contain a copyright notice
+
+#ifndef UBLOX_MSGS__MSG__CFG_CFG_HPP_
+#define UBLOX_MSGS__MSG__CFG_CFG_HPP_
+
+#include "ublox_msgs/msg/detail/cfg_cfg__struct.hpp"
+#include "ublox_msgs/msg/detail/cfg_cfg__builder.hpp"
+#include "ublox_msgs/msg/detail/cfg_cfg__traits.hpp"
+
+#endif  // UBLOX_MSGS__MSG__CFG_CFG_HPP_

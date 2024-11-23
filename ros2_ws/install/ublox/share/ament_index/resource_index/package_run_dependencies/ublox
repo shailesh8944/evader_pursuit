@@ -1,1 +1,1 @@
-/workspaces/mavlab/ros2_ws/build/ublox/ament_cmake_index/share/ament_index/resource_index/package_run_dependencies/ublox
+ublox_serialization;ublox_msgs;ublox_gps

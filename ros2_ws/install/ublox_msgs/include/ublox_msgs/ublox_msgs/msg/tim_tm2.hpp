@@ -1,1 +1,11 @@
-/workspaces/mavlab/ros2_ws/build/ublox_msgs/rosidl_generator_cpp/ublox_msgs/msg/tim_tm2.hpp
+// generated from rosidl_generator_cpp/resource/idl.hpp.em
+// generated code does not contain a copyright notice
+
+#ifndef UBLOX_MSGS__MSG__TIM_TM2_HPP_
+#define UBLOX_MSGS__MSG__TIM_TM2_HPP_
+
+#include "ublox_msgs/msg/detail/tim_tm2__struct.hpp"
+#include "ublox_msgs/msg/detail/tim_tm2__builder.hpp"
+#include "ublox_msgs/msg/detail/tim_tm2__traits.hpp"
+
+#endif  // UBLOX_MSGS__MSG__TIM_TM2_HPP_

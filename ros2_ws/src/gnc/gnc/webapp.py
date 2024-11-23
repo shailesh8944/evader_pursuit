@@ -436,8 +436,8 @@ def main():
 
     global odom_topic, encoders_topic, ros_thread_instance
 
-    odom_topic = '/matsya_00/odometry_sim'  # Default selected topic
-    encoders_topic = '/matsya_00/encoders'  # Default selected topic
+    odom_topic = '/kurma_00/odometry_sim'  # Default selected topic
+    encoders_topic = '/kurma_00/encoders'  # Default selected topic
     
     ros_thread_instance = threading.Thread(target=ros_thread, args=(odom_topic, encoders_topic,))
     ros_thread_instance.start()

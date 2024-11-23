@@ -1,1 +1,4 @@
-/workspaces/mavlab/ros2_ws/build/ublox_msgs/ament_cmake_environment_hooks/local_setup.dsv
+source;share/ublox_msgs/environment/ament_prefix_path.sh
+source;share/ublox_msgs/environment/library_path.sh
+source;share/ublox_msgs/environment/path.sh
+source;share/ublox_msgs/environment/pythonpath.sh

@@ -1,1 +1,11 @@
-/workspaces/mavlab/ros2_ws/build/ublox_msgs/rosidl_generator_cpp/ublox_msgs/msg/rxm_alm.hpp
+// generated from rosidl_generator_cpp/resource/idl.hpp.em
+// generated code does not contain a copyright notice
+
+#ifndef UBLOX_MSGS__MSG__RXM_ALM_HPP_
+#define UBLOX_MSGS__MSG__RXM_ALM_HPP_
+
+#include "ublox_msgs/msg/detail/rxm_alm__struct.hpp"
+#include "ublox_msgs/msg/detail/rxm_alm__builder.hpp"
+#include "ublox_msgs/msg/detail/rxm_alm__traits.hpp"
+
+#endif  // UBLOX_MSGS__MSG__RXM_ALM_HPP_
