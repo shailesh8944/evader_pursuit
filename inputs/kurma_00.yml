@@ -42,13 +42,13 @@ sensors:
     sensor_location: [0.0, 0.0, 0.0]          # With respect to BODY frame
     sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
     publish_rate: 50
-    topic: /kurma_00/imu
+    topic: /imu/data
   - 
     sensor_type: GPS
     sensor_location: [1.0, 0.0, 0.0]            # With respect to BODY frame
     sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
     publish_rate: 1
-    topic: /kurma_00/gps
+    topic: /ublox_gps_node/fix
   # - 
   #   sensor_type: UWB
   #   sensor_location: [0.0, 0.0, 0.0]            # With respect to BODY frame
@@ -63,8 +63,8 @@ sensors:
 ode: kvlcc2_ode
 
 odometry_topic:
-  - /kurma_00/odometry_sim
-  - /kurma_00/encoders
+  - /kurma_00/odometry_new
+  - /kurma_00/encoders_new
 
 # waypoints_type: XYZ
 # waypoints:

@@ -10,8 +10,7 @@ RUN apt-get -y install libsm6 libxext6 libxrender1 libfontconfig1 libgl1 sudo xa
 RUN apt-get update --fix-missing
 RUN apt-get -y install libboost-all-dev curl
 RUN apt-get -y install libasio-dev 
-RUN apt-get -y install ros-humble-diagnostic-updater ros-humble-nmea-msgs ros-humble-rtcm-msgs 
-
+RUN apt-get -y install ros-humble-diagnostic-updater ros-humble-nmea-msgs ros-humble-rtcm-msgs
 
 ENV USERNAME=mavlab
 RUN useradd -m $USERNAME && \
@@ -52,6 +51,20 @@ RUN echo "alias ardusimple='sros2 && ros2 launch ublox_gps ublox_gps_node-launch
 # Setup SBG drivers
 COPY sbg_setup.sh /home/mavlab/
 RUN ./sbg_setup.sh
+
+# Install NVM and Node.js
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
+ENV NVM_DIR=/home/mavlab/.nvm
+ENV NODE_VERSION=18.20.4
+RUN . "$NVM_DIR/nvm.sh" && \
+    nvm install $NODE_VERSION && \
+    nvm alias default $NODE_VERSION && \
+    nvm use default && \
+    npm install -g npm@latest
+
+# Ensure Node.js and NPM are in the PATH
+ENV PATH=$NVM_DIR/versions/node/v$NODE_VERSION/bin:$PATH
+RUN npm install -g localtunnel
 
 # For web application
 EXPOSE 9000
