@@ -3,10 +3,10 @@ from rclpy.serialization import deserialize_message
 from sensor_msgs.msg import Imu, NavSatFix
 from nav_msgs.msg import Odometry
 import numpy as np
-from module_kinematics import eul_to_quat
+from module_kinematics import quat_to_eul, llh_to_ned
 
 
-def extract_data_from_bag(bag_path):
+def extract_data_from_bag(bag_path, llh0):
     # Open the bag
     storage_options = StorageOptions(uri=bag_path, storage_id='sqlite3')
     converter_options = ConverterOptions(input_serialization_format='cdr', output_serialization_format='cdr')
@@ -51,7 +51,8 @@ def extract_data_from_bag(bag_path):
         elif topic_type == 'sensor_msgs/msg/NavSatFix':
             gps_data[topic_name] = {
                 "time": [],
-                "lla": []
+                "lla": [],
+                "ned": []
             }
         elif topic_type == 'nav_msgs/msg/Odometry':
             odom_data[topic_name] = {
@@ -81,20 +82,23 @@ def extract_data_from_bag(bag_path):
             imu_data[topic_name]["time"].append(timestamp / 1e9)
             imu_data[topic_name]["ang_vel"].append([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
             imu_data[topic_name]["acc"].append([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
-            quat = [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
-            imu_data[topic_name]["quat"].append(quat)
-            eul = eul_to_quat(quat, deg=True)  # Convert to Euler angles
-            imu_data[topic_name]["eul"].append(eul)
+            quat = np.array([msg.orientation.w, msg.orientation.x, msg.orientation.y, msg.orientation.z])
+            imu_data[topic_name]["quat"].append(quat.tolist())
+            eul = quat_to_eul(quat, deg=True)  # Convert to Euler angles
+            imu_data[topic_name]["eul"].append(eul.tolist())
         elif topic_type == 'sensor_msgs/msg/NavSatFix':
             gps_data[topic_name]["time"].append(timestamp / 1e9)
             gps_data[topic_name]["lla"].append([msg.latitude, msg.longitude, msg.altitude])
+            llh = np.array([msg.latitude, msg.longitude, msg.altitude])
+            ned = llh_to_ned(llh, llh0)
+            gps_data[topic_name]["ned"].append(ned.tolist())
         elif topic_type == 'nav_msgs/msg/Odometry':            
             odom_data[topic_name]["time"].append(timestamp / 1e9)
             odom_data[topic_name]["pos"].append([msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z])
-            quat = [msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
-            odom_data[topic_name]["quat"].append(quat)
-            eul = eul_to_quat(quat, deg=True)  # Convert to Euler angles
-            odom_data[topic_name]["eul"].append(eul)
+            quat = np.array([msg.pose.pose.orientation.w, msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z])
+            odom_data[topic_name]["quat"].append(quat.tolist())
+            eul = quat_to_eul(quat, deg=True)  # Convert to Euler angles
+            odom_data[topic_name]["eul"].append(eul.tolist())
             odom_data[topic_name]["lin_vel"].append([msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z])
             odom_data[topic_name]["ang_vel"].append([msg.twist.twist.angular.x, msg.twist.twist.angular.y, msg.twist.twist.angular.z])
 
@@ -110,11 +114,12 @@ def extract_data_from_bag(bag_path):
 if __name__ == '__main__':
     import sys
     if len(sys.argv) < 2:
-        print("Usage: python extract_bag_data.py <bag_path>")
+        print("Usage: python extract_ros2_data.py <bag_path>")
         sys.exit(1)
 
+    gps_datum = np.array([12.99300425860631, 80.23913114094384, 94.0])
     bag_path = sys.argv[1]
-    imu_data, gps_data, odom_data = extract_data_from_bag(bag_path)
+    imu_data, gps_data, odom_data = extract_data_from_bag(bag_path, gps_datum)
 
     print("IMU Data:")
     for topic, data in imu_data.items():

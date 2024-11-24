@@ -777,8 +777,8 @@ class Navigation():
                 rud_indx = 13
                 prop_indx = 14
             
-            self.x_hat[rud_indx] = kin.clip(self.x_hat[rud_indx], 35 * np.pi / 180)
-            self.x_hat[prop_indx] = kin.clip(self.x_hat[prop_indx], 800.0 * self.length / (self.U_des * 60.0))
+            # self.x_hat[rud_indx] = kin.clip(self.x_hat[rud_indx], 35 * np.pi / 180)
+            # self.x_hat[prop_indx] = kin.clip(self.x_hat[prop_indx], 1000.0 * self.length / (self.U_des * 60.0))
 
             self.P_hat = (np.eye(n) - K @ Cd) @ self.P_hat @ (np.eye(n) - K @ Cd).T + K @ Rd @ K.T
             
@@ -1039,8 +1039,8 @@ class Navigation():
                 if quat_diff[0] < 0:
                     self.x_hat[9:13] = -self.x_hat[9:13]
             
-            self.x_hat[rud_indx] = kin.clip(self.x_hat[rud_indx], 35 * np.pi / 180)
-            self.x_hat[prop_indx] = kin.clip(self.x_hat[prop_indx], 800.0 * self.length / (self.U_des * 60.0))
+            # self.x_hat[rud_indx] = kin.clip(self.x_hat[rud_indx], 35 * np.pi / 180)
+            # self.x_hat[prop_indx] = kin.clip(self.x_hat[prop_indx], 800.0 * self.length / (self.U_des * 60.0))
             
             self.P_hat = Ad @ self.P_hat @ Ad.T + Ed @ Qd @ Ed.T
             

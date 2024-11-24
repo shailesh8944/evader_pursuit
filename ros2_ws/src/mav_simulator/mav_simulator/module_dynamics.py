@@ -287,7 +287,7 @@ def kcs_ode(t, v, delta_c, n_c, options):
 
     return vd
 
-def onrt_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False):
+def onrt_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=False):
 
     scale = options['scale']
     wind_flag = options['wind_flag']
@@ -324,25 +324,26 @@ def onrt_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False):
     Nrv = options['N_r_av']
     Nrr = options['N_r_ar']
     
-    R0 = options['R0'] 
-    X_v_v = options['X_v_v'] 
-    X_v_r = options['X_v_r'] 
-    X_r_r = options['X_r_r'] 
-    X_v_v_v_v = options['X_v_v_v_v'] 
-    
-    Y_v = options['Y_v'] 
-    Y_R = options['Y_R'] 
-    Y_v_v_v = options['Y_v_v_v'] 
-    Y_v_v_r = options['Y_v_v_r'] 
-    Y_v_r_r = options['Y_v_r_r'] 
-    Y_r_r_r = options['Y_r_r_r'] 
-    
-    N_v = options['N_v'] 
-    N_R = options['N_R'] 
-    N_v_v_v = options['N_v_v_v'] 
-    N_v_v_r = options['N_v_v_r'] 
-    N_v_r_r = options['N_v_r_r'] 
-    N_r_r_r = options['N_r_r_r'] 
+    if mmg_flag:
+        R0 = options['R0'] 
+        X_v_v = options['X_v_v'] 
+        X_v_r = options['X_v_r'] 
+        X_r_r = options['X_r_r'] 
+        X_v_v_v_v = options['X_v_v_v_v'] 
+        
+        Y_v = options['Y_v'] 
+        Y_R = options['Y_R'] 
+        Y_v_v_v = options['Y_v_v_v'] 
+        Y_v_v_r = options['Y_v_v_r'] 
+        Y_v_r_r = options['Y_v_r_r'] 
+        Y_r_r_r = options['Y_r_r_r'] 
+        
+        N_v = options['N_v'] 
+        N_R = options['N_R'] 
+        N_v_v_v = options['N_v_v_v'] 
+        N_v_v_r = options['N_v_v_r'] 
+        N_v_r_r = options['N_v_r_r'] 
+        N_r_r_r = options['N_r_r_r'] 
 
     D_prop = options['D_prop']
     
@@ -427,21 +428,22 @@ def onrt_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False):
     tau_D = -(Dl @ ss[0:6]) - Dnl
     
     # MMG hull hydrodynamic force calculation
-    # Non-dimensional Surge Hull Hydrodynamic Force
-    Xp_H = -R0 * (up ** 2) + X_v_v * (vp ** 2) + X_v_r * vp * rp + X_r_r * (rp ** 2) + X_v_v_v_v * (vp ** 4)
+    if mmg_flag:
+        # Non-dimensional Surge Hull Hydrodynamic Force
+        Xp_H = -R0 * (up ** 2) + X_v_v * (vp ** 2) + X_v_r * vp * rp + X_r_r * (rp ** 2) + X_v_v_v_v * (vp ** 4)
 
-    # Non-dimensional Sway Hull Hydrodynamic Force
-    Yp_H = Y_v * vp + Y_R * rp + Y_v_v_v * (vp ** 3) \
-    + Y_v_v_r * (vp ** 2) * rp + Y_v_r_r * vp * (rp ** 2) + Y_r_r_r * (rp ** 3)
+        # Non-dimensional Sway Hull Hydrodynamic Force
+        Yp_H = Y_v * vp + Y_R * rp + Y_v_v_v * (vp ** 3) \
+        + Y_v_v_r * (vp ** 2) * rp + Y_v_r_r * vp * (rp ** 2) + Y_r_r_r * (rp ** 3)
 
-    # Non-dimensional Yaw Hull Hydrodynamic Moment
-    Np_H = N_v * vp + N_R * rp + N_v_v_v * (vp ** 3) + N_v_v_r * (vp ** 2) * rp \
-    + N_v_r_r * vp * (rp ** 2) + N_r_r_r * (rp ** 3)
-    
-    tau_MMG = np.zeros(6)
-    tau_MMG[0] = Xp_H
-    tau_MMG[1] = Yp_H
-    tau_MMG[5] = Np_H
+        # Non-dimensional Yaw Hull Hydrodynamic Moment
+        Np_H = N_v * vp + N_R * rp + N_v_v_v * (vp ** 3) + N_v_v_r * (vp ** 2) * rp \
+        + N_v_r_r * vp * (rp ** 2) + N_r_r_r * (rp ** 3)
+        
+        tau_MMG = np.zeros(6)
+        tau_MMG[0] = Xp_H
+        tau_MMG[1] = Yp_H
+        tau_MMG[5] = Np_H
 
     # Stiffness force calculation
 
@@ -503,8 +505,10 @@ def onrt_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False):
 
     # Total force calculation
 
-    tau = tau_C + tau_K + tau_P + tau_R + tau_MMG
-    # tau = tau_C + tau_D + tau_K + tau_P + tau_R
+    if mmg_flag:
+        tau = tau_C + tau_K + tau_P + tau_R + tau_MMG
+    else:
+        tau = tau_C + tau_D + tau_K + tau_P + tau_R
 
     # print(tau_P[0], tau_D[0], Xuu, up)
 

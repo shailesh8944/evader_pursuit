@@ -211,9 +211,13 @@ class Guidance_Control():
                 if self.control == 'pid':
                     u_cmd = con.pid(self, rudder_flag=True, prop_flag=True, rudder_default=0.0, prop_default=0.0)
                 else:
-                    prop_default = np.float64(self.control.split('_')[1])
-                    self.psi_des = np.float64(self.control.split('_')[2]) * np.pi / 180
-                    u_cmd = con.pid(self, rudder_flag=True, prop_flag=False, rudder_default=0.0, prop_default=prop_default)
+                    if len(self.control.split('_')) > 2:
+                        prop_default = np.float64(self.control.split('_')[1])
+                        self.psi_des = np.float64(self.control.split('_')[2]) * np.pi / 180
+                        u_cmd = con.pid(self, rudder_flag=True, prop_flag=False, rudder_default=0.0, prop_default=prop_default)
+                    else:
+                        prop_default = np.float64(self.control.split('_')[1])
+                        u_cmd = con.pid(self, rudder_flag=True, prop_flag=False, rudder_default=0.0, prop_default=prop_default)
             
             if 'straight' in self.control:            
                 prop_default = np.float64(self.control.split('_')[1])
@@ -359,6 +363,7 @@ class Guidance_Control():
 
             print(f"Goal Waypoint (m)        : {self.goal_waypoint[0]:.2f}, {self.goal_waypoint[1]:.2f}, {self.goal_waypoint[2]:.2f} ")
             print(f"Distance to Goal (m)     : {np.linalg.norm(self.goal_waypoint - self.x_hat[6:9] * self.length):.2f}")
+            print(f"Desired heading (deg)    : {self.psi_des * 180.0 / np.pi:.2f}")
         
         print('\n\n')
 

@@ -43,6 +43,8 @@ class Vessel():
 
     euler_angle_flag = True
     kinematic_kf_flag = False
+
+    mmg_flag = False
     
     def __init__(self, vessel_data, vessel_id=None):
 
@@ -263,6 +265,9 @@ class Vessel():
         
         if 'kinematic_kf_flag' in data:
             self.kinematic_kf_flag = data['kinematic_kf_flag']
+        
+        if 'kinematic_kf_flag' in data:
+            self.mmg_flag = data['mmg_flag']
         
         
     def create_model(self):        
@@ -493,7 +498,7 @@ class Vessel():
         self.ode_options['X_n'] = 2 * (1 - tp) * (D_prop ** 2) * ((1 - wp) * D_prop * pow_coeff[1] + 2 * n_prop * (D_prop ** 2) * pow_coeff[2])
         self.ode_options['X_n_n'] = 2 * (1 - tp) * (D_prop ** 2) * (2 * (D_prop ** 2) * pow_coeff[2])
         
-        if self.name == 'kurma':
+        if self.name == 'kurma' and self.mmg_flag:
             self.ode_options['R0'] = 0.022
             self.ode_options['X_v_v'] = -0.040
             self.ode_options['X_v_r'] = 0.002
@@ -614,7 +619,7 @@ class Vessel():
         if np.isnan(n_c):
             n_c = 0
 
-        sol = solve_ivp(self.ode, tspan, state, args=(delta_c, n_c, self.ode_options))
+        sol = solve_ivp(self.ode, tspan, state, args=(delta_c, n_c, self.ode_options, False, self.mmg_flag))
         new_state = np.array(sol.y)[:,-1]
         
         # Normalize the quaternion to a unit quaternion

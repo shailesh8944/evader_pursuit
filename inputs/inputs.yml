@@ -8,12 +8,12 @@ density: 1000
 gravity: 9.80665
 
 # GPS Datum at the sluez gate on the lake of IIT Madras
-gps_datum: [12.99300425860631, 80.23913114094384, 94.0]
+gps_datum: [12.99300425860631, 80.23913114094384, -87.0]
 # gps_datum: [12.990946762876007, 80.2263947095579, -70.0]
 
 world_size: [100, 100, Inf]
 nagents: 1
-time_step: 0.25
+time_step: 0.1
 
 geofence:
   - [12.993496, 80.239007]
@@ -52,10 +52,10 @@ geofence:
 #   - [12.993335, 80.239098]
 #   - [12.993496, 80.239007]
 
-static_obstacle:
-  - [12.993637, 80.239380, 94.0]
-  - [12.993633, 80.238615, 94.0]
-  - [12.993358, 80.239979, 94.0]
+# static_obstacle:
+#   - [12.993637, 80.239380, 94.0]
+#   - [12.993633, 80.238615, 94.0]
+#   - [12.993358, 80.239979, 94.0]
 
 # waves:
 #   -
@@ -71,7 +71,8 @@ static_obstacle:
 
 agents:
   # - '/workspaces/mavlab/inputs/makara_hwd.yml'
-  - '/workspaces/mavlab/inputs/kurma_00.yml'
+  # - '/workspaces/mavlab/inputs/kurma_00.yml'
   # - '/workspaces/mavlab/inputs/matsya_00.yml'
   # - '/workspaces/mavlab/inputs/makara_00.yml'
   # - '/workspaces/mavlab/inputs/makara_01.yml'
+  - '/workspaces/mavlab/inputs/kurma_straight.yml'
