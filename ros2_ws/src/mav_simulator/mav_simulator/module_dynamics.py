@@ -1,5 +1,6 @@
 import numpy as np
 import module_kinematics as kin
+import pandas as pd
 
 def ode_options(scale=1, 
     wind_flag=False, wind_speed=0.0, wind_dir=180.0,
@@ -551,4 +552,347 @@ def onrt_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=Fals
     ssd[prop_indx] = nd_prop
 
     return ssd
+
+def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=False):
+    
+    # x[0:3] Linear Velocity
+    # x[3:6] Angular Velocity
+    # x[6:9] Linear positions
+    # x[9:12] Euler Angles (Roll Pitch Yaw)
+    # x[13] Rudder Angle
+    # x[14] Propeller RPM
+
+    # Nondimensional State Space Variables
+    up = ss[0]; vp = ss[1]; wp = ss[2]  
+    pp = ss[3]; qp = ss[4]; rp = ss[5] 
+    xp = ss[6]; yp = ss[7]; zp = ss[8]  
+   
+    if euler_angle_flag:
+        eul = ss[9:12]
+    else:
+        quat = ss[9:13]
+        eul = kin.quat_to_eul(quat)
+    phi = eul[0]; theta = eul[1]; psi = eul[2]
+
+    if euler_angle_flag:
+        rud_indx = 12
+        prop_indx = 13
+    else:
+        rud_indx = 13
+        prop_indx = 14
+    
+   
+    v1 = ss[0:3]; v2 = ss[3:6]
+
+    ## First let's set the mass matrix 
+    ## Calculated in class_vessel.py in the function process_vessel_input()
+    ## and then normalized in calculate_hydrodynamics() function in class_vessel
+    M_RB = options['M_RB']      ## Rigid body mass matrix
+
+    ## Added mass also calculated in calculate_hydrodynamics() function 
+    ## Requries output from Hydra
+    M_A = options['M_A']        ## Added mass matrix
+    ## should be of form -diag(Xud,Yvd,Zwd,Kpd,Mqd,Nrd) (Ref Fossen)
+
+    # np.linalg.inv(M_RB + A)
+    M_inv = options['M_inv']    ## Inverse of mass matrix   
+
+    ## Now let's do the coriolis and centripetal matrix calculation
+    # Coriolis force calculation
+    M11 = M_RB[0:3][:, 0:3]
+    M12 = M_RB[0:3][:, 3:6]
+    M21 = M_RB[3:6][:, 0:3]
+    M22 = M_RB[3:6][:, 3:6]
+
+    C_RB = np.zeros((6,6))
+    C_RB[0:3][:, 3:6] = -kin.Smat(M11 @ v1 + M12 @ v2)
+    C_RB[3:6][:, 0:3] = -kin.Smat(M11 @ v1 + M12 @ v2)
+    C_RB[3:6][:, 3:6] = -kin.Smat(M21 @ v1 + M22 @ v2)
+
+    A11 = M_A[0:3][:, 0:3]
+    A12 = M_A[0:3][:, 3:6]
+    A21 = M_A[3:6][:, 0:3]
+    A22 = M_A[3:6][:, 3:6]
+
+    C_A = np.zeros((6,6))
+    C_A[0:3][:, 3:6] = -kin.Smat(A11 @ v1 + A12 @ v2)
+    C_A[3:6][:, 0:3] = -kin.Smat(A11 @ v1 + A12 @ v2)
+    C_A[3:6][:, 3:6] = -kin.Smat(A21 @ v1 + A22 @ v2)    
+
+    tau_C = -(C_RB @ ss[0:6] + C_A @ ss[0:6])
+
+    ## Now let us set the damping matrix
+    ## Unlike for ships, potential damping for AUV underwater will be zero
+    ## From Fossen's book pg.182, 6DOF Models for AUVs and ROVs (for low speed)
+    ## -diagonal(Xu,Yv,Zw,Kp,Mq,Nr} Dl (Linear Damping)
+
+    ## Coefficients, calculated from cross_flow_drag() function in class_vessel.py
+    ## Need to change the v and r values in cross_flow_drag function
+    ## Surge, Sway and Yaw
+    Xuu = options['X_u_au']
+    Yvv = options['Y_v_av']
+    Yvr = options['Y_v_ar']
+    Yrv = options['Y_r_av']
+    Yrr = options['Y_r_ar']
+    Nvv = options['N_v_av']
+    Nvr = options['N_v_ar']
+    Nrv = options['N_r_av']
+    Nrr = options['N_r_ar']
+
+    ## Also need to add Heave and Pitch Coefficients
+    ## Need to change the q and w values in cross_flow_drag function
+    Zww = options['Z_w_aw']
+    Zwq = options['Z_w_aq']
+    Zqw = options['Z_q_aw']
+    Zqq = options['Z_q_aq']
+    Mww = options['M_w_aw']
+    Mwq = options['M_w_aq']
+    Mqw = options['M_q_aw']
+    Mqq = options['M_q_aq']
+
+    ## Linear Damping (calculated in class_vessel)
+    Dl = options['Dl'] 
+
+    ## Non-Linear Damping, Surge and Cross Flow Drag (Sway and Heave)
+    Dnl = np.zeros(6)    
+    Dnl[0] = -Xuu * up * np.abs(up)
+    Dnl[1] = -(Yvv * vp * np.abs(vp) + Yrv * rp * np.abs(vp) + Yvr * vp * np.abs(rp) + Yrr * rp * np.abs(rp))
+    Dnl[5] = -(Nvv * vp * np.abs(vp) + Nrv * rp * np.abs(vp) + Nvr * vp * np.abs(rp) + Nrr * rp * np.abs(rp))
+
+    Dnl[2] = -(Zww * wp * np.abs(wp) + Zqw * qp * np.abs(wp) + Zwq * wp * np.abs(qp) + Zqq * qp * np.abs(qp))
+    Dnl[4] = -(Mww * wp * np.abs(wp) + Mqw * qp * np.abs(wp) + Mwq * wp * np.abs(qp) + Mqq * qp * np.abs(qp)) 
+
+    ## This sums up the total Damping due to hydrodynamics of AUV
+    tau_D = -(Dl @ ss[0:6]) - Dnl
+
+
+    ## Let us now add Gravitational Forces for the AUV (Hydrostatics)
+    W = options['W']
+    B = options['B']
+    r_bg = options['r_bg'] ## Vector from Body frame to COG
+    r_bb = options['r_bb'] ## Vector from Body framr to Buoyancy
+    g = gvect(W,B,ss[11],ss[10],r_bg,r_bb)
+
+    ## Now let us derive the generalized forces due to the propeller
+    ## Power Coefficients are calulated in calculate_hydrodynamics() in class_vessel.py
+    
+    n_prop = ss[prop_indx] ## Propeller RPM 
+    tp = options['tp'] ## Thrust deduction coeff
+    D_prop = options['D_prop']
+    n_max = 2668/60
+
+
+    ## 28.73 N thrust at 2668 RPM at 12V (from T200 datasheet)
+    KT_at_J0 = 28.73/(1024*D_prop**4 *n_max**2)
+
+
+    J = up/(n_prop*D_prop)
+    KT = KT_at_J0*(1-J)
+    
+    X_prop = KT * 1024 * D_prop**4 * np.abs(n_prop) * n_prop ## Normalize this
+    tau_P = np.zeros(6)
+    tau_P[0] = X_prop
+
+    ## Now let us calculate the forces due to the rudders, stern fin and bow fin   
+    A_R = options['rudder_area']
+    deltad_max = options['deltad_max']
+       
+    ## Need to add the following in class_vessel.py options
+    ## Positions from Body Centre
+
+    x_r1 = options['x_r1']      ## x position of upper rudder
+    x_r2 = options['x_r2']      ## x position of down rudder
+    x_sf1 = options['x_sf1']    ## x position of left fin
+    x_sf2 = options['x_sf2']    ## x position of right fin
+    x_b1 = options['x_b1']      ## x position of left bow fin
+    x_b2 = options['x_b2']      ## x position of right bow fin
+
+    y_r1 =  options['y_r1']      ## y position of upper rudder
+    y_r2 =  options['y_r2']      ## y position of down rudder
+    y_sf1 = options['y_sf1']     ## y position of left fin
+    y_sf2 = options['y_sf2']     ## y position of right fin
+    y_b1 =  options['y_b1']      ## y position of left bow fin
+    y_b2 =  options['y_b2']      ## y position of right bow fin
+
+    z_r1 = options['z_r1']      ## z position of upper rudder
+    z_r2 = options['z_r2']      ## z position of down rudder
+    z_sf1 = options['z_sf1']    ## z position of left fin
+    z_sf2 = options['z_sf2']    ## z position of right fin
+    z_b1 = options['z_b1']      ## z position of left bow fin
+    z_b2 = options['z_b2']      ## z position of right bow fin
+
+    ## delta = [UpperRudder,LowerRudder,LeftSternFin,RightSternFin,LeftBowFin,RightBowFin]
+    delta = ss[rud_indx] ## Rudder angle(s)
+
+    ## For each particular fin/rudder, +ve delta is anticlockwise direction (outward the hull)
+
+    ## Net flow angle is calculated accounting for the horizontal flow as well as flow due to rotation and rudder angle
+
+
+    ## NACA profile of the aerofoil with data at Reynolds number 1M
+    ## From Airfoilstools website
+    NACAfile = "../hullform/MAVYMINI/NACA0015.csv"
+
+    ## Upper Rudder
+    posr1 = [x_r1,y_r1,z_r1]
+    fr1 = controlSurface(delta[0],ss[:6],posr1,NACAfile,[0,0,-1],A_R)
+    
+    ## Lower Rudder
+    posr2 = [x_r2,y_r2,z_r2]
+    fr2 = controlSurface(delta[1],ss[:6],posr2,NACAfile,[0,0,1],A_R)
+
+    ##Left Stern Fin
+    possf1 = [x_sf1,y_sf1,z_sf1]
+    fsf1 = controlSurface(delta[2],ss[:6],possf1,NACAfile,[0,1,0],A_R)
+
+    ##Right Stern Fin
+    possf2 = [x_sf2,y_sf2,z_sf2]
+    fsf2 = controlSurface(delta[3],ss[:6],possf2,NACAfile,[0,-1,0],A_R)
+
+    ##Left Bow Fin
+    posbf1 = [x_b1,y_b1,z_b1]
+    fb1 = controlSurface(delta[4],ss[:6],posbf1,NACAfile,[0,1,0],A_R)
+
+    ##Right Bow Fin
+    posbf2 = [x_b2,y_b2,z_b2]
+    fb2 = controlSurface(delta[5],ss[:6],posbf2,NACAfile,[0,-1,0],A_R)
+
+    ## If angle goes above 20 degrees, that'll be a problem. (csv file does not have data for |alpha| > 20 degrees)
+
+
+    ## Need to add roll moment due to propeller
+    tau_R = fr1 + fr2 +fsf1 + fsf2 + fb1 + fb2
+
+    
+    T_rud = options['T_rud']
+    T_prop = options['T_prop']
+    nd_max = options['nd_max']
+    
+
+    L = options['L']
+    U_des = options['U_des']
+
+
+    # Total force calculation
+    tau = tau_C + tau_D + tau_P + tau_R + g
+
+    # print(tau_P[0], tau_D[0], Xuu, up)
+
+    # Derivative of velocity vector
+
+    veld = M_inv @ tau
+
+    # Derivative of state vector
+    if euler_angle_flag:
+        n = 14
+    else:
+        n = 15
+
+    ssd = np.zeros(n)
+    ssd[0:6] = veld
+
+    if euler_angle_flag:
+        ssd[6:9] = kin.eul_to_rotm(eul) @ v1
+        ssd[9:12] = kin.eul_rate(eul, v2)
+    else:
+        ssd[6:9] = kin.quat_to_rotm(quat) @ v1
+        ssd[9:13] = kin.quat_rate(quat, v2)
+    
+    # Rudder dynamics
+
+    deltad = (delta_c - delta) / T_rud
+    deltad_max = deltad_max
+    # Rudder rate saturation
+    if np.abs(deltad) > deltad_max:
+        deltad = np.sign(deltad) * deltad_max
+
+    # Propeller dynamics
+
+    nd_prop = (n_c - n_prop) / T_prop
+    # Propeller speed rate saturation
+    if np.abs(nd_prop) > nd_max:
+        nd_prop = np.sign(nd_prop) * nd_max
+
+    ssd[rud_indx] = deltad
+    ssd[prop_indx] = nd_prop
+
+    return ssd
+
+
+
+## delta = rudder/fin angle, sd = rudder/fin stock coordinate from CO
+## vel = [u,v,w,p,q,r]
+## delta convention is positive with normal coming out of the hull (normalAxis)
+## Thus in case of head on flow for upper rudder, alpha = -delta
+def controlSurface(delta,vel,sd,NACAfile,normalAxis,A_R):
+    """
+    genForce = controlSurface(delta,vel,sd,NACAfile,normalAxis,A_R) computes the 6x1 vector of generalized forces due
+    to control surface of an AUV. 
+
+    Inputs:
+        delta - rudder angle
+        vel - velocity vector [u,v,w,p,q,r]
+        sd - rudder/fin stock coordinate from CO
+        NACAfile - path for the NACA file from aerofoiltools
+        normalAxis - the outward normal (out of hull) of the rudder with respect to the body frame coordinates
+        A_R - Rudder area
+
+    Returns:
+        genForce: 6x1 vector of generalized force due to the control surface
+    """
+    data = pd.read_csv(NACAfile)
+    genForce = np.zeros((6,1)) ## generalized Force
+    u,v,w,p,q,r = vel  
+    netU = u
+    netV = v + r*sd[0]  ## yaw
+    netW = w + p*sd[1] - q*sd[0] ## roll and pitch
+    netVel = np.sqrt(netU**2+netV**2+netW**2)
+    ## Written in a manner such that it automatically takes care of the flow plane
+    alpha = delta * np.sum(normalAxis) + normalAxis[2]*np.arctan2(netV*-(np.sum(normalAxis)),netU) + normalAxis[1]*np.arctan2(netW*-(np.sum(normalAxis)),netU)
+    Cl = np.interp(np.rad2deg(alpha), data['Alpha'], data['Cl'])
+    Cd = np.interp(np.rad2deg(alpha), data['Alpha'], data['Cd'])
+    genForce[0] = np.abs(normalAxis[2])*(Cd*A_R*(netU**2+netV**2)) + np.abs(normalAxis[1])*(Cd*A_R*(netU**2+netW**2))
+    genForce[1] = normalAxis[2]*(Cl*A_R*(netU**2+netV**2))
+    genForce[2] = normalAxis[1]*(Cl*A_R*(netU**2+netW**2))
+    genForce[3] = genForce[1]*sd[0] + genForce[2]*sd[1] ## Roll due to Y and Z
+    genForce[4] = genForce[2]*sd[0]                     ## Pitch due to Z
+    genForce[5] = genForce[1]*sd[0] + genForce[0]*sd[2] ## Yaw due to X and Y
+
+    return genForce
+
+## From FOSSEN code
+def gvect(W,B,theta,phi,r_bg,r_bb):
+    """
+    g = gvect(W,B,theta,phi,r_bg,r_bb) computes the 6x1 vector of restoring 
+    forces about an arbitrarily point CO for a submerged body. 
+
+    Inputs:
+        W, B: weight and buoyancy (kg)
+        phi,theta: roll and pitch angles (rad)
+        r_bg = [x_g y_g z_g]: location of the CG with respect to the CO (m)
+        r_bb = [x_b y_b z_b]: location of the CB with respect to th CO (m)
+        
+    Returns:
+        g: 6x1 vector of restoring forces about CO
+    """
+    sth  = np.sin(theta)
+    cth  = np.cos(theta)
+    sphi = np.sin(phi)
+    cphi = np.cos(phi)
+
+    g = np.array([
+        (W-B) * sth,
+        -(W-B) * cth * sphi,
+        -(W-B) * cth * cphi,
+        -(r_bg[1]*W-r_bb[1]*B) * cth * cphi + (r_bg[2]*W-r_bb[2]*B) * cth * sphi,
+        (r_bg[2]*W-r_bb[2]*B) * sth         + (r_bg[0]*W-r_bb[0]*B) * cth * cphi,
+        -(r_bg[0]*W-r_bb[0]*B) * cth * sphi - (r_bg[1]*W-r_bb[1]*B) * sth      
+        ])
+    
+    return g
+         
+
+    
+  
+
 
