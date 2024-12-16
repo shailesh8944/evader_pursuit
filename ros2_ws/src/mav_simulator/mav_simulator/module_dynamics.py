@@ -700,26 +700,26 @@ def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=
     ## Need to add the following in class_vessel.py options
     ## Positions from Body Centre
 
-    x_r1 = options['x_r1']      ## x position of upper rudder
-    x_r2 = options['x_r2']      ## x position of down rudder
+    x_r1  = options['x_r1']      ## x position of upper rudder
+    x_r2  = options['x_r2']      ## x position of down rudder
     x_sf1 = options['x_sf1']    ## x position of left fin
     x_sf2 = options['x_sf2']    ## x position of right fin
-    x_b1 = options['x_b1']      ## x position of left bow fin
-    x_b2 = options['x_b2']      ## x position of right bow fin
+    x_b1  = options['x_b1']      ## x position of left bow fin
+    x_b2  = options['x_b2']      ## x position of right bow fin
 
-    y_r1 =  options['y_r1']      ## y position of upper rudder
-    y_r2 =  options['y_r2']      ## y position of down rudder
+    y_r1  = options['y_r1']      ## y position of upper rudder
+    y_r2  = options['y_r2']      ## y position of down rudder
     y_sf1 = options['y_sf1']     ## y position of left fin
     y_sf2 = options['y_sf2']     ## y position of right fin
-    y_b1 =  options['y_b1']      ## y position of left bow fin
-    y_b2 =  options['y_b2']      ## y position of right bow fin
+    y_b1  = options['y_b1']      ## y position of left bow fin
+    y_b2  = options['y_b2']      ## y position of right bow fin
 
-    z_r1 = options['z_r1']      ## z position of upper rudder
-    z_r2 = options['z_r2']      ## z position of down rudder
+    z_r1  = options['z_r1']      ## z position of upper rudder
+    z_r2  = options['z_r2']      ## z position of down rudder
     z_sf1 = options['z_sf1']    ## z position of left fin
     z_sf2 = options['z_sf2']    ## z position of right fin
-    z_b1 = options['z_b1']      ## z position of left bow fin
-    z_b2 = options['z_b2']      ## z position of right bow fin
+    z_b1  = options['z_b1']      ## z position of left bow fin
+    z_b2  = options['z_b2']      ## z position of right bow fin
 
     ## delta = [UpperRudder,LowerRudder,LeftSternFin,RightSternFin,LeftBowFin,RightBowFin]
     delta = ss[rud_indx] ## Rudder angle(s)
