@@ -834,6 +834,63 @@ def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=
 ## vel = [u,v,w,p,q,r]
 ## delta convention is positive with normal coming out of the hull (normalAxis)
 ## Thus in case of head on flow for upper rudder, alpha = -delta
+
+"""
+Explanation of Control Surface Angle of Attack Calculation
+========================================================
+
+The following equation calculates the effective angle of attack (alpha) for AUV control surfaces:
+
+alpha = delta * np.sum(normalAxis) + \
+        normalAxis[2]*np.arctan2(netV*-(np.sum(normalAxis)),netU) + \
+        normalAxis[1]*np.arctan2(netW*-(np.sum(normalAxis)),netU)
+
+Components:
+----------
+1. delta: The commanded deflection angle of the control surface
+
+2. normalAxis: A unit vector [x,y,z] indicating the direction the control surface normal points when deflection is zero
+   - For vertical rudders: [0,0,±1]
+   - For horizontal fins: [0,±1,0]
+
+3. netU: Forward velocity component at the control surface
+4. netV: Lateral velocity component (includes effects of yaw rate and roll rate)
+5. netW: Vertical velocity component (includes effects of pitch rate and roll rate)
+
+How it works:
+------------
+1. First term (delta * np.sum(normalAxis)):
+   - For vertical rudders (normalAxis = [0,0,±1]): Contributes ±delta
+   - For horizontal fins (normalAxis = [0,±1,0]): Contributes ±delta
+   - The sign ensures proper convention for positive lift direction
+
+2. Second term (normalAxis[2]*np.arctan2(netV*-(np.sum(normalAxis)),netU)):
+   - Only active for vertical rudders (normalAxis[2] = ±1)
+   - Calculates the effective inflow angle due to lateral velocity
+   - Important for yaw control and sideslip
+
+3. Third term (normalAxis[1]*np.arctan2(netW*-(np.sum(normalAxis)),netU)):
+   - Only active for horizontal fins (normalAxis[1] = ±1)
+   - Calculates the effective inflow angle due to vertical velocity
+   - Important for pitch control and heave motion
+
+Example scenarios:
+----------------
+1. Upper Rudder (normalAxis = [0,0,-1]):
+   alpha = -delta + arctan2(netV,netU)
+   - Positive delta creates positive sway force
+   - Accounts for sideslip angle
+
+2. Starboard Stern Fin (normalAxis = [0,-1,0]):
+   alpha = -delta + arctan2(netW,netU)
+   - Positive delta creates positive heave force
+   - Accounts for angle of attack due to pitch/heave motion
+
+This formulation ensures proper calculation of lift and drag forces regardless of 
+control surface orientation and local flow conditions, which is crucial for 
+accurate AUV dynamics simulation.
+"""
+
 def controlSurface(delta,vel,sd,NACAfile,normalAxis,A_R):
     """
     genForce = controlSurface(delta,vel,sd,NACAfile,normalAxis,A_R) computes the 6x1 vector of generalized forces due
@@ -854,11 +911,13 @@ def controlSurface(delta,vel,sd,NACAfile,normalAxis,A_R):
     genForce = np.zeros((6,1)) ## generalized Force
     u,v,w,p,q,r = vel  
     netU = u
-    netV = v + r*sd[0]  ## yaw
-    netW = w + p*sd[1] - q*sd[0] ## roll and pitch
+    netV = v + r*sd[0] + p*sd[2]  ## yaw and roll effects on sway
+    netW = w + p*sd[1] - q*sd[0]  ## roll and pitch effects on heave
     netVel = np.sqrt(netU**2+netV**2+netW**2)
     ## Written in a manner such that it automatically takes care of the flow plane
-    alpha = delta * np.sum(normalAxis) + normalAxis[2]*np.arctan2(netV*-(np.sum(normalAxis)),netU) + normalAxis[1]*np.arctan2(netW*-(np.sum(normalAxis)),netU)
+    alpha = delta * np.sum(normalAxis) + \
+            normalAxis[2]*np.arctan2(netV*-(np.sum(normalAxis)),netU) + \
+            normalAxis[1]*np.arctan2(netW*-(np.sum(normalAxis)),netU)
     Cl = np.interp(np.rad2deg(alpha), data['Alpha'], data['Cl'])
     Cd = np.interp(np.rad2deg(alpha), data['Alpha'], data['Cd'])
     genForce[0] = np.abs(normalAxis[2])*(Cd*A_R*(netU**2+netV**2)) + np.abs(normalAxis[1])*(Cd*A_R*(netU**2+netW**2))
@@ -901,8 +960,4 @@ def gvect(W,B,theta,phi,r_bg,r_bb):
     
     return g
          
-
-    
-  
-
 
