@@ -519,9 +519,9 @@ def onrt_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=Fals
 
     # Derivative of state vector
     if euler_angle_flag:
-        n = 14
+        n = 20  # 6 (velocities) + 3 (positions) + 3 (euler) + 6 (control surfaces) + 1 (propeller) = 19
     else:
-        n = 15
+        n = 21  # 6 (velocities) + 3 (positions) + 4 (quaternion) + 6 (control surfaces) + 1 (propeller) = 20
 
     ssd = np.zeros(n)
     ssd[0:6] = veld
@@ -533,13 +533,12 @@ def onrt_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=Fals
         ssd[6:9] = kin.quat_to_rotm(quat) @ v1
         ssd[9:13] = kin.quat_rate(quat, v2)
     
-    # Rudder dynamics
-
-    deltad = (delta_c - delta) / T_rud
-    deltad_max = deltad_max
-    # Rudder rate saturation
-    if np.abs(deltad) > deltad_max:
-        deltad = np.sign(deltad) * deltad_max
+    # Rudder dynamics - modified for 6x1 array
+    deltad = (delta_c - delta) / T_rud  # This will be element-wise division for arrays
+    deltad_max = deltad_max  # Assuming deltad_max is same for all surfaces
+    
+    # Rudder rate saturation - vectorized for 6x1 array
+    deltad = np.clip(deltad, -deltad_max, deltad_max)  # Handles array saturation
 
     # Propeller dynamics
 
@@ -555,13 +554,14 @@ def onrt_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=Fals
 
 def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=False):
     
+    # State vector indices:
     # x[0:3] Linear Velocity
     # x[3:6] Angular Velocity
     # x[6:9] Linear positions
-    # x[9:12] Euler Angles (Roll Pitch Yaw)
-    # x[13] Rudder Angle
-    # x[14] Propeller RPM
-
+    # x[9:12] Euler Angles (Roll Pitch Yaw) or x[9:13] for quaternions
+    # x[13:19] Control Surface Angles (6 surfaces)
+    # x[19] Propeller RPM
+    # print(euler_angle_flag)
     # Nondimensional State Space Variables
     up = ss[0]; vp = ss[1]; wp = ss[2]  
     pp = ss[3]; qp = ss[4]; rp = ss[5] 
@@ -569,18 +569,17 @@ def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=
    
     if euler_angle_flag:
         eul = ss[9:12]
+        PROP_IDX = 19
     else:
         quat = ss[9:13]
         eul = kin.quat_to_eul(quat)
+        PROP_IDX = 20
+    
     phi = eul[0]; theta = eul[1]; psi = eul[2]
 
-    if euler_angle_flag:
-        rud_indx = 12
-        prop_indx = 13
-    else:
-        rud_indx = 13
-        prop_indx = 14
-    
+    # Get control surface angles from state vector
+    delta = ss[13:19]  # All 6 control surfaces
+    n_prop = ss[PROP_IDX]  # Propeller RPM
    
     v1 = ss[0:3]; v2 = ss[3:6]
 
@@ -676,7 +675,7 @@ def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=
     ## Now let us derive the generalized forces due to the propeller
     ## Power Coefficients are calulated in calculate_hydrodynamics() in class_vessel.py
     
-    n_prop = ss[prop_indx] ## Propeller RPM 
+    n_prop = ss[PROP_IDX] ## Propeller RPM 
     tp = options['tp'] ## Thrust deduction coeff
     D_prop = options['D_prop']
     n_max = 2668/60
@@ -722,7 +721,8 @@ def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=
     z_b2  = options['z_b2']      ## z position of right bow fin
 
     ## delta = [UpperRudder,LowerRudder,LeftSternFin,RightSternFin,LeftBowFin,RightBowFin]
-    delta = ss[rud_indx] ## Rudder angle(s)
+    # delta = ss[rud_indx] ## Rudder angle(s)
+    # print("Delta: ", delta)
 
     ## For each particular fin/rudder, +ve delta is anticlockwise direction (outward the hull)
 
@@ -731,8 +731,12 @@ def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=
 
     ## NACA profile of the aerofoil with data at Reynolds number 1M
     ## From Airfoilstools website
-    NACAfile = "../hullform/MAVYMINI/NACA0015.csv"
+    NACAfile = "/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/MAVYMINI/NACA0015.csv"
 
+
+    if np.isscalar(delta):
+        delta = np.zeros(6)
+        
     ## Upper Rudder
     posr1 = [x_r1,y_r1,z_r1]
     fr1 = controlSurface(delta[0],ss[:6],posr1,NACAfile,[0,0,-1],A_R)
@@ -774,7 +778,15 @@ def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=
 
 
     # Total force calculation
+    tau_C = tau_C.flatten()  # Already 1D (6,)
+    tau_D = tau_D.flatten()  # Already 1D (6,)
+    tau_P = tau_P.flatten()  # Already 1D (6,)
+    tau_R = tau_R.flatten()  # Convert from (6,1) to (6,)
+    g = g.flatten()         # Convert from (6,1) to (6,)
+
+    # Total force calculation
     tau = tau_C + tau_D + tau_P + tau_R + g
+    # print("Shape of tau: ", tau_R.shape,tau_C.shape,tau_P.shape,tau_R.shape,g.shape)
 
     # print(tau_P[0], tau_D[0], Xuu, up)
 
@@ -784,9 +796,9 @@ def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=
 
     # Derivative of state vector
     if euler_angle_flag:
-        n = 14
+        n = 20  # 6 (velocities) + 3 (positions) + 3 (euler) + 6 (control surfaces) + 1 (propeller) = 19
     else:
-        n = 15
+        n = 21  # 6 (velocities) + 3 (positions) + 4 (quaternion) + 6 (control surfaces) + 1 (propeller) = 20
 
     ssd = np.zeros(n)
     ssd[0:6] = veld
@@ -798,23 +810,21 @@ def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=
         ssd[6:9] = kin.quat_to_rotm(quat) @ v1
         ssd[9:13] = kin.quat_rate(quat, v2)
     
-    # Rudder dynamics
-
-    deltad = (delta_c - delta) / T_rud
-    deltad_max = deltad_max
-    # Rudder rate saturation
-    if np.abs(deltad) > deltad_max:
-        deltad = np.sign(deltad) * deltad_max
-
+    
+    # Rudder dynamics - handle all 6 control surfaces
+    deltad = (delta_c - delta) / T_rud  # Element-wise for all 6 surfaces
+    deltad = np.clip(deltad, -deltad_max, deltad_max)  # Apply limits to all surfaces
+    # print(delta_c, delta, deltad)
     # Propeller dynamics
-
     nd_prop = (n_c - n_prop) / T_prop
     # Propeller speed rate saturation
     if np.abs(nd_prop) > nd_max:
         nd_prop = np.sign(nd_prop) * nd_max
 
-    ssd[rud_indx] = deltad
-    ssd[prop_indx] = nd_prop
+    # Fill in derivatives
+    ssd[0:6] = veld
+    ssd[13:19] = deltad  # Control surface derivatives
+    ssd[PROP_IDX] = nd_prop  # Propeller derivative
 
     return ssd
 

@@ -55,7 +55,7 @@ RUN ./sbg_setup.sh
 # Install NVM and Node.js
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
 ENV NVM_DIR=/home/mavlab/.nvm
-ENV NODE_VERSION=18.20.4
+ENV NODE_VERSION=20.17.0
 RUN . "$NVM_DIR/nvm.sh" && \
     nvm install $NODE_VERSION && \
     nvm alias default $NODE_VERSION && \

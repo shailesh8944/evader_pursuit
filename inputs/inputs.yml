@@ -75,4 +75,5 @@ agents:
   # - '/workspaces/mavlab/inputs/matsya_00.yml'
   # - '/workspaces/mavlab/inputs/makara_00.yml'
   # - '/workspaces/mavlab/inputs/makara_01.yml'
-  - '/workspaces/mavlab/inputs/kurma_straight.yml'
+  # - '/workspaces/mavlab/inputs/kurma_straight.yml'
+  - '/workspaces/mavlab/inputs/mavymini_00.yml'
