@@ -11,7 +11,7 @@ import os
 module_path = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator'
 sys.path.append(os.path.abspath(module_path))
 
-import module_kinematics as kin
+import mav_simulator.module_kinematics as kin
 import module_kinematic_kf as kkf
 import warnings
 import scipy
@@ -30,7 +30,7 @@ class Navigation():
     rate = 10
     node = None
     topic_prefix = None
-    actuator_cmd = '0.0, 0.0'
+    actuator_cmd = '0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0'  # Updated for 6 surfaces + propeller
 
     # Non-dimensionalizing parameters
     length = None
@@ -44,8 +44,13 @@ class Navigation():
     # Guidance parameters
     psi_des = 0.0
 
-    # Control commands
-    rudder_cmd = 0.0
+    # Control commands for MAVYMINI
+    upper_rudder_cmd = 0.0
+    lower_rudder_cmd = 0.0
+    stern_fin_left_cmd = 0.0
+    stern_fin_right_cmd = 0.0
+    bow_fin_left_cmd = 0.0
+    bow_fin_right_cmd = 0.0
     propeller_cmd = 0.0
 
     # Terminate flag
@@ -95,29 +100,53 @@ class Navigation():
         self.vessel_ode_data = self.vessel.ode_options
         self.vessel_ode = self.vessel.ode
         self.euler_angle_flag = self.vessel.euler_angle_flag
-        self.kinematic_kf_flag =  self.vessel.kinematic_kf_flag
+        self.kinematic_kf_flag = self.vessel.kinematic_kf_flag
         
-        if self.kinematic_kf_flag:
-            if self.euler_angle_flag:
-                self.x_hat = np.zeros(17)
-                self.P_hat = np.eye(17)
-                self.u_cmd = np.zeros(2)
+        if hasattr(self.vessel, 'name') and self.vessel.name == 'mavymini':
+            # For MAVYMINI with 6 control surfaces
+            if self.kinematic_kf_flag:
+                if self.euler_angle_flag:
+                    self.x_hat = np.zeros(20)  # 13 states + 7 actuators
+                    self.P_hat = np.eye(20)
+                    self.u_cmd = np.zeros(7)  # 6 surfaces + 1 propeller
+                else:
+                    self.x_hat = np.zeros(21)  # 14 states + 7 actuators
+                    self.x_hat[9] = 1.0  # Quaternion w component
+                    self.P_hat = np.eye(21)
+                    self.u_cmd = np.zeros(7)  # 6 surfaces + 1 propeller
             else:
-                self.x_hat = np.zeros(18)
-                self.x_hat[9] = 1.0
-                self.P_hat = np.eye(18)
-                self.u_cmd = np.zeros(2)
+                if self.euler_angle_flag:
+                    self.x_hat = np.zeros(20)  # 13 states + 7 actuators
+                    self.P_hat = np.eye(20)
+                    self.u_cmd = np.zeros(7)  # 6 surfaces + 1 propeller
+                else:
+                    self.x_hat = np.zeros(21)  # 14 states + 7 actuators
+                    self.x_hat[9] = 1.0  # Quaternion w component
+                    self.P_hat = np.eye(21)
+                    self.u_cmd = np.zeros(7)  # 6 surfaces + 1 propeller
         else:
-            if self.euler_angle_flag:
-                self.x_hat = np.zeros(14)
-                self.P_hat = np.eye(14)
-                self.u_cmd = np.zeros(2)
+            # For other vessels with single rudder
+            if self.kinematic_kf_flag:
+                if self.euler_angle_flag:
+                    self.x_hat = np.zeros(17)
+                    self.P_hat = np.eye(17)
+                    self.u_cmd = np.zeros(2)
+                else:
+                    self.x_hat = np.zeros(18)
+                    self.x_hat[9] = 1.0
+                    self.P_hat = np.eye(18)
+                    self.u_cmd = np.zeros(2)
             else:
-                self.x_hat = np.zeros(15)
-                self.x_hat[9] = 1.0
-                self.P_hat = np.eye(15)
-                self.u_cmd = np.zeros(2)
-        
+                if self.euler_angle_flag:
+                    self.x_hat = np.zeros(14)
+                    self.P_hat = np.eye(14)
+                    self.u_cmd = np.zeros(2)
+                else:
+                    self.x_hat = np.zeros(15)
+                    self.x_hat[9] = 1.0
+                    self.P_hat = np.eye(15)
+                    self.u_cmd = np.zeros(2)
+
         self.node = Node(f'Navigation_{self.topic_prefix}')
         
         # Allocate ID to each sensor
@@ -199,8 +228,21 @@ class Navigation():
         return jacob
 
     def callback_actuator_cmd(self, msg):
-        self.u_cmd[0] = msg.rudder * np.pi / 180
-        self.u_cmd[1] = msg.propeller / 60 * (self.length / self.U_des)
+        if hasattr(self.vessel, 'name') and self.vessel.name == 'mavymini':
+            # For MAVYMINI with 6 control surfaces
+            self.u_cmd = np.zeros(7)  # 6 surfaces + 1 propeller
+            self.u_cmd[0] = msg.upper_rudder * np.pi / 180  # Upper rudder
+            self.u_cmd[1] = msg.lower_rudder * np.pi / 180  # Lower rudder
+            self.u_cmd[2] = msg.stern_fin_left * np.pi / 180  # Left stern fin
+            self.u_cmd[3] = msg.stern_fin_right * np.pi / 180  # Right stern fin
+            self.u_cmd[4] = msg.bow_fin_left * np.pi / 180  # Left bow fin
+            self.u_cmd[5] = msg.bow_fin_right * np.pi / 180  # Right bow fin
+            self.u_cmd[6] = msg.propeller / 60 * (self.length / self.U_des)  # Propeller
+        else:
+            # For other vessels with single rudder
+            self.u_cmd = np.zeros(2)
+            self.u_cmd[0] = msg.rudder * np.pi / 180
+            self.u_cmd[1] = msg.propeller / 60 * (self.length / self.U_des)
 
     def imu_callback(self, msg, sensor_id):
 
@@ -567,57 +609,89 @@ class Navigation():
         
         self.sensor_measurements[sensor_id] = msg
 
-        q = 2; p = 2; 
-        
-        if self.euler_angle_flag:
-            if self.kinematic_kf_flag:
-                n = 17
+        if hasattr(self.vessel, 'name') and self.vessel.name == 'mavymini':
+            q = 7  # 6 surfaces + 1 propeller
+            p = 7  # 6 surfaces + 1 propeller
+            
+            if self.euler_angle_flag:
+                if self.kinematic_kf_flag:
+                    n = 20  # 13 states + 7 actuators
+                else:
+                    n = 20
             else:
-                n = 14
+                if self.kinematic_kf_flag:
+                    n = 21  # 14 states + 7 actuators
+                else:
+                    n = 21
+
+            y = np.zeros(q)
+            y[0] = msg.upper_rudder * np.pi / 180
+            y[1] = msg.lower_rudder * np.pi / 180
+            y[2] = msg.stern_fin_left * np.pi / 180
+            y[3] = msg.stern_fin_right * np.pi / 180
+            y[4] = msg.bow_fin_left * np.pi / 180
+            y[5] = msg.bow_fin_right * np.pi / 180
+            y[6] = msg.propeller / 60
+            y[6] = y[6] * self.length / self.U_des
+
+            # Measurement Noise
+            Rd = msg.covariance.reshape((7, 7))
+            # Scale propeller-related covariances
+            Rd[6, :] = Rd[6, :] / (self.U_des / self.length)
+            Rd[:, 6] = Rd[:, 6] / (self.U_des / self.length)
+            Rd[6, 6] = Rd[6, 6] / ((self.U_des / self.length) ** 2)
+
         else:
-            if self.kinematic_kf_flag:
-                n = 18
+            q = 2; p = 2
+            
+            if self.euler_angle_flag:
+                if self.kinematic_kf_flag:
+                    n = 17
+                else:
+                    n = 14
             else:
-                n = 15
+                if self.kinematic_kf_flag:
+                    n = 18
+                else:
+                    n = 15
 
-        y = np.zeros(q)
+            y = np.zeros(q)
+            y[0] = msg.rudder * np.pi / 180
+            y[1] = msg.propeller / 60
+            y[1] = y[1] * self.length / self.U_des
 
-        y[0] = msg.rudder * np.pi / 180
-        y[1] = msg.propeller / 60
-
-        y[1] = y[1] * self.length / self.U_des
-
-        # Measurement Noise
-        Rd = msg.covariance.reshape((2, 2))
-        Rd[0, 1] = Rd[0, 1] / (self.U_des / self.length)
-        Rd[1, 0] = Rd[1, 0] / (self.U_des / self.length)
-        Rd[1, 1] = Rd[1, 1] / ((self.U_des / self.length) ** 2)
+            # Measurement Noise
+            Rd = msg.covariance.reshape((2, 2))
+            Rd[0, 1] = Rd[0, 1] / (self.U_des / self.length)
+            Rd[1, 0] = Rd[1, 0] / (self.U_des / self.length)
+            Rd[1, 1] = Rd[1, 1] / ((self.U_des / self.length) ** 2)
 
         # Feed forward matrix
         Dd = np.zeros((q, p))
         
-        ################################################################################
-        # UPDATE THE OUTPUT MATRIX FOR ENCODER MEASUREMENTS
-        ################################################################################
-
         # Output matrix        
         Cd = np.zeros((q, n))
 
-        if self.euler_angle_flag:
-            Cd[0, 12] = 1
-            Cd[1, 13] = 1
+        if hasattr(self.vessel, 'name') and self.vessel.name == 'mavymini':
+            # For MAVYMINI with 6 control surfaces
+            for i in range(7):  # 6 surfaces + 1 propeller
+                Cd[i, 13+i] = 1  # Starting from index 13 for actuator states
         else:
-            Cd[0, 13] = 1
-            Cd[1, 14] = 1
-
-        ################################################################################
+            # For other vessels with single rudder
+            if self.euler_angle_flag:
+                Cd[0, 12] = 1
+                Cd[1, 13] = 1
+            else:
+                Cd[0, 13] = 1
+                Cd[1, 14] = 1
 
         self.state_corrector(y, Cd, Dd, Rd)
 
     def publish_odometry(self):
-
         # Predict EKF state estimate
-        self.state_predictor()
+        if not self.terminate_flag:
+            dt = (1 / self.rate) * self.U_des / self.length
+            self.state_predictor()
 
         current_time = self.node.get_clock().now()
 
@@ -627,25 +701,40 @@ class Navigation():
         odo.header.frame_id = 'NED'
         odo.child_frame_id = 'BODY'
 
-        odo.pose.pose.position = Point(x=self.x_hat[6] * self.length, y=self.x_hat[7] * self.length, z=self.x_hat[8] * self.length)
-        
+        # Linear velocity
+        odo.twist.twist.linear.x = self.x_hat[0] * self.U_des
+        odo.twist.twist.linear.y = self.x_hat[1] * self.U_des
+        odo.twist.twist.linear.z = self.x_hat[2] * self.U_des
+
+        # Angular velocity
+        odo.twist.twist.angular.x = self.x_hat[3] * self.U_des / self.length
+        odo.twist.twist.angular.y = self.x_hat[4] * self.U_des / self.length
+        odo.twist.twist.angular.z = self.x_hat[5] * self.U_des / self.length
+
+        # Position
+        odo.pose.pose.position.x = self.x_hat[6] * self.length
+        odo.pose.pose.position.y = self.x_hat[7] * self.length
+        odo.pose.pose.position.z = self.x_hat[8] * self.length
+
+        # Orientation
         if self.euler_angle_flag:
-            quat = kin.eul_to_quat(self.x_hat[9:12])
-            odo.pose.pose.orientation = Quaternion(x=quat[1], y=quat[2], z=quat[3], w=quat[0])
+            eul = self.x_hat[9:12]
+            quat = kin.eul_to_quat(eul)
         else:
-            odo.pose.pose.orientation = Quaternion(x=self.x_hat[10], y=self.x_hat[11], z=self.x_hat[12], w=self.x_hat[9])
+            quat = self.x_hat[9:13]
 
-        odo.twist.twist.linear = Vector3(x=self.x_hat[0] * self.U_des, y=self.x_hat[1] * self.U_des, z=self.x_hat[2] * self.U_des)
-        odo.twist.twist.angular = Vector3(x=self.x_hat[3] * self.U_des / self.length, y=self.x_hat[4] * self.U_des / self.length, z=self.x_hat[5] * self.U_des / self.length)
+        odo.pose.pose.orientation.w = quat[0]
+        odo.pose.pose.orientation.x = quat[1]
+        odo.pose.pose.orientation.y = quat[2]
+        odo.pose.pose.orientation.z = quat[3]
 
+        # Covariance
+        pose_cov = np.zeros((6,6))
         if self.euler_angle_flag:
             Ceul = self.P_hat[9:12][:, 9:12]
         else:
-            G = kin.deul_dquat(self.x_hat[9:13])
-            Cq = self.P_hat[9:13][:, 9:13]
-            Ceul = G @ Cq @ G.T
+            Ceul = np.eye(3)
 
-        pose_cov = np.zeros((6,6), dtype=np.float64)
         pose_cov[0:3][:, 0:3] = self.P_hat[6:9][:, 6:9] * (self.length ** 2)
         pose_cov[3:6][:, 3:6] = Ceul
         odo.pose.covariance = pose_cov.flatten()
@@ -655,24 +744,43 @@ class Navigation():
         twist_cov[3:6][:, 3:6] = self.P_hat[3:6][:, 3:6] * ((self.U_des / self.length) ** 2)
         odo.twist.covariance = twist_cov.flatten()
 
-
-        if self.euler_angle_flag:
-            rud_indx = 12
-            prop_indx = 13
-        else:
-            rud_indx = 13
-            prop_indx = 14
-
         # Create Actuator message
         enc = Actuator()
         enc.header.stamp = current_time.to_msg()
-        enc.rudder = self.x_hat[rud_indx] * 180.0 / np.pi
-        enc.propeller = self.x_hat[prop_indx] * 60 * self.U_des / self.length
-        
-        enc_cov = self.P_hat[rud_indx:prop_indx+1][:, rud_indx:prop_indx+1]
-        enc_cov[0, 1] = enc_cov[0, 1] * (self.U_des / self.length)
-        enc_cov[1, 0] = enc_cov[1, 0] * (self.U_des / self.length)
-        enc_cov[1, 1] = enc_cov[1, 1] * (self.U_des / self.length)**2
+
+        if hasattr(self.vessel, 'name') and self.vessel.name == 'mavymini':
+            # For MAVYMINI with 6 control surfaces
+            enc.upper_rudder = self.x_hat[13] * 180.0 / np.pi
+            enc.lower_rudder = self.x_hat[14] * 180.0 / np.pi
+            enc.stern_fin_left = self.x_hat[15] * 180.0 / np.pi
+            enc.stern_fin_right = self.x_hat[16] * 180.0 / np.pi
+            enc.bow_fin_left = self.x_hat[17] * 180.0 / np.pi
+            enc.bow_fin_right = self.x_hat[18] * 180.0 / np.pi
+            enc.propeller = self.x_hat[19] * 60 * self.U_des / self.length
+            
+            # Covariance matrix for 7 states (6 surfaces + propeller)
+            enc_cov = self.P_hat[13:20][:, 13:20]
+            # Scale propeller covariance terms
+            enc_cov[6, :] = enc_cov[6, :] * (self.U_des / self.length)
+            enc_cov[:, 6] = enc_cov[:, 6] * (self.U_des / self.length)
+            enc_cov[6, 6] = enc_cov[6, 6] * (self.U_des / self.length)**2
+        else:
+            # For other vessels with single rudder
+            if self.euler_angle_flag:
+                rud_indx = 12
+                prop_indx = 13
+            else:
+                rud_indx = 13
+                prop_indx = 14
+            
+            enc.rudder = self.x_hat[rud_indx] * 180.0 / np.pi
+            enc.propeller = self.x_hat[prop_indx] * 60 * self.U_des / self.length
+            
+            enc_cov = self.P_hat[rud_indx:prop_indx+1][:, rud_indx:prop_indx+1]
+            enc_cov[0, 1] = enc_cov[0, 1] * (self.U_des / self.length)
+            enc_cov[1, 0] = enc_cov[1, 0] * (self.U_des / self.length)
+            enc_cov[1, 1] = enc_cov[1, 1] * (self.U_des / self.length)**2
+
         enc.covariance = enc_cov.flatten()
 
         self.odometry['pub'].publish(odo)
@@ -779,7 +887,7 @@ class Navigation():
             
             # self.x_hat[rud_indx] = kin.clip(self.x_hat[rud_indx], 35 * np.pi / 180)
             # self.x_hat[prop_indx] = kin.clip(self.x_hat[prop_indx], 1000.0 * self.length / (self.U_des * 60.0))
-
+            
             self.P_hat = (np.eye(n) - K @ Cd) @ self.P_hat @ (np.eye(n) - K @ Cd).T + K @ Rd @ K.T
             
         except Exception as e:

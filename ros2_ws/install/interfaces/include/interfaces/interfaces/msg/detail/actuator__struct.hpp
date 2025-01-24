@@ -45,20 +45,29 @@ struct Actuator_
     {
       this->rudder = 0.0;
       this->propeller = 0.0;
-      std::fill<typename std::array<double, 4>::iterator, double>(this->covariance.begin(), this->covariance.end(), 0.0);
+      this->upper_rudder = 0.0;
+      this->lower_rudder = 0.0;
+      this->stern_fin_left = 0.0;
+      this->stern_fin_right = 0.0;
+      this->bow_fin_left = 0.0;
+      this->bow_fin_right = 0.0;
     }
   }
 
   explicit Actuator_(const ContainerAllocator & _alloc, rosidl_runtime_cpp::MessageInitialization _init = rosidl_runtime_cpp::MessageInitialization::ALL)
-  : header(_alloc, _init),
-    covariance(_alloc)
+  : header(_alloc, _init)
   {
     if (rosidl_runtime_cpp::MessageInitialization::ALL == _init ||
       rosidl_runtime_cpp::MessageInitialization::ZERO == _init)
     {
       this->rudder = 0.0;
       this->propeller = 0.0;
-      std::fill<typename std::array<double, 4>::iterator, double>(this->covariance.begin(), this->covariance.end(), 0.0);
+      this->upper_rudder = 0.0;
+      this->lower_rudder = 0.0;
+      this->stern_fin_left = 0.0;
+      this->stern_fin_right = 0.0;
+      this->bow_fin_left = 0.0;
+      this->bow_fin_right = 0.0;
     }
   }
 
@@ -72,8 +81,26 @@ struct Actuator_
   using _propeller_type =
     double;
   _propeller_type propeller;
+  using _upper_rudder_type =
+    double;
+  _upper_rudder_type upper_rudder;
+  using _lower_rudder_type =
+    double;
+  _lower_rudder_type lower_rudder;
+  using _stern_fin_left_type =
+    double;
+  _stern_fin_left_type stern_fin_left;
+  using _stern_fin_right_type =
+    double;
+  _stern_fin_right_type stern_fin_right;
+  using _bow_fin_left_type =
+    double;
+  _bow_fin_left_type bow_fin_left;
+  using _bow_fin_right_type =
+    double;
+  _bow_fin_right_type bow_fin_right;
   using _covariance_type =
-    std::array<double, 4>;
+    std::vector<double, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<double>>;
   _covariance_type covariance;
 
   // setters for named parameter idiom
@@ -95,8 +122,44 @@ struct Actuator_
     this->propeller = _arg;
     return *this;
   }
+  Type & set__upper_rudder(
+    const double & _arg)
+  {
+    this->upper_rudder = _arg;
+    return *this;
+  }
+  Type & set__lower_rudder(
+    const double & _arg)
+  {
+    this->lower_rudder = _arg;
+    return *this;
+  }
+  Type & set__stern_fin_left(
+    const double & _arg)
+  {
+    this->stern_fin_left = _arg;
+    return *this;
+  }
+  Type & set__stern_fin_right(
+    const double & _arg)
+  {
+    this->stern_fin_right = _arg;
+    return *this;
+  }
+  Type & set__bow_fin_left(
+    const double & _arg)
+  {
+    this->bow_fin_left = _arg;
+    return *this;
+  }
+  Type & set__bow_fin_right(
+    const double & _arg)
+  {
+    this->bow_fin_right = _arg;
+    return *this;
+  }
   Type & set__covariance(
-    const std::array<double, 4> & _arg)
+    const std::vector<double, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<double>> & _arg)
   {
     this->covariance = _arg;
     return *this;
@@ -151,6 +214,24 @@ struct Actuator_
       return false;
     }
     if (this->propeller != other.propeller) {
+      return false;
+    }
+    if (this->upper_rudder != other.upper_rudder) {
+      return false;
+    }
+    if (this->lower_rudder != other.lower_rudder) {
+      return false;
+    }
+    if (this->stern_fin_left != other.stern_fin_left) {
+      return false;
+    }
+    if (this->stern_fin_right != other.stern_fin_right) {
+      return false;
+    }
+    if (this->bow_fin_left != other.bow_fin_left) {
+      return false;
+    }
+    if (this->bow_fin_right != other.bow_fin_right) {
       return false;
     }
     if (this->covariance != other.covariance) {

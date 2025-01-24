@@ -622,11 +622,19 @@ class Vessel():
             Up_R = eps * np.sqrt( eta * (up_prop + kappa_R * (np.sqrt(up_prop ** 2 + 8/np.pi * Kt_up2_by_J2) - up_prop)) ** 2 + (1 - eta) * up_prop ** 2 )
             F_N = A_R * f_alp * (Up_R ** 2)
 
+        if self.name != 'mavymini':
             self.ode_options['X_d_d'] = - (1 - tR) * F_N
             self.ode_options['Y_d'] = - (1 + aH) * F_N
             self.ode_options['N_d'] = - (xp_R + aH * xp_H) * F_N
             self.ode_options['X_n'] = 2 * (1 - tp) * (D_prop ** 2) * ((1 - wp) * D_prop * pow_coeff[1] + 2 * n_prop * (D_prop ** 2) * pow_coeff[2])
             self.ode_options['X_n_n'] = 2 * (1 - tp) * (D_prop ** 2) * (2 * (D_prop ** 2) * pow_coeff[2])
+        else:
+            # TODO: Replace these dummy values with proper coefficients for mavymini
+            self.ode_options['X_d_d'] = -1.0
+            self.ode_options['Y_d'] = -1.0
+            self.ode_options['N_d'] = -1.0
+            self.ode_options['X_n'] = 1.0
+            self.ode_options['X_n_n'] = 1.0
         
         if self.name == 'kurma' and self.mmg_flag:
             self.ode_options['R0'] = 0.022
@@ -862,7 +870,7 @@ class Vessel():
         new_state[9:13] = new_state[9:13]/np.linalg.norm(new_state[9:13])
 
         # Calculate state derivative
-        new_state_der = self.ode((sh.current_time + sh.dt) * self.U_des / self.length, new_state, delta_c, n_c, self.ode_options)
+        new_state_der = self.ode((sh.current_time + sh.dt) * self.U_des / self.length, new_state, delta_c, n_c, self.ode_options, True)
         
         # Dimensionalize state
         if self.U_des is not None:
@@ -874,11 +882,9 @@ class Vessel():
                 new_state[19] = new_state[19] * (self.U_des / self.length)  # Propeller index for MAVYMINI
             else:
                 new_state[14] = new_state[14] * (self.U_des / self.length)  # Propeller index for others
-
             new_state_der[0:3] = new_state_der[0:3] * (self.U_des ** 2) / self.length
             new_state_der[3:6] = new_state_der[3:6] * (self.U_des ** 2) / (self.length ** 2)
             new_state_der[6:9] = new_state_der[6:9] * self.U_des
-            
             if self.name == 'mavymini':
                 new_state_der[19] = new_state_der[19] * (self.U_des ** 2) / (self.length ** 2)  # Propeller index for MAVYMINI
             else:

@@ -6,15 +6,34 @@
 
 module interfaces {
   module msg {
-    typedef double double__4[4];
     struct Actuator {
       std_msgs::msg::Header header;
 
+      @verbatim (language="comment", text=
+        "Single rudder vessel fields")
       double rudder;
 
       double propeller;
 
-      double__4 covariance;
+      @verbatim (language="comment", text=
+        "MAVYMINI control surfaces")
+      double upper_rudder;
+
+      double lower_rudder;
+
+      double stern_fin_left;
+
+      double stern_fin_right;
+
+      double bow_fin_left;
+
+      double bow_fin_right;
+
+      @verbatim (language="comment", text=
+        "Covariance matrix (flattened)" "\n"
+        "For single rudder: 2x2 matrix = 4 elements" "\n"
+        "For MAVYMINI: 7x7 matrix = 49 elements (6 surfaces + 1 propeller)")
+      sequence<double> covariance;
     };
   };
 };

@@ -563,6 +563,7 @@ def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=
     # x[19] Propeller RPM
     # print(euler_angle_flag)
     # Nondimensional State Space Variables
+    print("Euler Angle Flag",euler_angle_flag)
     up = ss[0]; vp = ss[1]; wp = ss[2]  
     pp = ss[3]; qp = ss[4]; rp = ss[5] 
     xp = ss[6]; yp = ss[7]; zp = ss[8]  
@@ -685,7 +686,13 @@ def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=
     KT_at_J0 = 28.73/(1024*D_prop**4 *n_max**2)
 
 
-    J = up/(n_prop*D_prop)
+    # Calculate advance ratio J with protection against division by zero
+    denominator = n_prop * D_prop
+    if abs(denominator) > 1e-6:  # Check if denominator is not too close to zero
+        J = up / denominator
+    else:
+        J = 0.0  # Set a default value when propeller is not rotating
+        
     KT = KT_at_J0*(1-J)
     
     X_prop = KT * 1024 * D_prop**4 * np.abs(n_prop) * n_prop ## Normalize this

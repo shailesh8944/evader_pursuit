@@ -14,6 +14,8 @@
 // Include directives for member types
 // Member `header`
 #include "std_msgs/msg/detail/header__functions.h"
+// Member `covariance`
+#include "rosidl_runtime_c/primitives_sequence_functions.h"
 
 bool
 interfaces__msg__Actuator__init(interfaces__msg__Actuator * msg)
@@ -28,7 +30,17 @@ interfaces__msg__Actuator__init(interfaces__msg__Actuator * msg)
   }
   // rudder
   // propeller
+  // upper_rudder
+  // lower_rudder
+  // stern_fin_left
+  // stern_fin_right
+  // bow_fin_left
+  // bow_fin_right
   // covariance
+  if (!rosidl_runtime_c__double__Sequence__init(&msg->covariance, 0)) {
+    interfaces__msg__Actuator__fini(msg);
+    return false;
+  }
   return true;
 }
 
@@ -42,7 +54,14 @@ interfaces__msg__Actuator__fini(interfaces__msg__Actuator * msg)
   std_msgs__msg__Header__fini(&msg->header);
   // rudder
   // propeller
+  // upper_rudder
+  // lower_rudder
+  // stern_fin_left
+  // stern_fin_right
+  // bow_fin_left
+  // bow_fin_right
   // covariance
+  rosidl_runtime_c__double__Sequence__fini(&msg->covariance);
 }
 
 bool
@@ -65,11 +84,35 @@ interfaces__msg__Actuator__are_equal(const interfaces__msg__Actuator * lhs, cons
   if (lhs->propeller != rhs->propeller) {
     return false;
   }
+  // upper_rudder
+  if (lhs->upper_rudder != rhs->upper_rudder) {
+    return false;
+  }
+  // lower_rudder
+  if (lhs->lower_rudder != rhs->lower_rudder) {
+    return false;
+  }
+  // stern_fin_left
+  if (lhs->stern_fin_left != rhs->stern_fin_left) {
+    return false;
+  }
+  // stern_fin_right
+  if (lhs->stern_fin_right != rhs->stern_fin_right) {
+    return false;
+  }
+  // bow_fin_left
+  if (lhs->bow_fin_left != rhs->bow_fin_left) {
+    return false;
+  }
+  // bow_fin_right
+  if (lhs->bow_fin_right != rhs->bow_fin_right) {
+    return false;
+  }
   // covariance
-  for (size_t i = 0; i < 4; ++i) {
-    if (lhs->covariance[i] != rhs->covariance[i]) {
-      return false;
-    }
+  if (!rosidl_runtime_c__double__Sequence__are_equal(
+      &(lhs->covariance), &(rhs->covariance)))
+  {
+    return false;
   }
   return true;
 }
@@ -92,9 +135,23 @@ interfaces__msg__Actuator__copy(
   output->rudder = input->rudder;
   // propeller
   output->propeller = input->propeller;
+  // upper_rudder
+  output->upper_rudder = input->upper_rudder;
+  // lower_rudder
+  output->lower_rudder = input->lower_rudder;
+  // stern_fin_left
+  output->stern_fin_left = input->stern_fin_left;
+  // stern_fin_right
+  output->stern_fin_right = input->stern_fin_right;
+  // bow_fin_left
+  output->bow_fin_left = input->bow_fin_left;
+  // bow_fin_right
+  output->bow_fin_right = input->bow_fin_right;
   // covariance
-  for (size_t i = 0; i < 4; ++i) {
-    output->covariance[i] = input->covariance[i];
+  if (!rosidl_runtime_c__double__Sequence__copy(
+      &(input->covariance), &(output->covariance)))
+  {
+    return false;
   }
   return true;
 }

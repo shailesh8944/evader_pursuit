@@ -20,14 +20,27 @@ extern "C"
 // Include directives for member types
 // Member 'header'
 #include "std_msgs/msg/detail/header__struct.h"
+// Member 'covariance'
+#include "rosidl_runtime_c/primitives_sequence.h"
 
 /// Struct defined in msg/Actuator in the package interfaces.
 typedef struct interfaces__msg__Actuator
 {
   std_msgs__msg__Header header;
+  /// Single rudder vessel fields
   double rudder;
   double propeller;
-  double covariance[4];
+  /// MAVYMINI control surfaces
+  double upper_rudder;
+  double lower_rudder;
+  double stern_fin_left;
+  double stern_fin_right;
+  double bow_fin_left;
+  double bow_fin_right;
+  /// Covariance matrix (flattened)
+  /// For single rudder: 2x2 matrix = 4 elements
+  /// For MAVYMINI: 7x7 matrix = 49 elements (6 surfaces + 1 propeller)
+  rosidl_runtime_c__double__Sequence covariance;
 } interfaces__msg__Actuator;
 
 // Struct for a sequence of interfaces__msg__Actuator.

@@ -17,6 +17,8 @@
 #include "std_msgs/msg/header.h"
 // Member `header`
 #include "std_msgs/msg/detail/header__rosidl_typesupport_introspection_c.h"
+// Member `covariance`
+#include "rosidl_runtime_c/primitives_sequence_functions.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -40,24 +42,25 @@ void interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_fin
 size_t interfaces__msg__Actuator__rosidl_typesupport_introspection_c__size_function__Actuator__covariance(
   const void * untyped_member)
 {
-  (void)untyped_member;
-  return 4;
+  const rosidl_runtime_c__double__Sequence * member =
+    (const rosidl_runtime_c__double__Sequence *)(untyped_member);
+  return member->size;
 }
 
 const void * interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_const_function__Actuator__covariance(
   const void * untyped_member, size_t index)
 {
-  const double * member =
-    (const double *)(untyped_member);
-  return &member[index];
+  const rosidl_runtime_c__double__Sequence * member =
+    (const rosidl_runtime_c__double__Sequence *)(untyped_member);
+  return &member->data[index];
 }
 
 void * interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_function__Actuator__covariance(
   void * untyped_member, size_t index)
 {
-  double * member =
-    (double *)(untyped_member);
-  return &member[index];
+  rosidl_runtime_c__double__Sequence * member =
+    (rosidl_runtime_c__double__Sequence *)(untyped_member);
+  return &member->data[index];
 }
 
 void interfaces__msg__Actuator__rosidl_typesupport_introspection_c__fetch_function__Actuator__covariance(
@@ -82,7 +85,16 @@ void interfaces__msg__Actuator__rosidl_typesupport_introspection_c__assign_funct
   *item = *value;
 }
 
-static rosidl_typesupport_introspection_c__MessageMember interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_message_member_array[4] = {
+bool interfaces__msg__Actuator__rosidl_typesupport_introspection_c__resize_function__Actuator__covariance(
+  void * untyped_member, size_t size)
+{
+  rosidl_runtime_c__double__Sequence * member =
+    (rosidl_runtime_c__double__Sequence *)(untyped_member);
+  rosidl_runtime_c__double__Sequence__fini(member);
+  return rosidl_runtime_c__double__Sequence__init(member, size);
+}
+
+static rosidl_typesupport_introspection_c__MessageMember interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_message_member_array[10] = {
   {
     "header",  // name
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
@@ -135,12 +147,114 @@ static rosidl_typesupport_introspection_c__MessageMember interfaces__msg__Actuat
     NULL  // resize(index) function pointer
   },
   {
+    "upper_rudder",  // name
+    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
+    0,  // upper bound of string
+    NULL,  // members of sub message
+    false,  // is array
+    0,  // array size
+    false,  // is upper bound
+    offsetof(interfaces__msg__Actuator, upper_rudder),  // bytes offset in struct
+    NULL,  // default value
+    NULL,  // size() function pointer
+    NULL,  // get_const(index) function pointer
+    NULL,  // get(index) function pointer
+    NULL,  // fetch(index, &value) function pointer
+    NULL,  // assign(index, value) function pointer
+    NULL  // resize(index) function pointer
+  },
+  {
+    "lower_rudder",  // name
+    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
+    0,  // upper bound of string
+    NULL,  // members of sub message
+    false,  // is array
+    0,  // array size
+    false,  // is upper bound
+    offsetof(interfaces__msg__Actuator, lower_rudder),  // bytes offset in struct
+    NULL,  // default value
+    NULL,  // size() function pointer
+    NULL,  // get_const(index) function pointer
+    NULL,  // get(index) function pointer
+    NULL,  // fetch(index, &value) function pointer
+    NULL,  // assign(index, value) function pointer
+    NULL  // resize(index) function pointer
+  },
+  {
+    "stern_fin_left",  // name
+    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
+    0,  // upper bound of string
+    NULL,  // members of sub message
+    false,  // is array
+    0,  // array size
+    false,  // is upper bound
+    offsetof(interfaces__msg__Actuator, stern_fin_left),  // bytes offset in struct
+    NULL,  // default value
+    NULL,  // size() function pointer
+    NULL,  // get_const(index) function pointer
+    NULL,  // get(index) function pointer
+    NULL,  // fetch(index, &value) function pointer
+    NULL,  // assign(index, value) function pointer
+    NULL  // resize(index) function pointer
+  },
+  {
+    "stern_fin_right",  // name
+    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
+    0,  // upper bound of string
+    NULL,  // members of sub message
+    false,  // is array
+    0,  // array size
+    false,  // is upper bound
+    offsetof(interfaces__msg__Actuator, stern_fin_right),  // bytes offset in struct
+    NULL,  // default value
+    NULL,  // size() function pointer
+    NULL,  // get_const(index) function pointer
+    NULL,  // get(index) function pointer
+    NULL,  // fetch(index, &value) function pointer
+    NULL,  // assign(index, value) function pointer
+    NULL  // resize(index) function pointer
+  },
+  {
+    "bow_fin_left",  // name
+    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
+    0,  // upper bound of string
+    NULL,  // members of sub message
+    false,  // is array
+    0,  // array size
+    false,  // is upper bound
+    offsetof(interfaces__msg__Actuator, bow_fin_left),  // bytes offset in struct
+    NULL,  // default value
+    NULL,  // size() function pointer
+    NULL,  // get_const(index) function pointer
+    NULL,  // get(index) function pointer
+    NULL,  // fetch(index, &value) function pointer
+    NULL,  // assign(index, value) function pointer
+    NULL  // resize(index) function pointer
+  },
+  {
+    "bow_fin_right",  // name
+    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
+    0,  // upper bound of string
+    NULL,  // members of sub message
+    false,  // is array
+    0,  // array size
+    false,  // is upper bound
+    offsetof(interfaces__msg__Actuator, bow_fin_right),  // bytes offset in struct
+    NULL,  // default value
+    NULL,  // size() function pointer
+    NULL,  // get_const(index) function pointer
+    NULL,  // get(index) function pointer
+    NULL,  // fetch(index, &value) function pointer
+    NULL,  // assign(index, value) function pointer
+    NULL  // resize(index) function pointer
+  },
+  {
     "covariance",  // name
     rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
     true,  // is array
-    4,  // array size
+    0,  // array size
     false,  // is upper bound
     offsetof(interfaces__msg__Actuator, covariance),  // bytes offset in struct
     NULL,  // default value
@@ -149,14 +263,14 @@ static rosidl_typesupport_introspection_c__MessageMember interfaces__msg__Actuat
     interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_function__Actuator__covariance,  // get(index) function pointer
     interfaces__msg__Actuator__rosidl_typesupport_introspection_c__fetch_function__Actuator__covariance,  // fetch(index, &value) function pointer
     interfaces__msg__Actuator__rosidl_typesupport_introspection_c__assign_function__Actuator__covariance,  // assign(index, value) function pointer
-    NULL  // resize(index) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__resize_function__Actuator__covariance  // resize(index) function pointer
   }
 };
 
 static const rosidl_typesupport_introspection_c__MessageMembers interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_message_members = {
   "interfaces__msg",  // message namespace
   "Actuator",  // message name
-  4,  // number of fields
+  10,  // number of fields
   sizeof(interfaces__msg__Actuator),
   interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_message_member_array,  // message members
   interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_init_function,  // function to initialize message memory (memory has to be allocated)
