@@ -24,7 +24,7 @@ import warnings
 # the resultant y-axis by angle theta followed by a 
 # rotation about the resultant x-axis by angle phi
 # to reach the BODY frame.
-#
+    #
 # quat = [qw, qx, qy, qz] is considered to be an unit quaternion
 #
 # rotm = 3 x 3 matrix
@@ -34,6 +34,16 @@ import warnings
 
 # Compute the rotation matrix from Euler angles
 def eul_to_rotm(eul, order='ZYX', deg=False):
+    """Convert Euler angles to rotation matrix.
+    
+    Args:
+        eul (numpy.ndarray): Euler angles [phi, theta, psi] in radians or degrees
+        order (str, optional): Rotation order. Only 'ZYX' supported. Defaults to 'ZYX'.
+        deg (bool, optional): If True, input angles are in degrees. Defaults to False.
+    
+    Returns:
+        numpy.ndarray: 3x3 rotation matrix that transforms vectors from body to NED frame
+    """
     rotm = np.eye(3, dtype=float)
 
     if order != 'ZYX':
@@ -70,6 +80,18 @@ def eul_to_rotm(eul, order='ZYX', deg=False):
 
 # Compute Euler angles from rotation matrix
 def rotm_to_eul(rotm, order='ZYX', prev_eul=None, deg=False, silent=True):
+    """Convert rotation matrix to Euler angles.
+    
+    Args:
+        rotm (numpy.ndarray): 3x3 rotation matrix that transforms vectors from body to NED frame
+        order (str, optional): Rotation order. Only 'ZYX' supported. Defaults to 'ZYX'.
+        prev_eul (numpy.ndarray, optional): Previous Euler angles to resolve ambiguity. Defaults to None.
+        deg (bool, optional): If True, output angles are in degrees. Defaults to False.
+        silent (bool, optional): If True, suppress warnings about multiple solutions. Defaults to True.
+    
+    Returns:
+        numpy.ndarray: Euler angles [phi, theta, psi] in radians or degrees
+    """
     eul = np.zeros(3, dtype=float)
     
     if order != 'ZYX':
@@ -126,6 +148,16 @@ def rotm_to_eul(rotm, order='ZYX', prev_eul=None, deg=False, silent=True):
 
 # Compute quaternion from euler angles
 def eul_to_quat(eul, order='ZYX', deg=False):
+    """Convert Euler angles to quaternion.
+    
+    Args:
+        eul (numpy.ndarray): Euler angles [phi, theta, psi] in radians or degrees
+        order (str, optional): Rotation order. Only 'ZYX' supported. Defaults to 'ZYX'.
+        deg (bool, optional): If True, input angles are in degrees. Defaults to False.
+    
+    Returns:
+        numpy.ndarray: Unit quaternion [qw, qx, qy, qz]
+    """
     quat = np.zeros(4, dtype=float)
 
     if order != 'ZYX':
@@ -155,6 +187,18 @@ def eul_to_quat(eul, order='ZYX', deg=False):
 
 # Compute Euler angles from quaternion
 def quat_to_eul(quat, order='ZYX', deg=False, prev_quat=None, silent=True):
+    """Convert quaternion to Euler angles.
+    
+    Args:
+        quat (numpy.ndarray): Unit quaternion [qw, qx, qy, qz]
+        order (str, optional): Rotation order. Only 'ZYX' supported. Defaults to 'ZYX'.
+        deg (bool, optional): If True, output angles are in degrees. Defaults to False.
+        prev_quat (numpy.ndarray, optional): Previous quaternion to resolve ambiguity. Defaults to None.
+        silent (bool, optional): If True, suppress warnings about multiple solutions. Defaults to True.
+    
+    Returns:
+        numpy.ndarray: Euler angles [phi, theta, psi] in radians or degrees
+    """
     eul = np.zeros(3, dtype=float)
     
     if order != 'ZYX':
@@ -216,6 +260,14 @@ def quat_to_eul(quat, order='ZYX', deg=False, prev_quat=None, silent=True):
 
 # Compute the rotation matrix from quaternion
 def quat_to_rotm(quat):
+    """Convert quaternion to rotation matrix.
+    
+    Args:
+        quat (numpy.ndarray): Unit quaternion [qw, qx, qy, qz]
+    
+    Returns:
+        numpy.ndarray: 3x3 rotation matrix that transforms vectors from body to NED frame
+    """
     rotm = np.eye(3, dtype=float)
 
     # Write your code here
@@ -245,6 +297,14 @@ def quat_to_rotm(quat):
 
 # Compute quaternion from rotation matrix
 def rotm_to_quat(rotm):
+    """Convert rotation matrix to quaternion.
+    
+    Args:
+        rotm (numpy.ndarray): 3x3 rotation matrix that transforms vectors from body to NED frame
+    
+    Returns:
+        numpy.ndarray: Unit quaternion [qw, qx, qy, qz]
+    """
     quat = np.zeros(4, dtype=float)
 
     # Write your code here
@@ -306,7 +366,15 @@ def rotm_to_quat(rotm):
     # return quat
 
 def quat_multiply(q1, q2):
-
+    """Multiply two quaternions.
+    
+    Args:
+        q1 (numpy.ndarray): First quaternion [qw, qx, qy, qz]
+        q2 (numpy.ndarray): Second quaternion [qw, qx, qy, qz]
+    
+    Returns:
+        numpy.ndarray: Result of quaternion multiplication q1 * q2
+    """
     w1 = q1[0]; x1 = q1[1]; y1 = q1[2]; z1 = q1[3]
     w2 = q2[0]; x2 = q2[1]; y2 = q2[2]; z2 = q2[3]
 
@@ -318,11 +386,28 @@ def quat_multiply(q1, q2):
     ])
 
 def quat_conjugate(quat):
+    """Compute the conjugate of a quaternion.
+    
+    Args:
+        quat (numpy.ndarray): Input quaternion [qw, qx, qy, qz]
+    
+    Returns:
+        numpy.ndarray: Conjugate quaternion [qw, -qx, -qy, -qz]
+    """
     q = quat.copy()
     q[1:] = -quat[1:]
     return q
 
 def rotate_vec_by_quat(vec_a, q_a_b):
+    """Rotate a vector using a quaternion rotation.
+    
+    Args:
+        vec_a (numpy.ndarray): 3D vector in frame A
+        q_a_b (numpy.ndarray): Quaternion representing rotation from frame A to frame B
+    
+    Returns:
+        numpy.ndarray: Rotated vector in frame B
+    """
     q_vec_a = np.zeros(4)
     q_vec_a[1:] = vec_a
     vec_b = quat_multiply(quat_multiply(q_a_b, q_vec_a), quat_conjugate(q_a_b))[1:]
@@ -330,6 +415,16 @@ def rotate_vec_by_quat(vec_a, q_a_b):
 
 # Compute T matrix (or J2 matrix) from Euler angles
 def eul_rate_matrix(eul, order='ZYX', deg=False):
+    """Compute the transformation matrix between Euler rates and angular velocity.
+    
+    Args:
+        eul (numpy.ndarray): Euler angles [phi, theta, psi]
+        order (str, optional): Rotation order. Only 'ZYX' supported. Defaults to 'ZYX'.
+        deg (bool, optional): If True, input angles are in degrees. Defaults to False.
+    
+    Returns:
+        numpy.ndarray: 3x3 transformation matrix
+    """
     Tmat = np.zeros((3, 3))
 
     if order != 'ZYX':
@@ -362,6 +457,14 @@ def eul_rate_matrix(eul, order='ZYX', deg=False):
 
 # Compute T matrix (or J2 matrix) from quaternion
 def quat_rate_matrix(quat):
+    """Compute the transformation matrix between quaternion rates and angular velocity.
+    
+    Args:
+        quat (numpy.ndarray): Unit quaternion [qw, qx, qy, qz]
+    
+    Returns:
+        numpy.ndarray: 4x3 transformation matrix
+    """
     Tmat = np.zeros((4, 3))
 
     qw = quat[0]
@@ -386,6 +489,16 @@ def quat_rate_matrix(quat):
 
 # Compute Euler rate from angular velocity
 def eul_rate(eul, w, order='ZYX'):
+    """Compute Euler angle rates from angular velocity.
+    
+    Args:
+        eul (numpy.ndarray): Euler angles [phi, theta, psi]
+        w (numpy.ndarray): Angular velocity vector in body frame [wx, wy, wz]
+        order (str, optional): Rotation order. Only 'ZYX' supported. Defaults to 'ZYX'.
+    
+    Returns:
+        numpy.ndarray: Euler angle rates [dphi, dtheta, dpsi]
+    """
     deul = np.zeros(3)
 
     if order != 'ZYX':
@@ -401,6 +514,15 @@ def eul_rate(eul, w, order='ZYX'):
 
 # Compute quaternion rate from angular velocity
 def quat_rate(quat, w):
+    """Compute quaternion rates from angular velocity.
+    
+    Args:
+        quat (numpy.ndarray): Unit quaternion [qw, qx, qy, qz]
+        w (numpy.ndarray): Angular velocity vector in body frame [wx, wy, wz]
+    
+    Returns:
+        numpy.ndarray: Quaternion rates [dqw, dqx, dqy, dqz]
+    """
     dquat = np.zeros(4)
 
     # Write your code here
@@ -411,7 +533,14 @@ def quat_rate(quat, w):
     return dquat
 
 def deul_dquat(quat):
+    """Compute the Jacobian of Euler angles with respect to quaternion.
     
+    Args:
+        quat (numpy.ndarray): Unit quaternion [qw, qx, qy, qz]
+    
+    Returns:
+        numpy.ndarray: 3x4 Jacobian matrix
+    """
     w = quat[0]
     x = quat[1]
     y = quat[2]
@@ -439,7 +568,14 @@ def deul_dquat(quat):
     ])
 
 def dquat_deul(quat):
-
+    """Compute the Jacobian of quaternion with respect to Euler angles.
+    
+    Args:
+        quat (numpy.ndarray): Unit quaternion [qw, qx, qy, qz]
+    
+    Returns:
+        numpy.ndarray: 4x3 Jacobian matrix
+    """
     eul = quat_to_eul(quat)
     phi = eul[0]
     theta = eul[1]
@@ -469,6 +605,15 @@ def dquat_deul(quat):
     return J
 
 def ssa(ang, deg=False):
+    """Convert angle to smallest signed angle.
+    
+    Args:
+        ang (float): Input angle
+        deg (bool, optional): If True, angle is in degrees. Defaults to False.
+    
+    Returns:
+        float: Smallest signed angle equivalent to input
+    """
     if deg:
         ang = (ang + 180) % (360.0) - 180.0
     else:
@@ -477,12 +622,30 @@ def ssa(ang, deg=False):
 
 # Clips the value to plus minus threshold
 def clip(value, threshold):
+    """Clip a value to +/- threshold.
+    
+    Args:
+        value (float): Input value
+        threshold (float): Maximum absolute value
+    
+    Returns:
+        float: Clipped value
+    """
     if np.abs(value) > threshold:
         return np.sign(value) * threshold
     else:
         return value
 
 def ned_to_llh(ned, llh0):
+    """Convert NED coordinates to latitude, longitude, height.
+    
+    Args:
+        ned (numpy.ndarray): Position vector in NED frame [North, East, Down]
+        llh0 (numpy.ndarray): Reference position [latitude, longitude, height]
+    
+    Returns:
+        numpy.ndarray: Position in LLH coordinates [latitude, longitude, height]
+    """
     xn = ned[0]
     yn = ned[1]
     zn = ned[2]
@@ -509,7 +672,15 @@ def ned_to_llh(ned, llh0):
     return llh
 
 def llh_to_ned(llh, llh0):
-
+    """Convert latitude, longitude, height to NED coordinates.
+    
+    Args:
+        llh (numpy.ndarray): Position in LLH coordinates [latitude, longitude, height]
+        llh0 (numpy.ndarray): Reference position [latitude, longitude, height]
+    
+    Returns:
+        numpy.ndarray: Position vector in NED frame [North, East, Down]
+    """
     mu0 = llh0[0] * np.pi / 180
     l0 = llh0[1] * np.pi / 180
     h0 = llh0[2]
@@ -534,7 +705,11 @@ def llh_to_ned(llh, llh0):
     return ned
 
 def generate_waypoints():
-
+    """Generate a set of waypoints for a rectangular trajectory.
+    
+    Returns:
+        numpy.ndarray: Array of waypoints in LLH coordinates
+    """
     # NED tangent point location - At the sluez gate in the lake
     mu_dat = 12.993012 
     l_dat = 80.239142
@@ -573,6 +748,14 @@ def generate_waypoints():
     return wp
 
 def rotm_ned_to_ecef(llh):
+    """Compute rotation matrix from NED to ECEF frame.
+    
+    Args:
+        llh (numpy.ndarray): Position in LLH coordinates [latitude, longitude, height]
+    
+    Returns:
+        numpy.ndarray: 3x3 rotation matrix from NED to ECEF
+    """
     mu = llh[0] * np.pi / 180
     l = llh[1] * np.pi / 180
     h = llh[2]
@@ -596,6 +779,14 @@ def rotm_ned_to_ecef(llh):
     return rotm
 
 def Smat(vec):
+    """Compute the skew-symmetric matrix for a vector.
+    
+    Args:
+        vec (numpy.ndarray): 3D vector
+    
+    Returns:
+        numpy.ndarray: 3x3 skew-symmetric matrix
+    """
     S = np.zeros((3,3))
     S[0, 1] = -vec[2]
     S[0, 2] = vec[1]

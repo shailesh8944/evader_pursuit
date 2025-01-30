@@ -418,6 +418,7 @@ class Vessel():
         B44_wn = np.interp(wn4, omg[1:], BD[1:, 3, 3, 0, 0])
         B55_wn = np.interp(wn5, omg[1:], BD[1:, 4, 4, 0, 0])
 
+        # Change from ENU to NED
         A = A_zero
         A[2:5][:, 2:5] = np.diag(np.array([A33_wn, A44_wn, A55_wn]))
 

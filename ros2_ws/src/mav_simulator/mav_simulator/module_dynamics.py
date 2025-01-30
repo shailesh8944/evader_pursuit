@@ -609,6 +609,7 @@ def mavymini_ode(t, ss, delta_c, n_c, options, euler_angle_flag=False, mmg_flag=
     C_RB[3:6][:, 0:3] = -kin.Smat(M11 @ v1 + M12 @ v2)
     C_RB[3:6][:, 3:6] = -kin.Smat(M21 @ v1 + M22 @ v2)
 
+   
     A11 = M_A[0:3][:, 0:3]
     A12 = M_A[0:3][:, 3:6]
     A21 = M_A[3:6][:, 0:3]
