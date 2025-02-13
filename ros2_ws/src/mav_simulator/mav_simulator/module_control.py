@@ -73,30 +73,3 @@ def fixed_thrust(t, state, n_thrusters=1, rpm=1000.0):
     """
     n_c = np.ones(n_thrusters) * rpm
     return n_c
-
-def switching_thrust(t, state, n_thrusters=1, rpm_max=1000.0):
-    """Return alternating thruster RPM commands that switch every 10 seconds.
-    
-    Args:
-        t (float): Current simulation time [s]
-        state (ndarray): Current vessel state vector
-        n_thrusters (int): Number of thrusters
-        rpm_max (float): Maximum RPM magnitude
-        
-    Returns:
-        ndarray: Commanded thruster RPMs
-        
-    Example:
-        >>> switching_thrust(5.0, state_vector, 2, 1000.0)
-        array([1000.0, 1000.0])
-        >>> switching_thrust(15.0, state_vector, 2, 1000.0)
-        array([-1000.0, -1000.0])
-    """
-    period = t % 20  # 20 sec for complete cycle (10 sec each direction)
-    if period < 10:
-        rpm = rpm_max
-    else:
-        rpm = -rpm_max
-        
-    n_c = np.ones(n_thrusters) * rpm
-    return n_c

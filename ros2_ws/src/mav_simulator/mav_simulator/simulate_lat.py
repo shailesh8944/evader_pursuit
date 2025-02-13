@@ -25,9 +25,32 @@ def simulate() -> NoReturn:
         # Extract position and velocity
         pos = vessel.current_state[6:9]  # [x, y, z]
         vel = vessel.current_state[0:3]  # [u, v, w]
+        # Calculate forces from different components
+        angles = vessel.current_state[9:12]  # [phi, theta, psi]
+        F_hyd = vessel.hydrodynamic_forces(vessel.current_state[0:6])
+        F_g = vessel.gravitational_forces(angles[0], angles[1])
+        
+        # Get control surface and thruster forces if they exist
+        F_control = vessel.control_forces(vessel.current_state[12:]) if hasattr(vessel, 'control_surfaces') else np.zeros(6)
+        F_thrust = vessel.thruster_forces(vessel.current_state[-len(vessel.thrusters['thrusters']):]) if hasattr(vessel, 'thrusters') else np.zeros(6)
+        
+        # Get control surface angles and thruster RPMs
+        control_start = 12  # After position, velocity and angles
+        thruster_start = control_start + len(vessel.control_surfaces['control_surfaces']) if hasattr(vessel, 'control_surfaces') else control_start
+        control_angles = vessel.current_state[control_start:thruster_start] if hasattr(vessel, 'control_surfaces') else []
+        thruster_rpms = vessel.current_state[thruster_start:] if hasattr(vessel, 'thrusters') else []
         
         # Print to terminal
-        print(f"{vessel.t:6.2f} | [{pos[0]:6.2f}, {pos[1]:6.2f}, {pos[2]:6.2f}] | [{vel[0]:6.2f}, {vel[1]:6.2f}, {vel[2]:6.2f}]")
+        print(f"\nTime: {vessel.t:6.2f}")
+        print(f"Position [x, y, z]: [{pos[0]:6.2f}, {pos[1]:6.2f}, {pos[2]:6.2f}]")
+        print(f"Velocity [u, v, w]: [{vel[0]:6.2f}, {vel[1]:6.2f}, {vel[2]:6.2f}]")
+        print(f"Orientation [phi, theta, psi] (deg): [{angles[0]*180/np.pi:6.2f}, {angles[1]*180/np.pi:6.2f}, {angles[2]*180/np.pi:6.2f}]")
+        print(f"Hydrodynamic forces: [{F_hyd[0]:6.2f}, {F_hyd[1]:6.2f}, {F_hyd[2]:6.2f}, {F_hyd[3]:6.2f}, {F_hyd[4]:6.2f}, {F_hyd[5]:6.2f}]")
+        print(f"Gravitational forces: [{F_g[0]:6.2f}, {F_g[1]:6.2f}, {F_g[2]:6.2f}, {F_g[3]:6.2f}, {F_g[4]:6.2f}, {F_g[5]:6.2f}]")
+        print(f"Control surface forces: [{F_control[0]:6.2f}, {F_control[1]:6.2f}, {F_control[2]:6.2f}, {F_control[3]:6.2f}, {F_control[4]:6.2f}, {F_control[5]:6.2f}]")
+        print(f"Thruster forces: [{F_thrust[0]:6.2f}, {F_thrust[1]:6.2f}, {F_thrust[2]:6.2f}, {F_thrust[3]:6.2f}, {F_thrust[4]:6.2f}, {F_thrust[5]:6.2f}]")
+        print(f"Control surface angles [deg]: {[f'{angle*180/np.pi:6.2f}' for angle in control_angles]}")
+        print(f"Thruster RPMs: {[f'{rpm:6.2f}' for rpm in thruster_rpms]}")  # Convert RPS to RPM
     
     print("-" * 60)
     print("Simulation complete!")

@@ -49,15 +49,15 @@ class Vessel:
         self.U = vessel_params.get('U', 0.0)  # Default to 0 if not specified
         
         # Mass parameters
-        self.mass = vessel_params['mass']
-        self.CG = vessel_params['cg']
-        self.gyration = vessel_params['gyration']
+        self.mass = vessel_params['inertia']['mass']
+        self.CG = vessel_params['geometry']['CG']
+        self.gyration = vessel_params['geometry']['gyration']
         
         # Buoyancy parameters
         self.W = self.mass * self.g  # Weight
-        self.buoyancy_mass = vessel_params.get('buoyancy_mass', self.W)  # Buoyancy force, default to neutral
+        self.buoyancy_mass = vessel_params['inertia']['buoyancy_mass']  # Buoyancy force, default to neutral
         self.B = self.buoyancy_mass * self.g  # Buoyancy force, default to neutral
-        self.CB = vessel_params['cb']  # Center of buoyancy location relative to body frame
+        self.CB = vessel_params['geometry']['CB']  # Center of buoyancy location relative to body frame
 
         # Generate mass matrix
         self._generate_mass_matrix()
@@ -82,25 +82,25 @@ class Vessel:
             self._dimensionalize_coefficients(self.rho, self.L, self.U)
         
         # Load NACA airfoil data
-        if 'naca_file' in vessel_params:
-            self.naca_data = pd.read_csv(vessel_params['naca_file'])
+        if 'naca_file' in vessel_params['control_surfaces']:
+            self.naca_data = pd.read_csv(vessel_params['control_surfaces']['naca_file'])
         else:
             raise ValueError("NACA airfoil data file path not specified in vessel parameters")
         
         # Determine state vector size based on attitude representation and actuators
-        self.use_quaternion = vessel_params.get('use_quaternion', False)
+        self.use_quaternion = vessel_params['initial_conditions'].get('use_quaternion', False)
         attitude_size = 4 if self.use_quaternion else 3
 
-        self.control_surfaces = vessel_params.get('control_surfaces', [])
+        self.control_surfaces = vessel_params['control_surfaces']
         n_control_surfaces = len(self.control_surfaces) if hasattr(self, 'control_surfaces') else 0
 
-        self.thrusters = vessel_params.get('thrusters', [])
+        self.thrusters = vessel_params['thrusters']
         n_thrusters = len(self.thrusters) if hasattr(self, 'thrusters') else 0
         
         # Build initial state vector
-        initial_velocity = vessel_params['initial_velocity']
-        initial_position = vessel_params['initial_position']
-        initial_attitude = vessel_params['initial_attitude']
+        initial_velocity = vessel_params['initial_conditions']['start_velocity']
+        initial_position = vessel_params['initial_conditions']['start_location']
+        initial_attitude = vessel_params['initial_conditions']['start_attitude']
         if self.use_quaternion:
             # Convert Euler angles to quaternion if needed
             initial_attitude = eul_to_quat(initial_attitude)
@@ -124,8 +124,10 @@ class Vessel:
         self.Tmax = vessel_params['sim_time']
         self.dt = vessel_params['time_step']
         self.t = 0.0
-        self.control_type = vessel_params['control_type']
+        self.control_surface_control_type = vessel_params['control']['control_surface_control_type']
+        self.thruster_control_type = vessel_params['control']['thruster_control_type']
         
+        self.tp = self.thrusters['thrusters'][0]['tp']
         # Initialize commanded values
         self.delta_c = np.zeros(n_control_surfaces)
         self.n_c = np.zeros(n_thrusters)
@@ -268,32 +270,36 @@ class Vessel:
         
         # Get commanded values
         if not self.ros_flag:
-            if self.control_type == 'fixed_rudder':
-                self.delta_c = con.fixed_rudder(t, state, n_control_surfaces, 5.0)
-            elif self.control_type == 'switching_rudder':
+            # Get control surface commands
+            if self.control_surface_control_type == 'fixed_rudder':
+                self.delta_c = con.fixed_rudder(t, state, n_control_surfaces, -15.0) #Enter rudder angle here
+            elif self.control_surface_control_type == 'switching_rudder':
                 self.delta_c = con.switching_rudder(t, state, n_control_surfaces)
             else:
-                raise ValueError(f"Invalid control type: {self.control_type}")
-        
+                raise ValueError(f"Invalid control surface control type: {self.control_surface_control_type}")
+                
+            # Get thruster commands
+            if self.thruster_control_type == 'fixed_rpm':
+                self.n_c = con.fixed_thrust(t, state, n_thrusters,1000.0) #Enter RPM here
+            else:
+                raise ValueError(f"Invalid thruster control type: {self.thruster_control_type}")
         # Initialize state derivative vector
         state_dot = np.zeros_like(state)
         
         # Calculate forces and moments
         F_hyd = self.hydrodynamic_forces(vel)
         F_control = self.control_forces(control_angles) if n_control_surfaces > 0 else np.zeros(6)
-        #F_thrust = self.thruster_forces(thruster_states) if n_thrusters > 0 else np.zeros(6)
+        F_thrust = self.thruster_forces(thruster_states) if n_thrusters > 0 else np.zeros(6)
         F_g = self.gravitational_forces(angles[0], angles[1])  # Add gravitational forces        
         
         # Calculate mass matrices
         M_RB = self.mass_matrix
-        M_A = self.added_mass_matrix()
-        M = M_RB + M_A
+        # M_A = self.added_mass_matrix()
+        M = M_RB 
         
         # Calculate total force vector
-        #F = F_hyd + F_control + F_thrust + F_g
-        F = F_hyd + F_g + F_control
-        print(F_control)
-        
+        F = F_hyd + F_control + F_thrust - F_g
+
         # Calculate velocity derivatives
         state_dot[0:6] = np.linalg.inv(M) @ F
         
@@ -310,9 +316,9 @@ class Vessel:
             delta_c = np.array(self.delta_c) if isinstance(self.delta_c, (list, np.ndarray)) else np.array([self.delta_c])
             for i in range(n_control_surfaces):
                 # Get time constant and limits for this control surface
-                T = self.control_surfaces[i]['control_surface_T']
-                delta_max = self.control_surfaces[i]['control_surface_delta_max']
-                deltad_max = self.control_surfaces[i]['control_surface_deltad_max']
+                T = self.control_surfaces['control_surfaces'][i]['control_surface_T']
+                delta_max = self.control_surfaces['control_surfaces'][i]['control_surface_delta_max']
+                deltad_max = self.control_surfaces['control_surfaces'][i]['control_surface_deltad_max']
                 
                 # Limit commanded angle
                 delta_c[i] = np.clip(delta_c[i], -delta_max, delta_max)
@@ -328,7 +334,7 @@ class Vessel:
         if n_thrusters > 0:
             n_c = self.n_c if hasattr(self, 'n_c') else np.zeros(n_thrusters)
             for i in range(n_thrusters):
-                state_dot[thruster_start + i] = (n_c[i] - thruster_states[i]) / self.T_prop
+                state_dot[thruster_start + i] = (n_c[i] - thruster_states[i]) / 1.0 # TODO: Add time constant
                 # Apply rate limiting
                 if hasattr(self, 'nd_max'):
                     state_dot[thruster_start + i] = np.clip(state_dot[thruster_start + i], 
@@ -436,7 +442,7 @@ class Vessel:
                         tau[self.force_indices[force_dir]] += coeff_value * delta
 
         # Then calculate forces from control surfaces
-        for surface in self.control_surfaces:
+        for surface in self.control_surfaces['control_surfaces']:
             # Get surface parameters
             sd = surface['control_surface_location']  # [x,y,z] coordinates in body frame
             area = surface['control_surface_area']
@@ -461,31 +467,24 @@ class Vessel:
             netU = u
             netV = v + r*sd[0] + p*sd[2]  # yaw and roll effects on sway
             netW = w + p*sd[1] - q*sd[0]  # roll and pitch effects on heave
-
-
-            
+           
             # Transform velocities to surface frame
             V_surface = R.T @ np.array([netU, netV, netW])
         
-            # Calculate angle of attack in surface frame
-            # Get corresponding delta for this control surface based on surface index
-            surface_idx = self.control_surfaces.index(surface)
-            surface_delta = delta[surface_idx]
+            # Get corresponding delta for this control surface based on surface ID
+            surface_id = surface['control_surface_id']
+            surface_delta = delta[surface_id - 1]  # Subtract 1 since IDs start at 1
             
             # Calculate effective angle of attack
-            alpha = np.arctan2(V_surface[2], V_surface[0]) + surface_delta
-            V_mag = np.sqrt(np.sum(V_surface**2))
+            alpha = np.arctan2(V_surface[2], V_surface[0]) - surface_delta
+            V_mag = np.sqrt(V_surface[0]**2 + V_surface[2]**2)
             
             # Calculate dynamic pressure
             q_dyn = 0.5 * self.rho * V_mag**2 * area
             
             # Check if angle of attack is near vertical
-            if abs(np.rad2deg(alpha)) > 35:
-                # For near-vertical motion, only consider lift force
-                alpha_deg = np.clip(np.rad2deg(alpha), 
-                                  self.naca_data['Alpha'].min(), 
-                                  self.naca_data['Alpha'].max())
-                Cl = np.interp(alpha_deg, self.naca_data['Alpha'], self.naca_data['Cl'])
+            # stall condition
+            if abs(np.rad2deg(alpha)) > 20:
                 L = 0.0
                 D = 0.0  # Ignore drag at high angles of attack
             else:
@@ -516,7 +515,7 @@ class Vessel:
         """Calculate thruster forces and moments
         
         Args:
-            n_prop (float): Propeller RPM
+            n_prop (ndarray): Array of propeller RPMs
             
         Returns:
             array: Forces and moments vector [X, Y, Z, K, M, N]
@@ -529,36 +528,36 @@ class Vessel:
 
         # Maximum RPM from T200 thruster specs
         n_max = 2668/60  # Convert to RPS
+        
+        # Convert input RPM to RPS
+        n_prop = n_prop/60
 
         # Calculate thrust coefficient at zero advance ratio (J=0)
         # 28.73 N thrust at 2668 RPM at 12V (from T200 datasheet)
-        KT_at_J0 = 28.73/(1024 * self.D_prop**4 * n_max**2)
-
-        # Calculate advance ratio J with protection against division by zero
-        denominator = n_prop * self.D_prop
-        if abs(denominator) > 1e-6:  # Check if denominator is not too close to zero
-            J = u / denominator
-        else:
-            J = 0.0  # Set a default value when propeller is not rotating
-            
-        # Linear approximation of thrust coefficient
-        KT = KT_at_J0 * (1 - J)
-        
-        # Calculate propeller thrust
-        X_prop = KT * 1024 * self.D_prop**4 * np.abs(n_prop) * n_prop
-
-        # Apply thrust deduction if available
-        if hasattr(self, 'tp'):
-            X_prop *= (1 - self.tp)
-
-        # Add thrust force to surge direction
-        tau[0] = X_prop
+        KT_at_J0 = 28.73/(1024 * self.thrusters['thrusters'][0]['D_prop']**4 * n_max**2)
 
         # For each thruster in the configuration
-        for thruster in self.thrusters:
+        for i, thruster in enumerate(self.thrusters['thrusters']):
+            # Calculate advance ratio J with protection against division by zero
+            denominator = n_prop[i] * thruster['D_prop']
+            if abs(denominator) > 1e-6:  # Check if denominator is not too close to zero
+                J = u / denominator
+            else:
+                J = 0.0  # Set a default value when propeller is not rotating
+                
+            # Linear approximation of thrust coefficient
+            KT = KT_at_J0 * (1 - J)
+            # Calculate propeller thrust
+            X_prop = KT * 1024 * thruster['D_prop']**4 * np.abs(n_prop[i]) * n_prop[i]
+            # Apply thrust deduction if available
+            if hasattr(self, 'tp'):
+                X_prop *= (1 - self.tp)
+
+            # Add thrust force to surge direction
+            tau[0] += X_prop
+            
             # Get thruster location relative to body frame
             pos = thruster['thruster_location']
-            
             # Calculate moments due to thrust
             # Only X-direction force is considered as per the mavymini implementation
             tau[3:6] += np.cross(pos, np.array([X_prop, 0, 0]))
@@ -618,5 +617,5 @@ class Vessel:
             -(self.CG[0]*self.W - self.CB[0]*self.B) * cth * sphi - 
              (self.CG[1]*self.W - self.CB[1]*self.B) * sth
         ])
-        
+
         return g

@@ -1,18 +1,18 @@
 dim_flag: false
 
-X_u: 1.0
-X_w: 1.0
-X_q: 1.0
-Y_v: 1.0
-Y_p: 1.0
-Y_r: 1.0
-N_v: 1.0
-N_p: 1.0
-N_r: 1.0
-X_ud: 1.0
-Y_vd: 1.0
-N_vd: 1.0
-Y_rd: 1.0
-N_rd: 1.0
+X_u: -0.01
+
+# Sway hydrodynamic derivatives
+Y_v: -0.010659050686665396
+Y_r: 0.0017799664706713543
+
+# Yaw hydrodynamic derivatives
+N_v: -0.0006242757399292063
+N_r: -0.001889456681929024
+
+#Heave hydrodynamic derivatives
+Z_w: -0.01
+
+
 
 

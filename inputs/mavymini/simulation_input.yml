@@ -1,5 +1,5 @@
 #Simulation Specific Inputs
-sim_time: 1
+sim_time: 20
 time_step: 0.01
 density: 1000
 gravity: 9.80665
@@ -20,6 +20,7 @@ agents:
     sensors: /workspaces/mavlab/inputs/{name}/sensors.yml
     guidance: /workspaces/mavlab/inputs/{name}/guidance.yml
     control: /workspaces/mavlab/inputs/{name}/control.yml
+    thrusters: /workspaces/mavlab/inputs/{name}/thrusters.yml
 
 
 
