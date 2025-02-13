@@ -1,0 +1,12 @@
+# Dimensions of the box enclosing the vessel
+length: 1
+breadth: 0.5
+depth: 0.5
+
+CO: [0.0, 0.0, 0.0]
+CG: [0.0, 0.0, 0.0]
+CB: [0.0, 0.0, 0.0]
+
+geometry_file: /workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/Mavymini/Mavymini.gdf
+
+

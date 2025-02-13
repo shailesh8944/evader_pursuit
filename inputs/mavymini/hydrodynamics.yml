@@ -1,0 +1,18 @@
+dim_flag: false
+
+X_u: 1.0
+X_w: 1.0
+X_q: 1.0
+Y_v: 1.0
+Y_p: 1.0
+Y_r: 1.0
+N_v: 1.0
+N_p: 1.0
+N_r: 1.0
+X_ud: 1.0
+Y_vd: 1.0
+N_vd: 1.0
+Y_rd: 1.0
+N_rd: 1.0
+
+

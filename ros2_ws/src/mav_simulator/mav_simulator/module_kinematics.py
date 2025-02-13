@@ -24,7 +24,7 @@ import warnings
 # the resultant y-axis by angle theta followed by a 
 # rotation about the resultant x-axis by angle phi
 # to reach the BODY frame.
-    #
+#
 # quat = [qw, qx, qy, qz] is considered to be an unit quaternion
 #
 # rotm = 3 x 3 matrix

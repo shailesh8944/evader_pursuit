@@ -6,7 +6,7 @@ def ode_options(scale=1,
     wind_flag=False, wind_speed=0.0, wind_dir=180.0,
     wave_flag=False, wave_comp=None,
     current_flag=False, current_speed=0.0, current_dir=180.0,
-    deltad_max=100, T_rud=1, T_prop=1, nd_max=0.1):
+    deltad_max=100, T_rud=1,  T_prop=1, nd_max=0.1):
 
     options = {}
 

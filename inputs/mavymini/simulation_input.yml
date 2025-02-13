@@ -1,0 +1,28 @@
+#Simulation Specific Inputs
+sim_time: 1
+time_step: 0.01
+density: 1000
+gravity: 9.80665
+world_size: [100, 100, Inf]
+gps_datum: [12.99300425860631, 80.23913114094384, -87.0]
+
+
+nagents: 1
+agents:
+  -
+    name: mavymini
+    type: auv
+    geometry: /workspaces/mavlab/inputs/{name}/geometry.yml
+    inertia: /workspaces/mavlab/inputs/{name}/inertia.yml
+    hydrodynamics: /workspaces/mavlab/inputs/{name}/hydrodynamics.yml
+    control_surfaces: /workspaces/mavlab/inputs/{name}/control_surfaces.yml
+    initial_conditions: /workspaces/mavlab/inputs/{name}/initial_conditions.yml
+    sensors: /workspaces/mavlab/inputs/{name}/sensors.yml
+    guidance: /workspaces/mavlab/inputs/{name}/guidance.yml
+    control: /workspaces/mavlab/inputs/{name}/control.yml
+
+
+
+
+
+

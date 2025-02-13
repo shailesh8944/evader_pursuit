@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marine Vessel Configurator</title>
+    
+    <!-- Bootstrap CSS and Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    
+    <!-- Three.js and related libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/stats.min.js"></script>
+    
+    <!-- Other dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    
+    <!-- Custom CSS -->
+    <link href="styles.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Context Menu -->
+    <div class="context-menu" style="display: none;">
+        <div class="context-menu-item" data-action="add-rudder">
+            <i class="bi bi-box"></i>Add Rudder
+        </div>
+        <div class="context-menu-item" data-action="add-fin">
+            <i class="bi bi-box"></i>Add Fin
+        </div>
+        <div class="context-menu-item" data-action="add-thruster">
+            <i class="bi bi-circle"></i>Add Thruster
+        </div>
+        <div class="context-menu-item" data-action="add-sensor">
+            <i class="bi bi-cpu"></i>Add Sensor
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Left Sidebar - Configuration Panel -->
+            <div class="col-md-3 sidebar">
+                <button class="sidebar-toggle">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+                <div class="sidebar-resize-handle"></div>
+                <h3>Vessel Configuration</h3>
+                <div class="accordion" id="configAccordion">
+                    <!-- Basic Properties -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="basicProps">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#basicPropsCollapse">
+                                Basic Properties
+                            </button>
+                        </h2>
+                        <div id="basicPropsCollapse" class="accordion-collapse collapse show" data-bs-parent="#configAccordion">
+                            <div class="accordion-body">
+                                <div class="mb-3">
+                                    <label for="vesselName" class="form-label">Vessel Name</label>
+                                    <input type="text" class="form-control" id="vesselName">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="vesselType" class="form-label">Vessel Type</label>
+                                    <select class="form-select" id="vesselType">
+                                        <option value="auv">AUV</option>
+                                        <option value="ship">Ship</option>
+                                        <option value="rov">ROV</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">3D Model</label>
+                                    <input type="file" class="form-control" id="modelFile" accept=".stl">
+                                    <small class="text-muted">Upload STL file for vessel geometry</small>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="length" class="form-label">Length (m)</label>
+                                    <input type="number" class="form-control" id="length" step="0.1" min="0">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="breadth" class="form-label">Breadth (m)</label>
+                                    <input type="number" class="form-control" id="breadth" step="0.1" min="0">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="depth" class="form-label">Depth (m)</label>
+                                    <input type="number" class="form-control" id="depth" step="0.1" min="0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Physical Properties -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="physicalProps">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#physicalPropsCollapse">
+                                Physical Properties
+                            </button>
+                        </h2>
+                        <div id="physicalPropsCollapse" class="accordion-collapse collapse" data-bs-parent="#configAccordion">
+                            <div class="accordion-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Mass (kg)</label>
+                                    <input type="number" class="form-control" id="mass" step="0.1" min="0">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Center of Gravity [x, y, z] (m)</label>
+                                    <div class="row g-2">
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="cg_x" step="0.01" placeholder="X">
+                                        </div>
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="cg_y" step="0.01" placeholder="Y">
+                                        </div>
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="cg_z" step="0.01" placeholder="Z">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Inertia Matrix (kg⋅m²)</label>
+                                    <div class="matrix-input">
+                                        <input type="number" class="form-control" id="i_xx" step="0.01" placeholder="Ixx">
+                                        <input type="number" class="form-control" id="i_xy" step="0.01" placeholder="Ixy">
+                                        <input type="number" class="form-control" id="i_xz" step="0.01" placeholder="Ixz">
+                                        <input type="number" class="form-control" id="i_yx" step="0.01" placeholder="Iyx">
+                                        <input type="number" class="form-control" id="i_yy" step="0.01" placeholder="Iyy">
+                                        <input type="number" class="form-control" id="i_yz" step="0.01" placeholder="Iyz">
+                                        <input type="number" class="form-control" id="i_zx" step="0.01" placeholder="Izx">
+                                        <input type="number" class="form-control" id="i_zy" step="0.01" placeholder="Izy">
+                                        <input type="number" class="form-control" id="i_zz" step="0.01" placeholder="Izz">
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">HydRA Results</label>
+                                    <input type="file" class="form-control" id="hydraResults" accept=".zip">
+                                    <small class="text-muted">Upload HydRA results zip file to update hydrodynamic coefficients</small>
+                                </div>
+                                <div class="mb-3">
+                                    <button class="btn btn-primary w-100" id="calculateHydrodynamics">
+                                        <i class="bi bi-calculator"></i> Calculate Hydrodynamics
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Control Surfaces -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="controlSurfaces">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#controlSurfacesCollapse">
+                                Control Surfaces
+                            </button>
+                        </h2>
+                        <div id="controlSurfacesCollapse" class="accordion-collapse collapse" data-bs-parent="#configAccordion">
+                            <div class="accordion-body">
+                                <button class="add-component-btn" id="addControlSurface">
+                                    <i class="bi bi-plus-circle"></i>
+                                    Add Control Surface
+                                </button>
+                                <div class="mb-3">
+                                    <label for="nacaNumber" class="form-label">NACA Profile</label>
+                                    <input type="text" class="form-control" id="nacaNumber" value="0015" pattern="[0-9]{4}">
+                                    <small class="text-muted">4-digit NACA airfoil profile</small>
+                                </div>
+                                <div id="controlSurfacesList"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Thrusters -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="thrusters">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#thrustersCollapse">
+                                Thrusters
+                            </button>
+                        </h2>
+                        <div id="thrustersCollapse" class="accordion-collapse collapse" data-bs-parent="#configAccordion">
+                            <div class="accordion-body">
+                                <button class="add-component-btn" id="addThruster">
+                                    <i class="bi bi-plus-circle"></i>
+                                    Add Thruster
+                                </button>
+                                <div id="thrustersList"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sensors -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="sensors">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sensorsCollapse">
+                                Sensors
+                            </button>
+                        </h2>
+                        <div id="sensorsCollapse" class="accordion-collapse collapse" data-bs-parent="#configAccordion">
+                            <div class="accordion-body">
+                                <button class="add-component-btn" id="addSensor">
+                                    <i class="bi bi-plus-circle"></i>
+                                    Add Sensor
+                                </button>
+                                <div id="sensorsList"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Initial Conditions -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="initialConditions">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#initialConditionsCollapse">
+                                Initial Conditions
+                            </button>
+                        </h2>
+                        <div id="initialConditionsCollapse" class="accordion-collapse collapse" data-bs-parent="#configAccordion">
+                            <div class="accordion-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Initial Velocity [u, v, w, p, q, r]</label>
+                                    <div class="row g-2">
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="init_u" placeholder="u (m/s)" step="0.1">
+                                        </div>
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="init_v" placeholder="v (m/s)" step="0.1">
+                                        </div>
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="init_w" placeholder="w (m/s)" step="0.1">
+                                        </div>
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="init_p" placeholder="p (rad/s)" step="0.01">
+                                        </div>
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="init_q" placeholder="q (rad/s)" step="0.01">
+                                        </div>
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="init_r" placeholder="r (rad/s)" step="0.01">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Initial Position [x, y, z]</label>
+                                    <div class="row g-2">
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="init_x" placeholder="x (m)" step="0.1">
+                                        </div>
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="init_y" placeholder="y (m)" step="0.1">
+                                        </div>
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="init_z" placeholder="z (m)" step="0.1">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Initial Orientation (Quaternion) [w, x, y, z]</label>
+                                    <div class="row g-2">
+                                        <div class="col-3">
+                                            <input type="number" class="form-control" id="init_qw" placeholder="w" step="0.01" value="1">
+                                        </div>
+                                        <div class="col-3">
+                                            <input type="number" class="form-control" id="init_qx" placeholder="x" step="0.01" value="0">
+                                        </div>
+                                        <div class="col-3">
+                                            <input type="number" class="form-control" id="init_qy" placeholder="y" step="0.01" value="0">
+                                        </div>
+                                        <div class="col-3">
+                                            <input type="number" class="form-control" id="init_qz" placeholder="z" step="0.01" value="0">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Simulation Parameters -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="simParams">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#simParamsCollapse">
+                                Simulation Parameters
+                            </button>
+                        </h2>
+                        <div id="simParamsCollapse" class="accordion-collapse collapse" data-bs-parent="#configAccordion">
+                            <div class="accordion-body">
+                                <div class="mb-3">
+                                    <label for="simTime" class="form-label">Simulation Time (s)</label>
+                                    <input type="number" class="form-control" id="simTime" value="100" min="0" step="1">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="timeStep" class="form-label">Time Step (s)</label>
+                                    <input type="number" class="form-control" id="timeStep" value="0.01" min="0.001" step="0.001">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="density" class="form-label">Water Density (kg/m³)</label>
+                                    <input type="number" class="form-control" id="density" value="1025" min="0" step="0.1">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="gravity" class="form-label">Gravity (m/s²)</label>
+                                    <input type="number" class="form-control" id="gravity" value="9.80665" step="0.00001">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">World Size [x, y, z] (m)</label>
+                                    <div class="row g-2">
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="worldSizeX" value="1000" min="0">
+                                        </div>
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="worldSizeY" value="1000" min="0">
+                                        </div>
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="worldSizeZ" value="100" min="0">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">GPS Datum [lat, lon, alt]</label>
+                                    <div class="row g-2">
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="gpsLat" value="12.99300425860631" step="0.000001">
+                                        </div>
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="gpsLon" value="80.23913114094384" step="0.000001">
+                                        </div>
+                                        <div class="col-4">
+                                            <input type="number" class="form-control" id="gpsAlt" value="-87.0" step="0.1">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons mt-3">
+                    <button class="btn btn-success" id="generateYAML">
+                        <i class="bi bi-file-earmark-text"></i> Generate YAML
+                    </button>
+                    <button class="btn btn-primary" id="saveConfig">
+                        <i class="bi bi-save"></i> Save
+                    </button>
+                    <button class="btn btn-secondary" id="loadConfig">
+                        <i class="bi bi-folder2-open"></i> Load
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Content - 3D Viewer -->
+            <div class="col-md-9 main-content">
+                <div class="scene-hierarchy">
+                    <div class="scene-hierarchy-header">
+                        <h5>Scene Hierarchy</h5>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-secondary" id="expandAll" title="Expand All">
+                                <i class="bi bi-arrows-expand"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" id="collapseAll" title="Collapse All">
+                                <i class="bi bi-arrows-collapse"></i>
+                            </button>
+                        </div>
+                        <button class="collapse-btn" id="collapseHierarchy" title="Toggle Panel">
+                            <i class="bi bi-chevron-up"></i>
+                        </button>
+                    </div>
+                    <div class="scene-hierarchy-content" id="sceneHierarchy">
+                        <!-- Scene objects will be listed here -->
+                    </div>
+                </div>
+
+                <div class="model-visibility-controls">
+                    <div class="control-item">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggleSTLVisibility" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span>STL Model</span>
+                    </div>
+                    <div class="control-item">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggleBoxVisibility" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span>Bounding Box</span>
+                    </div>
+                </div>
+
+                <div id="viewer3D"></div>
+                <div class="viewer-controls">
+                    <button class="btn btn-outline-secondary" id="resetCamera" title="Reset Camera View">
+                        <i class="bi bi-camera-video"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary" id="toggleGrid" title="Toggle Grid">
+                        <i class="bi bi-grid-3x3"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary" id="toggleWireframe" title="Toggle Wireframe">
+                        <i class="bi bi-box"></i>
+                    </button>
+                    <div class="btn-group" role="group" aria-label="Model Controls">
+                        <button id="toggleBoxBtn" class="btn btn-outline-secondary active" title="Toggle Bounding Box">
+                            <i class="bi bi-box"></i>
+                        </button>
+                        <button id="toggleSTLBtn" class="btn btn-outline-secondary active" title="Toggle STL Model">
+                            <i class="bi bi-cube"></i>
+                        </button>
+                        <button id="addBCS" class="btn btn-outline-secondary" title="Add Body Center System">
+                            <i class="bi bi-plus-circle"></i> Add Body Center
+                        </button>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-secondary active" id="translateMode" title="Translate (G)">
+                            <i class="bi bi-arrows-move"></i>
+                        </button>
+                        <button class="btn btn-outline-secondary" id="rotateMode" title="Rotate (R)">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </button>
+                        <button class="btn btn-outline-secondary" id="scaleMode" title="Scale (S)">
+                            <i class="bi bi-arrows-angle-expand"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="transform-info">
+                    <div>
+                        Position (m): 
+                        <div class="d-flex gap-2">
+                            <input type="number" id="pos_x" step="0.01" placeholder="X">
+                            <input type="number" id="pos_y" step="0.01" placeholder="Y">
+                            <input type="number" id="pos_z" step="0.01" placeholder="Z">
+                        </div>
+                    </div>
+                    <div>
+                        Rotation (rad): 
+                        <div class="d-flex gap-2">
+                            <input type="number" id="rot_x" step="0.01" placeholder="X">
+                            <input type="number" id="rot_y" step="0.01" placeholder="Y">
+                            <input type="number" id="rot_z" step="0.01" placeholder="Z">
+                        </div>
+                    </div>
+                    <div>
+                        Scale: 
+                        <div class="d-flex gap-2">
+                            <input type="number" id="scale_x" step="0.01" placeholder="X">
+                            <input type="number" id="scale_y" step="0.01" placeholder="Y">
+                            <input type="number" id="scale_z" step="0.01" placeholder="Z">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Calculating hydrodynamics...</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/three-setup.js"></script>
+    <script src="js/vessel-model.js"></script>
+    <script src="js/controls.js"></script>
+    <script src="js/yaml-generator.js"></script>
+    <script src="js/gdf-loader.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html> 

@@ -3,7 +3,6 @@
 import numpy as np
 import yaml
 from class_vessel import Vessel
-from class_waves import Waves
 import module_shared as sh
 from class_vessel_pub_sub_ros2 import Vessel_Pub_Sub
 
@@ -16,7 +15,6 @@ class World():
     gps_datum = None                    # GPS datum for the simulation (read from the inputs.yml file)
     node = None
 
-    waves = None
 
     def __init__(self, world_file=None):
         if world_file is not None:
@@ -24,8 +22,8 @@ class World():
                 world_data = yaml.safe_load(stream)  # content from world_file.yml stored in world_data
             self.process_world_input(world_data)       # parse the world data dictionary to create dictionaries
 
-    def start_vessel_ros_nodes(self):
 
+    def start_vessel_ros_nodes(self):
         for vessel in self.vessels:
             vessel.vessel_node = Vessel_Pub_Sub(vessel_id=vessel.vessel_id)
     
@@ -43,9 +41,6 @@ class World():
                 # Appends the objects of class 'Vessel' to the list 'vessels'
                 self.vessels.append(Vessel(vessel_data=agent, vessel_id=agent_count))
                 agent_count += 1
-
-            if data.get('waves') is not None:
-                self.waves = Waves(data['waves'])
             
             if data.get('density') is not None:
                 sh.rho = data['density']
