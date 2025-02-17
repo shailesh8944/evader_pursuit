@@ -1,9 +1,106 @@
 import numpy as np
+import json
+from ros2_ws.src.mav_simulator.mav_simulator.module_kinematics import Smat
 
 class CalculateHydrodynamics:
     def __init__(self):
         pass
 
+    def _generate_mass_matrix(self,CG,mass,gyration):
+    
+        """Generate the mass matrix"""
+        # Calculate gyration tensor about vessel frame
+        xprdct2 = np.diag(gyration)**2 - Smat(CG)@Smat(CG)
+        
+        # Generate the inertia matrix (3 x 3)using radii of gyration
+        inertia_matrix = xprdct2 * mass
+
+        # Generate the mass matrix
+        mass_matrix = np.zeros((6,6))
+        mass_matrix[0:3][:, 0:3] = mass * np.eye(3)
+        mass_matrix[3:6][:, 3:6] = inertia_matrix
+        mass_matrix[0:3][:, 3:6] = -Smat(CG) * mass
+        mass_matrix[3:6][:, 0:3] = Smat(CG) * mass
+
+        return mass_matrix
+
+    def calculate_added_mass_from_hydra(self, hydra_file):
+        """Calculate added mass coefficients from HydRA data file.
+        
+        Args:
+            hydra_file (str): Path to the HydRA JSON file containing hydrodynamic data
+            
+        Returns:
+            np.ndarray: 6x6 added mass matrix
+        """
+        # Load hydrodynamic data from file
+        with open(hydra_file, 'r') as file:
+            mdict = json.load(file)
+        
+        # Extract arrays from data
+        omg = np.array(mdict['w'])      # Frequency array
+        AM = np.array(mdict['AM'])      # Added mass array
+        BD = np.array(mdict['BD'])      # Damping array
+        M = np.array(mdict['M'])        # Mass matrix
+        C = np.array(mdict['C'])        # Restoring matrix
+
+        # Extract zero-frequency added mass and specific components
+        A_zero = AM[1, :, :, 0, 0]      # Zero frequency added mass
+        A33 = AM[1:, 2, 2, 0, 0]        # Heave added mass
+        A44 = AM[1:, 3, 3, 0, 0]        # Roll added mass
+        A55 = AM[1:, 4, 4, 0, 0]        # Pitch added mass
+
+        # Calculate natural frequencies through iteration
+        # Heave natural frequency
+        wn3_old = 0
+        wn3_new = np.sqrt(C[2, 2] / (M[2, 2] + A33[0]))
+        while np.abs(wn3_old - wn3_new) > 1e-6:
+            wn3_old = wn3_new
+            wn3_new = np.sqrt(C[2, 2] / (M[2, 2] + np.interp(wn3_old, omg[1:], A33)))
+        wn3 = wn3_new
+
+        # Roll natural frequency
+        wn4_old = 0
+        wn4_new = np.sqrt(C[3, 3] / (M[3, 3] + A44[0]))
+        while np.abs(wn4_old - wn4_new) > 1e-6:
+            wn4_old = wn4_new
+            wn4_new = np.sqrt(C[3, 3] / (M[3, 3] + np.interp(wn4_old, omg[1:], A44)))
+        wn4 = wn4_new
+
+        # Pitch natural frequency
+        wn5_old = 0
+        wn5_new = np.sqrt(C[4, 4] / (M[4, 4] + A55[0]))
+        while np.abs(wn5_old - wn5_new) > 1e-6:
+            wn5_old = wn5_new
+            wn5_new = np.sqrt(C[4, 4] / (M[4, 4] + np.interp(wn5_old, omg[1:], A55)))
+        wn5 = wn5_new
+
+        # Interpolate added mass at natural frequencies
+        A33_wn = np.interp(wn3, omg[1:], A33)
+        A44_wn = np.interp(wn4, omg[1:], A44)
+        A55_wn = np.interp(wn5, omg[1:], A55)
+
+        # Construct final added mass matrix (converting from ENU to NED)
+        A = A_zero.copy()
+        A[2:5, 2:5] = np.diag(np.array([A33_wn, A44_wn, A55_wn]))
+
+        B33_wn = np.interp(wn3, omg[1:], BD[1:, 2, 2, 0, 0])
+        B44_wn = np.interp(wn4, omg[1:], BD[1:, 3, 3, 0, 0])
+        B55_wn = np.interp(wn5, omg[1:], BD[1:, 4, 4, 0, 0])
+
+        # Change from ENU to NED
+        A = A_zero
+        R = np.array([
+            [0, 1, 0],
+            [1, 0, 0],
+            [0, 0, -1]
+        ])
+        
+        A[2:5][:, 2:5] = np.diag(np.array([A33_wn, A44_wn, A55_wn]))
+        A[0:3,0:3] = R @ A[0:3,0:3] @ R.T
+        A[3:6,3:6] = R @ A[3:6,3:6] @ R.T
+        return A
+    
     def cross_flow_drag(self):
         Cd_2D = self.hoerner()
         x = self.grid.x_sec

@@ -6,7 +6,7 @@ import sys
 sys.path.append('/workspaces/mavlab/')
 from module_kinematics import Smat, eul_to_rotm, eul_rate_matrix, eul_to_quat
 import module_control as con
-
+from calculate_hydrodynamics import CalculateHydrodynamics
 class Vessel:
     """A class representing a marine vessel with its dynamics.
     
@@ -53,14 +53,14 @@ class Vessel:
         self.CG = vessel_params['geometry']['CG']
         self.gyration = vessel_params['geometry']['gyration']
         
+        hydrodynamics = CalculateHydrodynamics()
+        self.mass_matrix = hydrodynamics._generate_mass_matrix(self.CG,self.mass,self.gyration)
+        self.added_mass_matrix = hydrodynamics.calculate_added_mass_from_hydra(hydrodynamic_data['hydra_file'])
         # Buoyancy parameters
         self.W = self.mass * self.g  # Weight
         self.buoyancy_mass = vessel_params['inertia']['buoyancy_mass']  # Buoyancy force, default to neutral
         self.B = self.buoyancy_mass * self.g  # Buoyancy force, default to neutral
         self.CB = vessel_params['geometry']['CB']  # Center of buoyancy location relative to body frame
-
-        # Generate mass matrix
-        self._generate_mass_matrix()
 
         # Dimensionalization flag
         self.dim_flag = hydrodynamic_data.get('dim_flag', False)
@@ -150,10 +150,10 @@ class Vessel:
             U (float): Characteristic velocity
             
         The dimensionalization follows standard naval architecture practices:
-        - Linear velocity dependent terms: 0.5 * rho * L^2 * U
-        - Angular velocity dependent terms: 0.5 * rho * L^3 * U
-        - Linear acceleration dependent terms: 0.5 * rho * L^3
-        - Angular acceleration dependent terms: 0.5 * rho * L^4
+        - Linear velocity dependent terms (e.g. X_u_u): 0.5 * rho * L^2 * U^2
+        - Angular velocity dependent terms (e.g. Y_r_r): 0.5 * rho * L^4 * U^2
+        - Linear acceleration dependent terms (e.g. X_u_dot): 0.5 * rho * L^3
+        - Angular acceleration dependent terms (e.g. N_r_dot): 0.5 * rho * L^5
         - Control surface dependent terms: 0.5 * rho * L^2 * U^2
         """
         # Skip if coefficients are already dimensional
@@ -167,63 +167,48 @@ class Vessel:
                 continue
                 
             # Split into force direction and components
-            force_dir, components = coeff_name.split('_')
+            parts = coeff_name.split('_')
+            if len(parts) < 3:  # Need at least force direction and two components
+                continue
+                
+            force_dir = parts[0]  # X, Y, Z, K, M, or N
+            components = parts[1:]  # remaining components
             
             # Skip if not a valid force direction
             if force_dir not in self.force_indices:
                 continue
                 
             # Determine the dimensionalization factor based on the components
-            # and force direction
             factor = 0.5 * rho
             
-            # Count the number of velocity components (not counting 'a' for absolute)
-            vel_components = sum(1 for c in components if c in 'uvwpqr')
+            # Base L power depends on force direction (X,Y,Z vs K,M,N)
+            base_L_power = 2 if force_dir in ['X', 'Y', 'Z'] else 4
             
-            # Base factor on force direction (X,Y,Z vs K,M,N)
-            # Moments (K,M,N) get an extra L factor
-            base_L_power = 2 if force_dir in ['X', 'Y', 'Z'] else 3
+            # Check for acceleration terms (dot)
+            is_acceleration = any('dot' in comp for comp in components)
             
-            # Add L factors based on components
-            # Each velocity component adds 1 to L power
-            # Each acceleration component (d) adds 1 more to L power
-            L_power = base_L_power
-            L_power += vel_components
-            if 'd' in components:  # Acceleration term
-                L_power += 1
+            # Adjust L power based on term type
+            if is_acceleration:
+                # Acceleration terms get +1 power for forces, +1 for moments
+                L_power = base_L_power + 1
+            else:
+                # Velocity terms use base power
+                L_power = base_L_power
                 
             # Add L^n factor
             factor *= L**L_power
             
             # Add U factor for velocity-dependent terms (not acceleration)
-            if 'd' not in components:
-                # Each velocity component contributes one U factor
-                factor *= U**vel_components
+            if not is_acceleration:
+                # Quadratic velocity terms get U^2
+                factor *= U**2
                 
             # Special case for control surface coefficients (delta)
-            if 'delta' in components:
+            if any('delta' in comp for comp in components):
                 factor = 0.5 * rho * L**base_L_power * U**2
                 
             # Apply the dimensionalization factor
             setattr(self, coeff_name, coeff_value * factor)
-
-    def _generate_mass_matrix(self):
-    
-        """Generate the mass matrix"""
-        # Calculate gyration tensor about vessel frame
-        self.xprdct2 = np.diag(self.gyration)**2 - Smat(self.CG)@Smat(self.CG)
-        
-        # Generate the inertia matrix (3 x 3)using radii of gyration
-        self.inertia_matrix = self.xprdct2 * self.mass
-
-        # Generate the mass matrix
-        self.mass_matrix = np.zeros((6,6))
-        self.mass_matrix[0:3][:, 0:3] = self.mass * np.eye(3)
-        self.mass_matrix[3:6][:, 3:6] = self.inertia_matrix
-        self.mass_matrix[0:3][:, 3:6] = -Smat(self.CG) * self.mass
-        self.mass_matrix[3:6][:, 0:3] = Smat(self.CG) * self.mass
-
-        #========================================================================
 
     def vessel_ode(self, t, state):
         """Vessel ordinary differential equations.
@@ -272,7 +257,7 @@ class Vessel:
         if not self.ros_flag:
             # Get control surface commands
             if self.control_surface_control_type == 'fixed_rudder':
-                self.delta_c = con.fixed_rudder(t, state, n_control_surfaces, -15.0) #Enter rudder angle here
+                self.delta_c = con.fixed_rudder(t, state, n_control_surfaces, 10.0) #Enter rudder angle here
             elif self.control_surface_control_type == 'switching_rudder':
                 self.delta_c = con.switching_rudder(t, state, n_control_surfaces)
             else:
@@ -294,11 +279,21 @@ class Vessel:
         
         # Calculate mass matrices
         M_RB = self.mass_matrix
-        # M_A = self.added_mass_matrix()
-        M = M_RB 
+        M_A = self.added_mass_matrix
+        C_RB, C_A = self.calculate_coriolis_matrices(vel)
         
+        # Check if added mass is too large compared to rigid body mass
+        if np.any(np.abs(M_A) > 2 * np.abs(M_RB)):
+            M = M_RB  # Ignore added mass if too large
+            C_A = np.zeros_like(C_A)  # Ignore Coriolis added mass if too large
+        else:
+            M = M_RB + M_A
+            
+        # Calculate Coriolis forces
+        F_C = (C_RB + C_A) @ vel
+      
         # Calculate total force vector
-        F = F_hyd + F_control + F_thrust - F_g
+        F = F_hyd + F_control + F_thrust - F_g - F_C
 
         # Calculate velocity derivatives
         state_dot[0:6] = np.linalg.inv(M) @ F
@@ -342,20 +337,6 @@ class Vessel:
                                                           self.nd_max)
         
         return state_dot
-
-    def added_mass_matrix(self):
-        """Calculate the added mass matrix"""
-        # Initialize added mass matrix
-        M_A = np.zeros((6, 6))
-
-        # Calculate added mass matrix
-        M_A[0, 0] = -self.X_ud
-        M_A[1, 1] = -self.Y_vd
-        M_A[1, 5] = -self.Y_rd
-        M_A[5, 1] = -self.N_vd
-        M_A[5, 5] = -self.N_rd
-
-        return M_A
     
     def hydrodynamic_forces(self, vel):
         """Calculate hydrodynamic forces and moments
@@ -376,36 +357,34 @@ class Vessel:
         vel_map = {'u': u, 'v': v, 'w': w, 'p': p, 'q': q, 'r': r}
         
         # Process each hydrodynamic coefficient from the vessel's hydrodynamics dictionary
-        # Example coefficients: X_uau (X-force dependent on u*|u|), Y_vav (Y-force dependent on v*|v|)
+        # Example coefficients: X_u_u (X-force dependent on u*u), Y_v_v (Y-force dependent on v*v)
         for coeff_name, coeff_value in self.hydrodynamics.items():
             # Skip zero coefficients since they won't contribute to forces
             if coeff_value == 0:
                 continue
                 
             # Split coefficient name into force direction and velocity components
-            # e.g., X_uau splits into ['X', 'uau'] where:
+            # e.g., X_u_u splits into ['X', 'u', 'u'] where:
             # - X is the force direction 
-            # - uau indicates multiplication of u * |u|
+            # - u_u indicates multiplication of u * u
             parts = coeff_name.split('_')
-            if len(parts) != 2:
+            if len(parts) < 2:
                 continue
                 
             # Extract force direction (X,Y,Z,K,M,N) and velocity components
-            force_dir, vel_components = parts
+            force_dir = parts[0]
             # Skip if not a valid force direction
             if force_dir not in self.force_indices:
                 continue
                 
             # Calculate the force component by multiplying coefficient with velocity terms
             force = coeff_value
-            for vel_char in vel_components:
+            
+            # Handle velocity components
+            for vel_char in parts[1:]:
                 if vel_char in vel_map:
                     # Multiply by the velocity component (u,v,w,p,q,r)
                     force *= vel_map[vel_char]
-                elif vel_char == 'a':
-                    # 'a' indicates absolute value term
-                    # e.g., in X_uau, multiply by |u| where u is the first velocity component
-                    force *= abs(vel_map[vel_components[0]])
             
             # Add the calculated force to the appropriate component in the force vector
             # using the mapping from force direction to vector index
@@ -413,7 +392,7 @@ class Vessel:
                 
         return F
 
-    def control_forces(self, delta):
+    def control_forces(self, delta, stall_angle=15, Cl=None, Cd=None):
         """Calculate control forces and moments
         
         Args:
@@ -476,7 +455,7 @@ class Vessel:
             surface_delta = delta[surface_id - 1]  # Subtract 1 since IDs start at 1
             
             # Calculate effective angle of attack
-            alpha = np.arctan2(V_surface[2], V_surface[0]) - surface_delta
+            alpha = np.arctan2(V_surface[2], V_surface[0]) + surface_delta
             V_mag = np.sqrt(V_surface[0]**2 + V_surface[2]**2)
             
             # Calculate dynamic pressure
@@ -484,16 +463,17 @@ class Vessel:
             
             # Check if angle of attack is near vertical
             # stall condition
-            if abs(np.rad2deg(alpha)) > 20:
-                L = 0.0
-                D = 0.0  # Ignore drag at high angles of attack
+            if abs(np.rad2deg(alpha)) > stall_angle:
+                L = 0.0 #Lift is zero at stall
+                D = q_dyn * 0.1  # Use a high drag coefficient (~1.2) for stalled flat plate
             else:
                 # Normal operation - calculate both lift and drag
-                alpha_deg = np.clip(np.rad2deg(alpha), 
-                                  self.naca_data['Alpha'].min(), 
-                                  self.naca_data['Alpha'].max())
-                Cl = np.interp(alpha_deg, self.naca_data['Alpha'], self.naca_data['Cl'])
-                Cd = np.interp(alpha_deg, self.naca_data['Alpha'], self.naca_data['Cd'])
+                if Cl is None or Cd is None:
+                    alpha_deg = np.clip(np.rad2deg(alpha), 
+                                      self.naca_data['Alpha'].min(), 
+                                      self.naca_data['Alpha'].max())
+                    Cl = np.interp(alpha_deg, self.naca_data['Alpha'], self.naca_data['Cl'])
+                    Cd = np.interp(alpha_deg, self.naca_data['Alpha'], self.naca_data['Cd'])
                 L = q_dyn * Cl
                 D = q_dyn * Cd
             # Force vector in surface frame
@@ -619,3 +599,49 @@ class Vessel:
         ])
 
         return g
+
+    def calculate_coriolis_matrices(self, vel):
+        """Calculate rigid-body and added mass Coriolis-centripetal matrices.
+        
+        Args:
+            vel (np.ndarray): 6x1 velocity vector [u, v, w, p, q, r]
+            
+        Returns:
+            tuple: (C_RB, C_A) where:
+                - C_RB is the 6x6 rigid-body Coriolis-centripetal matrix
+                - C_A is the 6x6 added mass Coriolis-centripetal matrix
+        """
+        # Split velocity vector into linear and angular components
+        v1 = vel[0:3]  # Linear velocities [u, v, w]
+        v2 = vel[3:6]  # Angular velocities [p, q, r]
+        
+        # Split mass matrix into blocks
+        M_RB = self.mass_matrix
+        M11  = M_RB[0:3, 0:3]
+        M12  = M_RB[0:3, 3:6]
+        M21  = M_RB[3:6, 0:3]
+        M22  = M_RB[3:6, 3:6]
+        
+        # Calculate rigid-body Coriolis matrix
+        C_RB = np.zeros((6, 6))
+        C_RB[0:3, 3:6] = -Smat(M11 @ v1 + M12 @ v2)
+        C_RB[3:6, 0:3] = -Smat(M11 @ v1 + M12 @ v2)
+        C_RB[3:6, 3:6] = -Smat(M21 @ v1 + M22 @ v2)
+        
+        # Split added mass matrix into blocks
+        M_A = self.added_mass_matrix
+        A11 = M_A[0:3, 0:3]
+        A12 = M_A[0:3, 3:6]
+        A21 = M_A[3:6, 0:3]
+        A22 = M_A[3:6, 3:6]
+        
+        # Calculate added mass Coriolis matrix
+        C_A = np.zeros((6, 6))
+        C_A[0:3, 3:6] = -Smat(A11 @ v1 + A12 @ v2)
+        C_A[3:6, 0:3] = -Smat(A11 @ v1 + A12 @ v2)
+        C_A[3:6, 3:6] = -Smat(A21 @ v1 + A22 @ v2)
+        
+        return C_RB, C_A
+
+
+    

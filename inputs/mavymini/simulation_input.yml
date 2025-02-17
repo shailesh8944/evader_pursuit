@@ -1,12 +1,12 @@
 #Simulation Specific Inputs
-sim_time: 20
+sim_time: 5
 time_step: 0.01
 density: 1000
 gravity: 9.80665
 world_size: [100, 100, Inf]
 gps_datum: [12.99300425860631, 80.23913114094384, -87.0]
 
-
+# Add geofencing
 nagents: 1
 agents:
   -
