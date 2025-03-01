@@ -6,7 +6,7 @@ if [ $# -eq 0 ]
     cmd=$1
 fi
 
-docker run -it --rm --privileged --name jetson_docker \
+docker run -it --rm --privileged --name mavlabsim \
     --net=host \
     --env="DISPLAY" \
     --env="ROS_DOMAIN_ID=42" \

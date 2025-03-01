@@ -10,7 +10,7 @@ def simulate() -> NoReturn:
     """Run vessel simulation using parameters from input files."""
     # Read input files and create vessel
     sim_params, vessel_configs, hydrodynamic_data = read_input("/workspaces/mavlab/inputs/mavymini/simulation_input.yml")
-    vessel = Vessel(vessel_configs[0], hydrodynamic_data[0])
+    vessel = Vessel(vessel_configs[0], hydrodynamic_data[0], vessel_id=0)
     
     print("\nStarting simulation...")
     print("Time [s] | Position [x, y, z] | Velocity [u, v, w]")

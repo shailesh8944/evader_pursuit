@@ -41,7 +41,7 @@ def read_input(input_file: str = None) -> Tuple[Dict, List[Dict]]:
     Returns:
         Tuple containing:
             sim_params (Dict): Global simulation parameters
-            vessel_configs (List[Dict]): List of vessel configurations
+            agents (List[Dict]): List of agents, each containing vessel config and hydrodynamics
     """    
     base_path = str(Path(input_file).parent.parent)
     sim_config = load_yaml(input_file)
@@ -54,12 +54,13 @@ def read_input(input_file: str = None) -> Tuple[Dict, List[Dict]]:
         'gravity': sim_config.get('gravity', 9.80665),
         'world_size': sim_config.get('world_size', [100, 100, float('inf')]),
         'gps_datum': sim_config.get('gps_datum', [0, 0, 0]),
-        'nagents': sim_config.get('nagents', 1)
+        'nagents': sim_config.get('nagents', 1),
+        'geofence': sim_config.get('geofence', [])
     }
     
     # Process each vessel's configuration
-    vessel_configs = []
-    hydrodynamic_data = []
+    agents = []
+    
     for agent in sim_config.get('agents', []):
         vessel_name = agent['name']
         vessel_config = {
@@ -82,24 +83,27 @@ def read_input(input_file: str = None) -> Tuple[Dict, List[Dict]]:
             'gravity': sim_params['gravity']
         })
         
-        vessel_configs.append(vessel_config)
-        if 'hydrodynamics' in vessel_config:
-            hydrodynamic_data.append(vessel_config['hydrodynamics'])
-        else:
-            hydrodynamic_data.append({})
+        # Create agent dictionary with vessel config and hydrodynamics
+        agent_data = {
+            'vessel_config': vessel_config,
+            'hydrodynamics': vessel_config.get('hydrodynamics', {})
+        }
+        agents.append(agent_data)
             
-    return sim_params, vessel_configs, hydrodynamic_data
+    return sim_params, agents
 
 if __name__ == "__main__":
     # Example usage
     input_file = input("Please enter the path to the input file: ")
-    sim_params, vessel_configs, hydrodynamic_data = read_input(input_file)
+    sim_params, agents = read_input(input_file)
     print("Simulation parameters:")
     print(sim_params)
-    print("\nVessel configurations:")
-    for config in vessel_configs:
-        print(f"\nVessel: {config['name']}")
-        print(f"Initial position: {config.get('initial_position')}")
-        print(f"Initial velocity: {config.get('initial_velocity')}")
-        print(f"Control surfaces: {len(config.get('control_surfaces', []))}")
-        print(f"Thrusters: {len(config.get('thrusters', []))}")
+    print("\nAgents:")
+    for agent in agents:
+        vessel_config = agent['vessel_config']
+        print(f"\nVessel: {vessel_config['name']}")
+        print(f"Initial position: {vessel_config.get('initial_position')}")
+        print(f"Initial velocity: {vessel_config.get('initial_velocity')}")
+        print(f"Control surfaces: {len(vessel_config.get('control_surfaces', []))}")
+        print(f"Thrusters: {len(vessel_config.get('thrusters', []))}")
+        print(f"Has hydrodynamics data: {bool(agent['hydrodynamics'])}")

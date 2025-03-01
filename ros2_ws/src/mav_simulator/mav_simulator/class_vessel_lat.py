@@ -7,6 +7,7 @@ sys.path.append('/workspaces/mavlab/')
 from module_kinematics import Smat, eul_to_rotm, eul_rate_matrix, eul_to_quat
 import module_control as con
 from calculate_hydrodynamics import CalculateHydrodynamics
+
 class Vessel:
     """A class representing a marine vessel with its dynamics.
     
@@ -26,7 +27,7 @@ class Vessel:
         >>> vessel.simulate()
     """
     
-    def __init__(self, vessel_params: Dict, hydrodynamic_data: Dict, ros_flag: bool = False):
+    def __init__(self, vessel_params: Dict, hydrodynamic_data: Dict, vessel_id: int, ros_flag: bool = False):
         """Initialize vessel with parameters and hydrodynamic data.
         
         Args:
@@ -34,6 +35,7 @@ class Vessel:
             hydrodynamic_data: Dictionary containing hydrodynamic coefficients
         """
 
+        self.vessel_id = vessel_id
         # ROS flag
         self.ros_flag = ros_flag
 
@@ -288,7 +290,7 @@ class Vessel:
             C_A = np.zeros_like(C_A)  # Ignore Coriolis added mass if too large
         else:
             M = M_RB + M_A
-            
+
         # Calculate Coriolis forces
         F_C = (C_RB + C_A) @ vel
       
@@ -642,6 +644,3 @@ class Vessel:
         C_A[3:6, 3:6] = -Smat(A21 @ v1 + A22 @ v2)
         
         return C_RB, C_A
-
-
-    

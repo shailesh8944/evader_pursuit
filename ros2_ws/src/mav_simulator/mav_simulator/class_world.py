@@ -2,11 +2,22 @@
 
 import numpy as np
 import yaml
-from class_vessel import Vessel
-import module_shared as sh
+from class_vessel_lat import Vessel
 from class_vessel_pub_sub_ros2 import Vessel_Pub_Sub
+from read_input import read_input
 
 class World():
+    """
+    A class representing the simulation world containing multiple vessels.
+
+    Attributes:
+        terminate (bool): Flag indicating whether the world simulation is terminated
+        vessels (list): List of Vessel objects in the world
+        nvessels (int): Number of vessels in the world
+        size (numpy.ndarray): Size of the world in X-Y-Z dimensions
+        gps_datum (numpy.ndarray): GPS reference point for the simulation
+        node: ROS2 node reference
+    """
 
     terminate = False                   # variable to note whether world is terminated
     vessels = []                        # list to store objects of class 'Vessel'
@@ -17,42 +28,62 @@ class World():
 
 
     def __init__(self, world_file=None):
-        if world_file is not None:
-            with open(world_file) as stream:
-                world_data = yaml.safe_load(stream)  # content from world_file.yml stored in world_data
-            self.process_world_input(world_data)       # parse the world data dictionary to create dictionaries
+        """
+        Initialize the World object.
 
+        Args:
+            world_file (str, optional): Path to the YAML file containing world configuration.
+                                      If provided, loads and processes the world data.
+        """
+        if world_file is not None:
+            self.process_world_input(world_file)       # parse the world data dictionary to create dictionaries
 
     def start_vessel_ros_nodes(self):
+        """
+        Initialize ROS2 nodes for all vessels in the world.
+        Creates a Vessel_Pub_Sub node for each vessel with their respective IDs.
+        """
         for vessel in self.vessels:
             vessel.vessel_node = Vessel_Pub_Sub(vessel_id=vessel.vessel_id)
-    
-    def process_world_input(self, data=None):
-        
+   
+    def process_world_input(self, world_file=None):
+        """
+        Process the world configuration data from the YAML file.
+
+        Args:
+            data (dict, optional): Dictionary containing world configuration parameters including:
+                - world_size: X-Y-Z dimensions of the world
+                - time_step: Simulation time step
+                - nagents: Number of vessels/agents
+                - gps_datum: GPS reference coordinates
+                - agents: List of vessel configurations
+                - density: Optional fluid density
+                - gravity: Optional gravity value
+
+        Raises:
+            yaml.YAMLError: If there's an error in parsing the YAML data
+        """
         try:
-            self.size = np.array(data['world_size'])
-            sh.current_time = 0
-            sh.dt = data['time_step']
-            self.nvessels = data['nagents']
-            self.gps_datum = np.array(data['gps_datum'])
+            sim_params, agents = read_input(world_file)
+            self.size = np.array(sim_params['world_size'])
+            self.nvessels = sim_params['nagents']
+            self.gps_datum = np.array(sim_params['gps_datum'])
             agent_count = 0
             
-            for agent in data['agents'][0:self.nvessels]:
-                # Appends the objects of class 'Vessel' to the list 'vessels'
-                self.vessels.append(Vessel(vessel_data=agent, vessel_id=agent_count))
+            for agent in agents[0:self.nvessels]:
+                vessel_config = agent['vessel_config']
+                hydrodynamic_data = agent['hydrodynamics']
+                self.vessels.append(Vessel(vessel_config=vessel_config, hydrodynamic_data=hydrodynamic_data, vessel_id=agent_count))
                 agent_count += 1
-            
-            if data.get('density') is not None:
-                sh.rho = data['density']
-            
-            if data.get('gravity') is not None:
-                sh.g = data['gravity']
 
         except yaml.YAMLError as exc:
             print(exc)
             exit()
 
     def step(self):
+        """
+        Advance the simulation by one time step.
+        Updates the state of all vessels and increments the current simulation time.
+        """
         for vessel in self.vessels:
             vessel.step()
-        sh.current_time += sh.dt
