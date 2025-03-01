@@ -25,6 +25,7 @@ class World():
     size = np.zeros(3)                  # Initialization of Size of the world (X-Y-Z)
     gps_datum = None                    # GPS datum for the simulation (read from the inputs.yml file)
     node = None
+    dt = 0.01
 
 
     def __init__(self, world_file=None):
@@ -38,13 +39,13 @@ class World():
         if world_file is not None:
             self.process_world_input(world_file)       # parse the world data dictionary to create dictionaries
 
-    def start_vessel_ros_nodes(self):
+    def start_vessel_ros_nodes(self,world_node):
         """
         Initialize ROS2 nodes for all vessels in the world.
         Creates a Vessel_Pub_Sub node for each vessel with their respective IDs.
         """
         for vessel in self.vessels:
-            vessel.vessel_node = Vessel_Pub_Sub(vessel_id=vessel.vessel_id)
+            vessel.vessel_node = Vessel_Pub_Sub(vessel,world_node)
    
     def process_world_input(self, world_file=None):
         """
@@ -69,11 +70,12 @@ class World():
             self.nvessels = sim_params['nagents']
             self.gps_datum = np.array(sim_params['gps_datum'])
             agent_count = 0
+            self.dt = sim_params['time_step']
             
             for agent in agents[0:self.nvessels]:
                 vessel_config = agent['vessel_config']
                 hydrodynamic_data = agent['hydrodynamics']
-                self.vessels.append(Vessel(vessel_config=vessel_config, hydrodynamic_data=hydrodynamic_data, vessel_id=agent_count))
+                self.vessels.append(Vessel(vessel_params=vessel_config, hydrodynamic_data=hydrodynamic_data, vessel_id=agent_count))
                 agent_count += 1
 
         except yaml.YAMLError as exc:

@@ -26,8 +26,10 @@ class Vessel:
         >>> vessel = Vessel(vessel_params, hydro_data)
         >>> vessel.simulate()
     """
+
+    vessel_node = None
     
-    def __init__(self, vessel_params: Dict, hydrodynamic_data: Dict, vessel_id: int, ros_flag: bool = False):
+    def __init__(self, vessel_params: Dict, hydrodynamic_data: Dict, vessel_id: int, ros_flag: bool = True):
         """Initialize vessel with parameters and hydrodynamic data.
         
         Args:
@@ -35,7 +37,11 @@ class Vessel:
             hydrodynamic_data: Dictionary containing hydrodynamic coefficients
         """
 
+        self.vessel_config = vessel_params
+        self.vessel_name = vessel_params['name']
         self.vessel_id = vessel_id
+
+        self.gps_datum = vessel_params['gps_datum']
         # ROS flag
         self.ros_flag = ros_flag
 
@@ -119,6 +125,9 @@ class Vessel:
         ])
         
         self.initial_state = self.current_state.copy()
+        
+        # Initialize state derivative vector
+        self.current_state_der = np.zeros_like(self.current_state)
         
         # Store total state size for history allocation
         self.state_size = len(self.current_state)
@@ -550,6 +559,10 @@ class Vessel:
         """Step the vessel forward in time"""        
         sol = solve_ivp(self.vessel_ode, [self.t, self.t + self.dt], self.current_state, method='RK45')        
         self.current_state = sol.y[:, -1]
+        
+        # Calculate state derivative at new state
+        self.current_state_der = self.vessel_ode(self.t + self.dt, self.current_state)
+        
         self.t = sol.t[-1]
 
         # Store current state in history

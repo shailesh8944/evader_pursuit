@@ -4,22 +4,22 @@ from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, PointCloud2, Image, LaserScan, NavSatFix, NavSatStatus
 from geometry_msgs.msg import Point, Vector3, Pose, Quaternion, Twist, PoseWithCovarianceStamped
-from interfaces.msg import Actuator
-import module_shared as sh
+# from interfaces.msg import Actuator
 import module_kinematics as kin
 
 class BaseSensor:
-    def __init__(self, sensor_config, vessel_id, topic_prefix):
+    def __init__(self, sensor_config, vessel_id, topic_prefix, vessel_node):
         self.vessel_id = vessel_id
         self.topic_prefix = topic_prefix
         self.sensor_type = sensor_config['sensor_type']
         self.rate = sensor_config['publish_rate']
-        self.topic = sensor_config['topic']
+        self.topic = None
         self.id = sensor_config.get('id', 0)
+        self.vessel_node = vessel_node
 
 class IMUSensor(BaseSensor):
-    def __init__(self, sensor_config, vessel_id, topic_prefix):
-        super().__init__(sensor_config, vessel_id, topic_prefix)
+    def __init__(self, sensor_config, vessel_id, topic_prefix, vessel_node):
+        super().__init__(sensor_config, vessel_id, topic_prefix, vessel_node)
         self.location = np.array(sensor_config['sensor_location'])
         self.orientation = np.array(sensor_config['sensor_orientation'])
         
@@ -31,12 +31,12 @@ class IMUSensor(BaseSensor):
         self.lin_acc_rms = np.array([1, 1, 1]) * 1.5e-1
         self.lin_acc_cov = np.diag(self.lin_acc_rms ** 2)
 
-    def get_measurement(self):
-        state = sh.world.vessels[self.vessel_id].current_state
-        state_der = sh.world.vessels[self.vessel_id].current_state_der
+    def get_measurement(self,quat=False):
+        state = self.vessel_node.vessel.current_state
+        state_der = self.vessel_node.vessel.current_state_der
         
         # Handle both quaternion and euler angle inputs
-        if hasattr(self, 'quat') and not self.quat:
+        if quat:
             # Convert euler angles to quaternion
             eul = state[9:12]
             quat = kin.eul_to_quat(eul)
@@ -56,7 +56,7 @@ class IMUSensor(BaseSensor):
         acc_bcs = state_der[0:3] + np.cross(omg_bcs, v_bcs)
         acc_s_bcs = acc_bcs + np.cross(alpha, self.location) + np.cross(omg_bcs, np.cross(omg_bcs, self.location))
         acc_sensor = kin.quat_to_rotm(orientation_quat).T @ acc_s_bcs
-        acc_sensor = acc_sensor + kin.quat_to_rotm(q_sensor).T @ np.array([0, 0, -sh.g])
+        acc_sensor = acc_sensor + kin.quat_to_rotm(q_sensor).T @ np.array([0, 0, -self.vessel_node.vessel.g])
         acc_sensor = acc_sensor + np.random.multivariate_normal(np.zeros(3), self.lin_acc_cov)
 
         omg_sensor = kin.quat_to_rotm(orientation_quat).T @ omg_bcs
@@ -72,8 +72,8 @@ class IMUSensor(BaseSensor):
         }
 
 class GPSSensor(BaseSensor):
-    def __init__(self, sensor_config, vessel_id, topic_prefix):
-        super().__init__(sensor_config, vessel_id, topic_prefix)
+    def __init__(self, sensor_config, vessel_id, topic_prefix, vessel_node):
+        super().__init__(sensor_config, vessel_id, topic_prefix, vessel_node)
         self.location = np.array(sensor_config['sensor_location'])
         
         # Noise parameters
@@ -81,8 +81,8 @@ class GPSSensor(BaseSensor):
         self.gps_cov = np.diag(self.gps_rms ** 2)
 
     def get_measurement(self):
-        state = sh.world.vessels[self.vessel_id].current_state
-        llh0 = sh.world.gps_datum
+        state = self.vessel_node.vessel.current_state
+        llh0 = self.vessel_node.vessel.gps_datum
         ned = state[6:9] + kin.quat_to_rotm(state[9:13]) @ self.location
         ned = ned + np.random.multivariate_normal(np.zeros(3), self.gps_cov)
         llh = kin.ned_to_llh(ned, llh0)
@@ -95,8 +95,8 @@ class GPSSensor(BaseSensor):
         }
 
 class UWBSensor(BaseSensor):
-    def __init__(self, sensor_config, vessel_id, topic_prefix):
-        super().__init__(sensor_config, vessel_id, topic_prefix)
+    def __init__(self, sensor_config, vessel_id, topic_prefix, vessel_node):
+        super().__init__(sensor_config, vessel_id, topic_prefix, vessel_node)
         self.location = np.array(sensor_config['sensor_location'])
         
         # Noise parameters
@@ -106,7 +106,7 @@ class UWBSensor(BaseSensor):
         self.uwb_cov_full[0:3][:, 0:3] = self.uwb_cov
 
     def get_measurement(self):
-        state = sh.world.vessels[self.vessel_id].current_state
+        state = self.vessel_node.vessel.current_state
         ned = state[6:9]
         r_sen = ned + kin.quat_to_rotm(state[9:13]) @ self.location
         r_sen = r_sen + np.random.multivariate_normal(np.zeros(3), self.uwb_cov)
@@ -117,15 +117,15 @@ class UWBSensor(BaseSensor):
         }
 
 class EncoderSensor(BaseSensor):
-    def __init__(self, sensor_config, vessel_id, topic_prefix):
-        super().__init__(sensor_config, vessel_id, topic_prefix)
+    def __init__(self, sensor_config, vessel_id, topic_prefix, vessel_node):
+        super().__init__(sensor_config, vessel_id, topic_prefix, vessel_node)
         
         # Noise parameters
         self.encoders_rms = np.array([1e-1 * np.pi / 180, 1e-1 / 60])
         self.encoders_cov = np.diag(self.encoders_rms ** 2)
 
     def get_measurement(self):
-        state = sh.world.vessels[self.vessel_id].current_state
+        state = self.vessel_node.vessel.current_state
         
         return {
             'rudder': state[13] * 180.0 / np.pi,
@@ -133,17 +133,38 @@ class EncoderSensor(BaseSensor):
             'covariance': self.encoders_cov.flatten()
         }
 
-def create_sensor(sensor_config, vessel_id, topic_prefix):
+class DVLSensor(BaseSensor):
+    def __init__(self, sensor_config, vessel_id, topic_prefix, vessel_node):
+        super().__init__(sensor_config, vessel_id, topic_prefix, vessel_node)
+        
+        # Noise parameters - typical DVL has accuracy of ~0.2-1% of measured velocity
+        self.vel_rms = np.array([0.05, 0.05, 0.05])  # 5cm/s RMS noise in each axis
+        self.vel_cov = np.diag(self.vel_rms ** 2)
+
+    def get_measurement(self):
+        state = self.vessel_node.vessel.current_state
+        
+        # Get body-frame velocity and add noise
+        v_body = state[0:3]
+        v_body_noisy = v_body + np.random.multivariate_normal(np.zeros(3), self.vel_cov)
+        
+        return {
+            'velocity': v_body_noisy,
+            'covariance': self.vel_cov.flatten()
+        }
+
+def create_sensor(sensor_config, vessel_id, topic_prefix, vessel_node):
     """Factory function to create appropriate sensor object based on sensor type"""
     sensor_type = sensor_config['sensor_type']
     sensor_classes = {
         'IMU': IMUSensor,
         'GPS': GPSSensor,
         'UWB': UWBSensor,
-        'encoders': EncoderSensor
+        'encoders': EncoderSensor,
+        'DVL': DVLSensor
     }
     
     if sensor_type not in sensor_classes:
         raise ValueError(f"Unknown sensor type: {sensor_type}")
         
-    return sensor_classes[sensor_type](sensor_config, vessel_id, topic_prefix) 
+    return sensor_classes[sensor_type](sensor_config, vessel_id, topic_prefix, vessel_node) 

@@ -80,7 +80,8 @@ def read_input(input_file: str = None) -> Tuple[Dict, List[Dict]]:
             'sim_time': sim_params['sim_time'],
             'time_step': sim_params['time_step'],
             'density': sim_params['density'],
-            'gravity': sim_params['gravity']
+            'gravity': sim_params['gravity'],
+            'gps_datum': sim_params['gps_datum']
         })
         
         # Create agent dictionary with vessel config and hydrodynamics

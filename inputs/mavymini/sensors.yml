@@ -11,8 +11,8 @@ sensors:
     sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
     publish_rate: 1
    
-  - 
-    sensor_type: DVL
-    sensor_location: [1.0, 0.01, 0.015]         # With respect to BODY frame
-    sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
-    publish_rate: 1
+  # - 
+  #   sensor_type: DVL
+  #   sensor_location: [1.0, 0.01, 0.015]         # With respect to BODY frame
+  #   sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
+  #   publish_rate: 1
