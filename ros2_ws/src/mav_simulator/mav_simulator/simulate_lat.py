@@ -4,14 +4,13 @@ import sys
 sys.path.append('/workspaces/mavlab/')
 
 from read_input import read_input
-from class_vessel_lat import Vessel
+from ros2_ws.src.mav_simulator.mav_simulator.class_vessel import Vessel
 
 def simulate() -> NoReturn:
     """Run vessel simulation using parameters from input files."""
     # Read input files and create vessel
-    sim_params, vessel_configs, hydrodynamic_data = read_input("/workspaces/mavlab/inputs/mavymini/simulation_input.yml")
-    vessel = Vessel(vessel_configs[0], hydrodynamic_data[0], vessel_id=0)
-    
+    sim_params, agents = read_input("/workspaces/mavlab/inputs/mavymini/simulation_input.yml")
+    vessel = Vessel(agents[0]['vessel_config'], agents[0]['hydrodynamics'], vessel_id=0, ros_flag=False)
     print("\nStarting simulation...")
     print("Time [s] | Position [x, y, z] | Velocity [u, v, w]")
     print("-" * 60)

@@ -1,932 +1,662 @@
+from typing import Dict, Optional, List
 import numpy as np
-import yaml, json
-import module_kinematics as kin
-import module_dynamics as dyn
-import module_shared as sh
-from class_grid import Grid
 from scipy.integrate import solve_ivp
+import pandas as pd
+import sys
+sys.path.append('/workspaces/mavlab/')
+from module_kinematics import Smat, eul_to_rotm, eul_rate_matrix, eul_to_quat
+import module_control as con
+from calculate_hydrodynamics import CalculateHydrodynamics
 
-class Vessel():
-
-    name = None                # Name of the vessel (determines the ode to be used for the vessel object)
-    vessel_id = None           # ID for the vessel object
-    scale = 1                                 
-    rho = 1000
-    g = 9.80665
-    start_velocity = np.zeros(3)
-    start_angular_velocity = np.zeros(3)
-    start_location = np.zeros(3)
-    start_orientation = np.zeros(4)
-    start_rudder_cmd = 0.0
-    start_propeller_cmd = 0.0    
-    start_upper_rudder_cmd = 0.0
-    start_lower_rudder_cmd = 0.0
-    start_stern_fin_left_cmd = 0.0
-    start_stern_fin_right_cmd = 0.0
-    start_bow_fin_left_cmd = 0.0
-    start_bow_fin_right_cmd = 0.0
+class Vessel:
+    """A class representing a marine vessel with its dynamics.
     
-    dt = 0.1                   # Initialization of dt. Ideally we should set the value of dt for the world itself
-    ode = None                 # Will be a function imported from module_dynamics
-    ode_options = None
+    Attributes:
+        g (float): Gravitational acceleration
+        rho (float): Water density
+        L (float): Vessel length
+        U (float): Forward speed
+        mass (float): Vessel mass
+        cg (np.ndarray): Center of gravity coordinates
+        ...
+    
+    Example:
+        >>> vessel_params = {...}  # vessel parameters
+        >>> hydro_data = {...}     # hydrodynamic coefficients
+        >>> vessel = Vessel(vessel_params, hydro_data)
+        >>> vessel.simulate()
+    """
 
     vessel_node = None
-    current_state = None
-    current_state_der = None
-
-    U_des = None
-    Fn = 0.0
-    length = 0.0
-
-    grid = None
-    sensors = []
-
-    waypoints = None
-    waypoints_type = None
-
-    guidance = None
-    control = None
-
-    euler_angle_flag = True
-    kinematic_kf_flag = False
-
-    mmg_flag = False
+    delta_c = None
+    n_c = None
     
-    def __init__(self, vessel_data, vessel_id=None):
+    def __init__(self, vessel_params: Dict, hydrodynamic_data: Dict, vessel_id: int, ros_flag: bool = True):
+        """Initialize vessel with parameters and hydrodynamic data.
+        
+        Args:
+            vessel_params: Dictionary containing vessel parameters
+            hydrodynamic_data: Dictionary containing hydrodynamic coefficients
+        """
 
+        self.vessel_config = vessel_params
+        self.vessel_name = vessel_params['name']
         self.vessel_id = vessel_id
 
-        if isinstance(vessel_data, str):
-            with open(vessel_data) as stream:
-                vessel_data_yaml = yaml.safe_load(stream)
-            self.process_vessel_input(vessel_data_yaml)
-        else:
-            self.process_vessel_input(vessel_data)
+        self.gps_datum = vessel_params['gps_datum']
+        # ROS flag
+        self.ros_flag = ros_flag
+
+        # Force direction mapping
+        self.force_indices = {'X': 0, 'Y': 1, 'Z': 2, 'K': 3, 'M': 4, 'N': 5}
+
+        # Base vessel parameters
+        self.g = vessel_params['gravity']
+        self.rho = vessel_params['density'] 
+        self.L = vessel_params['geometry']['length']
+        self.B = vessel_params['geometry']['breadth'] 
+        self.D = vessel_params['geometry']['depth']
+        self.U = vessel_params.get('U', 0.0)  # Default to 0 if not specified
         
-        current_state = []
-        current_state.extend(self.start_velocity.tolist())
-        current_state.extend(self.start_angular_velocity.tolist())
-        current_state.extend(self.start_location.tolist())
-        current_state.extend(self.start_orientation.tolist())
-        # For MAVYMINI: 6 control surfaces + 1 propeller
-        if self.name == 'mavymini':
-            current_state.extend([
-                self.start_upper_rudder_cmd,      # Upper rudder
-                self.start_lower_rudder_cmd,      # Lower rudder
-                self.start_stern_fin_left_cmd,    # Left stern fin
-                self.start_stern_fin_right_cmd,   # Right stern fin
-                self.start_bow_fin_left_cmd,      # Left bow fin
-                self.start_bow_fin_right_cmd,     # Right bow fin
-                self.start_propeller_cmd          # Propeller
-            ])
-        else:
-            current_state.extend([self.start_rudder_cmd, self.start_propeller_cmd])
+        # Mass parameters
+        self.mass = vessel_params['inertia']['mass']
+        self.CG = vessel_params['geometry']['CG']
+        self.gyration = vessel_params['geometry']['gyration']
         
-        self.current_state = np.array(current_state)
-        self.current_state_der = np.zeros(len(current_state))
-    
-    def process_vessel_input(self, data=None):
+        hydrodynamics = CalculateHydrodynamics()
+        self.mass_matrix = hydrodynamics._generate_mass_matrix(self.CG,self.mass,self.gyration)
+        self.added_mass_matrix = hydrodynamics.calculate_added_mass_from_hydra(hydrodynamic_data['hydra_file'])
+        # Buoyancy parameters
+        self.W = self.mass * self.g  # Weight
+        self.buoyancy_mass = vessel_params['inertia']['buoyancy_mass']  # Buoyancy force, default to neutral
+        self.B = self.buoyancy_mass * self.g  # Buoyancy force, default to neutral
+        self.CB = vessel_params['geometry']['CB']  # Center of buoyancy location relative to body frame
+
+        # Dimensionalization flag
+        self.dim_flag = hydrodynamic_data.get('dim_flag', False)
+
+        # Initialize hydrodynamics dictionary
+        self.hydrodynamics = {}
         
-        self.name = data['name']
+        # Extract hydrodynamic coefficients
+        # Dynamically set hydrodynamic coefficients from data
+        for coeff_name, coeff_value in hydrodynamic_data.items():
+            if coeff_name != 'dim_flag':  # Skip the dimensionalization flag
+                # Store in the hydrodynamics dictionary
+                self.hydrodynamics[coeff_name] = coeff_value
+                # Also set as attribute for backward compatibility
+                setattr(self, coeff_name, coeff_value)
 
-        if 'start_velocity' in list(data.keys()):
-            self.start_velocity = np.array(data['start_velocity'])
-        if 'start_angular_velocity' in list(data.keys()):
-            self.start_angular_velocity = np.array(data['start_angular_velocity'])
-
-        self.start_location = np.array(data['start_location'])
-        start_orientation_euler = data['start_orientation']
-        self.start_orientation = kin.eul_to_quat(start_orientation_euler)
-
-        if 'start_upper_rudder_cmd' in list(data.keys()):
-            self.start_upper_rudder_cmd = data['start_upper_rudder_cmd']
-        if 'start_lower_rudder_cmd' in list(data.keys()):
-            self.start_lower_rudder_cmd = data['start_lower_rudder_cmd']
-        if 'start_stern_fin_left_cmd' in list(data.keys()):
-            self.start_stern_fin_left_cmd = data['start_stern_fin_left_cmd']
-        if 'start_stern_fin_right_cmd' in list(data.keys()):
-            self.start_stern_fin_right_cmd = data['start_stern_fin_right_cmd']
-        if 'start_bow_fin_left_cmd' in list(data.keys()):
-            self.start_bow_fin_left_cmd= data['start_bow_fin_left_cmd']
-        if 'start_bow_fin_right_cmd' in list(data.keys()):
-            self.start_bow_fin_right_cmd = data['start_bow_fin_right_cmd']
+        # Dimensionalize if needed
+        if not self.dim_flag:
+            self._dimensionalize_coefficients(self.rho, self.L, self.U)
         
-        if 'start_propeller_cmd' in list(data.keys()):
-            self.start_propeller_cmd = data['start_propeller_cmd']
-
-        if 'propeller_diameter' in list(data.keys()):
-            self.propeller_diameter = data['propeller_diameter']
+        # Load NACA airfoil data
+        if 'naca_file' in vessel_params['control_surfaces']:
+            self.naca_data = pd.read_csv(vessel_params['control_surfaces']['naca_file'])
         else:
-            raise ValueError('Propeller diameter is a required input')
-
-        self.free_float = data['free_floating']
-
-        self.cog = np.array(data['COG'])
-        self.gyration = np.array(data['gyration_radii'])
-
-        if 'geometry_file' in list(data.keys()):
-            self.geometry_file = data['geometry_file']
-        else:
-            self.geometry_file = None
-
-
-        if 'density' in list(data.keys()):
-            self.rho = data['density']
-
-        if 'scale' in list(data.keys()):
-            self.scale = data['scale']
-        else:
-            if self.name == 'makara':
-                self.scale = 48.9355
-            elif self.name == 'matsya':
-                self.scale = 75.5
-            elif self.name == 'kurma':
-                self.scale = 110.0
+            raise ValueError("NACA airfoil data file path not specified in vessel parameters")
         
-        if 'length' in list(data.keys()):
-            self.length = data['length']
-        else:
-            if self.name == 'makara':
-                self.length = 154.0 / self.scale
-            elif self.name == 'matsya':
-                self.length = 230.0 / self.scale
-            elif self.name == 'kurma':
-                self.length = 320.0 / self.scale
-            else:
-                raise ValueError('Specified hull is not found in the library. Spcify the length of the vessel!')
-        
-        if 'breadth' in list(data.keys()):
-            self.breadth = data['breadth']
-        else:
-            if self.name == 'makara':
-                self.breadth = 18.78 / self.scale
-            elif self.name == 'matsya':
-                self.breadth = 32.2 / self.scale
-            elif self.name == 'kurma':
-                self.breadth = 58.0 / self.scale
-            else:
-                self.breadth = None
-        
-        if 'draft' in list(data.keys()):
-            self.draft = data['draft']
-        else:
-            if self.name == 'makara':
-                self.draft = 5.494 / self.scale
-            elif self.name == 'matsya':
-                self.draft = 10.8 / self.scale
-            elif self.name == 'kurma':
-                self.draft = 20.8 / self.scale
-            else:
-                self.draft = None
-        
-        if 'block_coefficient' in list(data.keys()):
-            self.Cb = data['block_coefficient']
-        else:
-            if self.name == 'makara':
-                self.Cb = 0.535
-            elif self.name == 'matsya':
-                self.Cb = 0.651
-            elif self.name == 'kurma':
-                self.Cb = 0.8098
-            else:
-                self.Cb = None
+        # Determine state vector size based on attitude representation and actuators
+        self.use_quaternion = vessel_params['initial_conditions'].get('use_quaternion', False)
+        attitude_size = 4 if self.use_quaternion else 3
 
-        if 'mass' in list(data.keys()):
-            self.mass_input = data['mass']
+        self.control_surfaces = vessel_params['control_surfaces']
+        n_control_surfaces = len(self.control_surfaces) if hasattr(self, 'control_surfaces') else 0
 
-        # Calculate mass in freely floating condition
-        if self.free_float and all(x is not None for x in [self.length, self.breadth, self.draft, self.Cb]):
-            self.mass = self.rho * self.Cb * self.length * self.breadth * self.draft
-            # For neutrally buoyant condition in water
-            self.W = self.mass * self.g  # Weight force
-            self.B = self.W              # Buoyancy force equals weight
+        self.thrusters = vessel_params['thrusters']
+        n_thrusters = len(self.thrusters) if hasattr(self, 'thrusters') else 0
+        
+        # Build initial state vector
+        initial_velocity = vessel_params['initial_conditions']['start_velocity']
+        initial_position = vessel_params['initial_conditions']['start_location']
+        initial_attitude = vessel_params['initial_conditions']['start_attitude']
+        if self.use_quaternion:
+            # Convert Euler angles to quaternion if needed
+            initial_attitude = eul_to_quat(initial_attitude)
             
-            # Set r_bg as COG position vector
-            self.r_bg = self.cog
-            # For neutrally buoyant condition, center of buoyancy is typically below COG
-            self.r_bb = np.array([self.cog[0], self.cog[1], self.cog[2] - 0.1])  # Offset CB slightly below CG
-        else:
-            if 'mass' in list(data.keys()):
-                self.mass = self.mass_input
-                self.W = self.mass * self.g
-                if 'buoyancy' in list(data.keys()):
-                    self.B = data['buoyancy']
-                else:
-                    self.B = self.W  # Default to neutral buoyancy if not specified
+        initial_control = np.zeros(n_control_surfaces)  # Initial control surface angles
+        initial_thrust = np.zeros(n_thrusters)  # Initial thruster states
+        
+        self.current_state = np.concatenate([
+            initial_velocity,
+            initial_position,
+            initial_attitude,
+            initial_control,
+            initial_thrust
+        ])
+        
+        self.initial_state = self.current_state.copy()
+        
+        # Initialize state derivative vector
+        self.current_state_der = np.zeros_like(self.current_state)
+        
+        # Store total state size for history allocation
+        self.state_size = len(self.current_state)
                 
-                # Allow custom positions for COG and COB if specified
-                if 'r_bg' in list(data.keys()):
-                    self.r_bg = np.array(data['r_bg'])
-                else:
-                    self.r_bg = self.cog
+        self.Tmax = vessel_params['sim_time']
+        self.dt = vessel_params['time_step']
+        self.t = 0.0
+        self.control_surface_control_type = vessel_params['control']['control_surface_control_type']
+        self.thruster_control_type = vessel_params['control']['thruster_control_type']
+        
+        self.tp = self.thrusters['thrusters'][0]['tp']
+        # Initialize commanded values
+        self.delta_c = np.zeros(n_control_surfaces)
+        self.n_c = np.zeros(n_thrusters)
+
+        # Initialize history with pre-allocated array based on simulation time
+        num_timesteps = int(self.Tmax / self.dt) + 2
+        self.history = np.zeros((num_timesteps, self.state_size))  # Dynamic state size
+        self.history[0, :] = self.current_state  # Store initial state
+        self.time_index = 1  # Index to track position in history array
+
+    def _dimensionalize_coefficients(self, rho, L, U):
+        """Convert non-dimensional coefficients to dimensional form.
+        
+        This function processes all hydrodynamic coefficients and applies the appropriate
+        dimensionalization factors based on the coefficient type.
+        
+        Args:
+            rho (float): Water density
+            L (float): Characteristic length (vessel length)
+            U (float): Characteristic velocity
+            
+        The dimensionalization follows standard naval architecture practices:
+        - Linear velocity dependent terms (e.g. X_u_u): 0.5 * rho * L^2 * U^2
+        - Angular velocity dependent terms (e.g. Y_r_r): 0.5 * rho * L^4 * U^2
+        - Linear acceleration dependent terms (e.g. X_u_dot): 0.5 * rho * L^3
+        - Angular acceleration dependent terms (e.g. N_r_dot): 0.5 * rho * L^5
+        - Control surface dependent terms: 0.5 * rho * L^2 * U^2
+        """
+        # Skip if coefficients are already dimensional
+        if self.dim_flag:
+            return
+            
+        # Process each coefficient in the hydrodynamics dictionary
+        for coeff_name, coeff_value in self.hydrodynamics.items():
+            # Skip if coefficient is zero or not a valid name format
+            if coeff_value == 0 or '_' not in coeff_name:
+                continue
+                
+            # Split into force direction and components
+            parts = coeff_name.split('_')
+            if len(parts) < 3:  # Need at least force direction and two components
+                continue
+                
+            force_dir = parts[0]  # X, Y, Z, K, M, or N
+            components = parts[1:]  # remaining components
+            
+            # Skip if not a valid force direction
+            if force_dir not in self.force_indices:
+                continue
+                
+            # Determine the dimensionalization factor based on the components
+            factor = 0.5 * rho
+            
+            # Base L power depends on force direction (X,Y,Z vs K,M,N)
+            base_L_power = 2 if force_dir in ['X', 'Y', 'Z'] else 4
+            
+            # Check for acceleration terms (dot)
+            is_acceleration = any('dot' in comp for comp in components)
+            
+            # Adjust L power based on term type
+            if is_acceleration:
+                # Acceleration terms get +1 power for forces, +1 for moments
+                L_power = base_L_power + 1
+            else:
+                # Velocity terms use base power
+                L_power = base_L_power
+                
+            # Add L^n factor
+            factor *= L**L_power
+            
+            # Add U factor for velocity-dependent terms (not acceleration)
+            if not is_acceleration:
+                # Quadratic velocity terms get U^2
+                factor *= U**2
+                
+            # Special case for control surface coefficients (delta)
+            if any('delta' in comp for comp in components):
+                factor = 0.5 * rho * L**base_L_power * U**2
+                
+            # Apply the dimensionalization factor
+            setattr(self, coeff_name, coeff_value * factor)
+
+    def vessel_ode(self, t, state):
+        """Vessel ordinary differential equations.
+        
+        The state vector is structured as follows:
+        - state[0:6]: Velocities [u, v, w, p, q, r]
+        - state[6:9]: Positions [x, y, z]
+        - state[9:12]: Euler angles [phi, theta, psi] OR
+        - state[9:13]: Quaternions [q0, q1, q2, q3]
+        - state[control_start:thruster_start]: Control surface angles
+        - state[thruster_start:]: Thruster states (RPM)
+        
+        Args:
+            t (float): Current time
+            state (np.ndarray): Current state vector
+            
+        Returns:
+            np.ndarray: State derivatives
+        """
+        # Determine state vector structure based on quaternion vs euler
+        use_quaternion = hasattr(self, 'use_quaternion') and self.use_quaternion
+        attitude_size = 4 if use_quaternion else 3
+        attitude_end = 9 + attitude_size
+        
+        # Calculate indices for control surfaces and thrusters
+        control_start = attitude_end
+        n_control_surfaces = len(self.control_surfaces) if hasattr(self, 'control_surfaces') else 0
+        thruster_start = control_start + n_control_surfaces
+        n_thrusters = len(self.thrusters) if hasattr(self, 'thrusters') else 0
+        
+        # Extract state components
+        vel = state[0:6]  # [u, v, w, p, q, r]
+        pos = state[6:9]  # [x, y, z]
+        
+        if use_quaternion:
+            quat = state[9:13]
+            angles = eul_to_rotm(quat)
+        else:
+            angles = state[9:attitude_end]  # [phi, theta, psi]
+            
+        # Extract control surface angles and thruster states
+        control_angles = state[control_start:thruster_start] if n_control_surfaces > 0 else np.array([])
+        thruster_states = state[thruster_start:] if n_thrusters > 0 else np.array([])
+        
+        # Get commanded values
+        if not self.ros_flag:
+            # Get control surface commands
+            if self.control_surface_control_type == 'fixed_rudder':
+                self.delta_c = con.fixed_rudder(t, state, n_control_surfaces, 10.0) #Enter rudder angle here
+            elif self.control_surface_control_type == 'switching_rudder':
+                self.delta_c = con.switching_rudder(t, state, n_control_surfaces)
+            else:
+                raise ValueError(f"Invalid control surface control type: {self.control_surface_control_type}")
+                
+            # Get thruster commands
+            if self.thruster_control_type == 'fixed_rpm':
+                self.n_c = con.fixed_thrust(t, state, n_thrusters,1000.0) #Enter RPM here
+            else:
+                raise ValueError(f"Invalid thruster control type: {self.thruster_control_type}")
+        # Initialize state derivative vector
+        state_dot = np.zeros_like(state)
+        
+        # Calculate forces and moments
+        F_hyd = self.hydrodynamic_forces(vel)
+        F_control = self.control_forces(control_angles) if n_control_surfaces > 0 else np.zeros(6)
+        F_thrust = self.thruster_forces(thruster_states) if n_thrusters > 0 else np.zeros(6)
+        F_g = self.gravitational_forces(angles[0], angles[1])  # Add gravitational forces        
+        
+        # Calculate mass matrices
+        M_RB = self.mass_matrix
+        M_A = self.added_mass_matrix
+        C_RB, C_A = self.calculate_coriolis_matrices(vel)
+        
+        # Check if added mass is too large compared to rigid body mass
+        if np.any(np.abs(M_A) > 2 * np.abs(M_RB)):
+            M = M_RB  # Ignore added mass if too large
+            C_A = np.zeros_like(C_A)  # Ignore Coriolis added mass if too large
+        else:
+            M = M_RB + M_A
+
+        # Calculate Coriolis forces
+        F_C = (C_RB + C_A) @ vel
+      
+        # Calculate total force vector
+        F = F_hyd + F_control + F_thrust - F_g - F_C
+
+        # Calculate velocity derivatives
+        state_dot[0:6] = np.linalg.inv(M) @ F
+        
+        # Calculate position derivatives
+        if use_quaternion:
+            state_dot[6:9] = eul_to_rotm(quat) @ vel[0:3]
+            state_dot[9:13] = eul_rate_matrix(angles) @ vel[3:6]
+        else:
+            state_dot[6:9] = eul_to_rotm(angles) @ vel[0:3]
+            state_dot[9:attitude_end] = eul_rate_matrix(angles) @ vel[3:6]
+        
+        # Calculate control surface derivatives using individual time constants
+        if n_control_surfaces > 0:
+            delta_c = np.array(self.delta_c) if isinstance(self.delta_c, (list, np.ndarray)) else np.array([self.delta_c])
+            for i in range(n_control_surfaces):
+                # Get time constant and limits for this control surface
+                T = self.control_surfaces['control_surfaces'][i]['control_surface_T']
+                delta_max = self.control_surfaces['control_surfaces'][i]['control_surface_delta_max']
+                deltad_max = self.control_surfaces['control_surfaces'][i]['control_surface_deltad_max']
+                
+                # Limit commanded angle
+                delta_c[i] = np.clip(delta_c[i], -delta_max, delta_max)
+                
+                # Calculate derivative
+                state_dot[control_start + i] = (delta_c[i] - control_angles[i]) / T
+                
+                # Apply rate limiting
+                state_dot[control_start + i] = np.clip(state_dot[control_start + i], 
+                                                     -deltad_max, 
+                                                     deltad_max)
+        # Calculate thruster derivatives
+        if n_thrusters > 0:
+            n_c = self.n_c if hasattr(self, 'n_c') else np.zeros(n_thrusters)
+            for i in range(n_thrusters):
+                state_dot[thruster_start + i] = (n_c[i] - thruster_states[i]) / 1.0 # TODO: Add time constant
+                # Apply rate limiting
+                if hasattr(self, 'nd_max'):
+                    state_dot[thruster_start + i] = np.clip(state_dot[thruster_start + i], 
+                                                          -self.nd_max, 
+                                                          self.nd_max)
+        
+        return state_dot
+    
+    def hydrodynamic_forces(self, vel):
+        """Calculate hydrodynamic forces and moments
+        
+        Args:
+            vel (array): Velocity vector [u, v, w, p, q, r]
+            
+        Returns:
+            array: Forces and moments vector [X, Y, Z, K, M, N]
+        """
+        # Extract velocities
+        u, v, w, p, q, r = vel
+        
+        # Initialize forces vector
+        F = np.zeros(6)
                     
-                if 'r_bb' in list(data.keys()):
-                    self.r_bb = np.array(data['r_bb'])
-                else:
-                    self.r_bb = np.array([self.cog[0], self.cog[1], self.cog[2] - 0.1])
-            else:
-                raise ValueError('Unable to calculate mass! Either specify mass attribute or specify length, breadth, draft and block_coefficient attributes')
-
-        # Calculate Intertia
-        self.inertia = self.mass * self.gyration * np.abs(self.gyration)
-
-        # Probably not getting used currently ?
-        self.mass_matrix = np.zeros((6,6))
-        np.fill_diagonal(self.mass_matrix[0:3, 0:3], self.mass)
-        self.mass_matrix[0:3, 3:6] = -self.mass * kin.Smat(self.cog)
-        self.mass_matrix[3:6, 0:3] = self.mass * kin.Smat(self.cog)
-        self.mass_matrix[3:6, 3:6] = self.inertia
-
-        if 'design_froude_number' in list(data.keys()):
-            self.Fn = data['design_froude_number']
-            self.U_des = self.Fn * np.sqrt(self.g * self.length)
+        # Dictionary mapping velocity components to values
+        vel_map = {'u': u, 'v': v, 'w': w, 'p': p, 'q': q, 'r': r}
         
-        # Desgin speed specification will overwrite Fn input
-        if 'design_speed' in list(data.keys()):
-            self.U_des = data['design_speed']
-            self.Fn = self.U_des / np.sqrt(sh.g * self.length)
-        
-        if self.U_des is None:
-            raise ValueError('Design speed is not specified but is a required quantity. Either specify design_froude_number or design_speed')
-            
-
-        if 'sensors' in list(data.keys()):
-            self.sensors = []
-            for sensor in data['sensors']:
-                self.sensors.append(sensor)
-
-        # If by mistake we set different dt for each vessel in world_file.yml then it could mess up the stepping of each vessel
-        # When we initialize the objects of vessel class we can send 'world_data' also as an argument
-        # The 'world_data' can include 'rho', 'g', 'dt' and other world parameters related to external forces
-        # Currently ode_options has the world parametrs like wind, wave and current but these can change with changing environment
-        # So we can separate out the constant ode_options like T_rudder,T_prop etc from the changing ones form world.
-
-        # name of the ode function to use
-        ode = data['ode']
-
-        if ode == 'kcs_ode':
-            self.ode = dyn.onrt_ode # The ODE structure does not change, only parameter values change
-        elif ode == 'onrt_ode':
-            self.ode = dyn.onrt_ode
-        elif ode == 'kvlcc2_ode':
-            self.ode = dyn.onrt_ode # The ODE structure does not change, only parameter values change
-        elif ode == 'mavymini_ode':
-            self.ode = dyn.mavymini_ode # The ODE structure does not change, only parameter values change
-        else:
-            raise ValueError('Specified ODE for vessel is not available!')
-        
-        ## Have to change this 
-        deltad_max = 3 * np.pi / 180 * np.sqrt(self.length * self.scale / sh.g) / self.Fn
-        T_rud = 1 / (4 * deltad_max)
-        T_prop = T_rud
-        
-        self.ode_options = dyn.ode_options(scale=self.scale,
-                            deltad_max = deltad_max,
-                            T_prop = T_prop, 
-                            T_rud = T_rud, 
-                            nd_max=100,
-                           )
-        self.ode_options['W'] = self.W
-        self.ode_options['B'] = self.B
-
-        self.create_model()
-        self.ode_options['L'] = self.length
-        self.ode_options['U_des'] = self.U_des
-
-        self.Up_int = 0
-
-        if 'guidance' in data:
-            self.guidance = data['guidance']
-            
-            if self.guidance == 'none':
-                self.guidance = None
-
-            if self.guidance == 'ilos':
-                if 'waypoints' not in data:
-                    raise ValueError('Waypoints need to be defined for ILOS guidance')
-                self.waypoints = np.array(data['waypoints'])
+        # Process each hydrodynamic coefficient from the vessel's hydrodynamics dictionary
+        # Example coefficients: X_u_u (X-force dependent on u*u), Y_v_v (Y-force dependent on v*v)
+        for coeff_name, coeff_value in self.hydrodynamics.items():
+            # Skip zero coefficients since they won't contribute to forces
+            if coeff_value == 0:
+                continue
                 
-                if 'waypoints_type' not in data:
-                    self.waypoints_type = 'XYZ'
-                else:
-                    self.waypoints_type = data['waypoints_type']
-        
-        if 'control' in data:
-            self.control = data['control']
-        
-        if 'euler_angle_flag' in data:
-            self.euler_angle_flag = data['euler_angle_flag']            
-        
-        if 'kinematic_kf_flag' in data:
-            self.kinematic_kf_flag = data['kinematic_kf_flag']
-        
-        if 'kinematic_kf_flag' in data:
-            self.mmg_flag = data['mmg_flag']
-          
-    def create_model(self):        
-        self.grid = Grid(self.geometry_file, self.start_location, self.start_orientation, self.scale)
-        self.grid.load_gdf()
-        self.grid.create_2d_sections()
-        self.calculate_hydrodynamics()
-        if self.name == 'mavymini':
-            self.cross_flow_drag_AUV()
-        else:
-            self.cross_flow_drag()
-
-    def calculate_hydrodynamics(self):
-        
-        if self.name == 'makara':
-            hydra_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/HydRA/Output_Archive/matlab/ONRT_hydra.json'
-            pow_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/ONRT/pow.json'
-
-        elif self.name == 'matsya':
-            hydra_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/KCS/HydRA/Output_Archive/matlab/KCS_hydra.json'
-            pow_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/KCS/pow.json'
-        
-        elif self.name == 'kurma':
-            hydra_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/KVLCC2/HydRA/Output_Archive/matlab/KVLCC2_hydra.json'
-            pow_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/KVLCC2/pow.json'
-        
-        elif self.name == 'mavymini':
-            hydra_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/MAVYMINI/HydRA/Output_Archive/matlab/MAVYMINI_hydra.json'
-            # pow_file = '/workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/MAVYMINI/pow.json'
-
-        with open(hydra_file,'r') as file:
-            mdict = json.load(file)
-            
-        if self.name != 'mavymini':
-            with open(pow_file, 'r') as file:
-                pow = json.load(file)
-
-            if self.name == 'makara':
-                J = np.array(pow['J'])
-                Kt_port = np.array(pow['Kt_port'])
-                Kt_stbd = np.array(pow['Kt_stbd'])
-                Kt = Kt_port + Kt_stbd
-            else:
-                J = np.array(pow['J'])
-                Kt = np.array(pow['Kt'])
-            
-            Amat = np.ones((np.size(J), 3))
-            b = np.zeros((np.size(J)))
-            Amat[:, 0] = J ** 2
-            Amat[:, 1] = J
-            b = Kt            
-            coeff, residue, rank, sing_val = np.linalg.lstsq(Amat, b, rcond=-1)
-            
-            self.ode_options['pow_coeff'] = coeff
-        
-        # Note that the hydrodynamic data is for zero speed
-        omg = np.array(mdict['w'])
-        AM = np.array(mdict['AM'])
-        BD = np.array(mdict['BD'])
-
-        M = np.array(mdict['M'])
-        C = np.array(mdict['C'])
-
-        A_zero = AM[1, :, :, 0, 0]
-        A33 = AM[1:, 2, 2, 0, 0]
-        A44 = AM[1:, 3, 3, 0, 0]
-        A55 = AM[1:, 4, 4, 0, 0]
-
-        wn3_old = 0
-        wn3_new = np.sqrt(C[2, 2] / (M[2, 2] + A33[0]))
-        while np.abs(wn3_old - wn3_new) > 1e-6:
-            wn3_old = wn3_new
-            wn3_new = np.sqrt(C[2, 2] / (M[2, 2] + np.interp(wn3_old, omg[1:], A33)))
-        wn3 = wn3_new
-
-        wn4_old = 0
-        wn4_new = np.sqrt(C[3, 3] / (M[3, 3] + A44[0]))
-        while np.abs(wn4_old - wn4_new) > 1e-6:
-            wn4_old = wn4_new
-            wn4_new = np.sqrt(C[3, 3] / (M[3, 3] + np.interp(wn4_old, omg[1:], A44)))
-        wn4 = wn4_new
-
-        wn5_old = 0
-        wn5_new = np.sqrt(C[4, 4] / (M[4, 4] + A55[0]))
-        while np.abs(wn5_old - wn5_new) > 1e-6:
-            wn5_old = wn5_new
-            wn5_new = np.sqrt(C[4, 4] / (M[4, 4] + np.interp(wn5_old, omg[1:], A55)))
-        wn5 = wn5_new
-
-        A33_wn = np.interp(wn3, omg[1:], A33)
-        A44_wn = np.interp(wn4, omg[1:], A44)
-        A55_wn = np.interp(wn5, omg[1:], A55)
-
-        B33_wn = np.interp(wn3, omg[1:], BD[1:, 2, 2, 0, 0])
-        B44_wn = np.interp(wn4, omg[1:], BD[1:, 3, 3, 0, 0])
-        B55_wn = np.interp(wn5, omg[1:], BD[1:, 4, 4, 0, 0])
-
-        # Change from ENU to NED
-        A = A_zero
-        A[2:5][:, 2:5] = np.diag(np.array([A33_wn, A44_wn, A55_wn]))
-
-        # Full scale natural periods for horizontal modes
-        Tn1 = np.inf 
-        Tn2 = np.inf
-        Tn6 = np.inf
-
-        # Damping ratio being assumed in the modes
-        zeta1 = 0.1
-        zeta2 = 0.1
-        zeta6 = 0.1
-
-        Xu = - 8 * np.pi * zeta1 * (M[0, 0] + A[0, 0]) / Tn1
-        Yv = - 8 * np.pi * zeta2 * (M[1, 1] + A[1, 1]) / Tn2
-        Nr = - 8 * np.pi * zeta6 * (M[5, 5] + A[5, 5]) / Tn6
-
-
-        # Will have to change this for AUV
-        B = np.zeros((6,6))
-        B[0, 0] = -Xu / (0.5 * sh.rho * ((self.length * self.scale) ** 2) * (self.U_des * np.sqrt(self.scale))) 
-        B[1, 1] = -Yv / (0.5 * sh.rho * ((self.length * self.scale) ** 2) * (self.U_des * np.sqrt(self.scale)))
-        B[2, 2] = B33_wn / (0.5 * sh.rho * ((self.length * self.scale) ** 2) * (self.U_des * np.sqrt(self.scale)))
-        B[3, 3] = B44_wn / (0.5 * sh.rho * ((self.length * self.scale) ** 4) * (self.U_des * np.sqrt(self.scale)))
-        B[4, 4] = B55_wn / (0.5 * sh.rho * ((self.length * self.scale) ** 4) * (self.U_des * np.sqrt(self.scale)))
-        B[5, 5] = -Nr / (0.5 * sh.rho * ((self.length * self.scale) ** 4) * (self.U_des * np.sqrt(self.scale)))
-
-        A[0:3][:, 0:3] = A[0:3][:, 0:3] / (0.5 * sh.rho * ((self.length * self.scale) ** 3))
-        A[0:3][:, 3:6] = A[0:3][:, 3:6] / (0.5 * sh.rho * ((self.length * self.scale) ** 4))
-        A[3:6][:, 0:3] = A[3:6][:, 0:3] / (0.5 * sh.rho * ((self.length * self.scale) ** 4))
-        A[3:6][:, 3:6] = A[3:6][:, 3:6] / (0.5 * sh.rho * ((self.length * self.scale) ** 5))
-
-        M_RB = self.mass_matrix.copy()
-        M_RB[0:3][:, 0:3] = M_RB[0:3][:, 0:3] / (0.5 * sh.rho * (self.length ** 3))
-        M_RB[0:3][:, 3:6] = M_RB[0:3][:, 3:6] / (0.5 * sh.rho * (self.length ** 4))
-        M_RB[3:6][:, 0:3] = M_RB[3:6][:, 0:3] / (0.5 * sh.rho * (self.length ** 4))
-        M_RB[3:6][:, 3:6] = M_RB[3:6][:, 3:6] / (0.5 * sh.rho * (self.length ** 5))
-
-        C[0:3][:, 0:3] = C[0:3][:, 0:3] / (0.5 * sh.rho * (self.length * self.scale) * (self.U_des * np.sqrt(self.scale)) ** 2)
-        C[0:3][:, 3:6] = C[0:3][:, 3:6] / (0.5 * sh.rho * ((self.length * self.scale) ** 2) * (self.U_des * np.sqrt(self.scale)) ** 2)
-        C[3:6][:, 0:3] = C[3:6][:, 0:3] / (0.5 * sh.rho * ((self.length * self.scale) ** 2) * (self.U_des * np.sqrt(self.scale)) ** 2)
-        C[3:6][:, 3:6] = C[3:6][:, 3:6] / (0.5 * sh.rho * ((self.length * self.scale) ** 3) * (self.U_des * np.sqrt(self.scale)) ** 2)
-        
-        self.ode_options['M_RB'] = M_RB
-        self.ode_options['M_A'] = A
-        self.ode_options['Dl'] = B
-        self.ode_options['K'] = C
-
-        self.ode_options['M_inv'] = np.linalg.inv(M_RB + A)
-
-        self.ode_options['D_prop'] = self.propeller_diameter / self.length
-        
-        # Taken from accompanying excel sheet in hullform folder
-        if self.name == 'makara':
-            self.ode_options['rudder_area'] = 0.002415163
-            self.ode_options['rudder_aspect_ratio'] = 1.25
-
-        elif self.name == 'matsya':
-            self.ode_options['rudder_area'] = 0.0026689453125
-            self.ode_options['rudder_aspect_ratio'] = 1.8287037037037
-
-        elif self.name == 'kurma':
-            self.ode_options['rudder_area'] = 0.0026689453125
-            self.ode_options['rudder_aspect_ratio'] = 1.8287037037037
-        
-        ## Mavy Mini 
-        elif self.name == 'mavymini':
-            self.ode_options['rudder_area'] = 0.0026689453125
-            self.ode_options['rudder_aspect_ratio'] = 1.8287037037037
-        
-        D_prop = self.ode_options['D_prop']
-        A_R = self.ode_options['rudder_area']
-        Lamda = self.ode_options['rudder_aspect_ratio']
-        
-        if self.name != 'mavymini':
-            pow_coeff = self.ode_options['pow_coeff']
-
-        if self.name == 'makara':
-            wp = 0.355              # Effective Wake Fraction of the Propeller (taken from KCS)
-            tp = 0.207              # Thrust Deduction Factor (taken from KCS)
-            xp_R = -0.46104         # Rudder stock location based on geometry (calculated from Rhino)
-            tR = 1 - 0.75           # Steering resistance deduction factor - taken from KCS - value modified
-            aH = 0.0                # Rudder force increase factor - taken from KCS - value modified
-            xp_H = xp_R             # Longitudinal coordinate of acting point of the additional lateral force -  taken from KCS - value modified (same as rudder stock)
-            eta = 0.6               # Ratio of propeller diameter to height of rudder in slipstream
-            eps = 1.0               # Ratio of (1 - wR) / (1 - wP)
-            X_by_Dp = 0.766797661   # Full scale X/D = 4.0/5.2165
-            lp_R = -0.75            # Effective longitudinal coordinate of rudder position (taken from KCS - value modified)
-            gamma_R1 = 0.6          # gamma_R for b_p > 0 (formula from from KCS structure - values modified)
-            gamma_R2 = 0.3          # gamma_R for b_p < 0 (formula from from KCS structure - values modified)
-
-        elif self.name == 'matsya':
-
-            wp = 0.355              # Effective Wake Fraction of the Propeller (taken from KCS)
-            tp = 0.207              # Thrust Deduction Factor (taken from KCS)
-            xp_R = -0.5             # Rudder stock location based on geometry (calculated from Rhino)
-            tR = 0.250              # Steering resistance deduction factor - taken from KCS - value modified
-            aH = 0.0                # Rudder force increase factor - taken from KCS - value modified
-            xp_H = xp_R             # Longitudinal coordinate of acting point of the additional lateral force -  taken from KCS - value modified (same as rudder stock)
-            eta = 0.6               # Ratio of propeller diameter to height of rudder in slipstream
-            eps = 1.0               # Ratio of (1 - wR) / (1 - wP)
-            X_by_Dp = 0.766797661   # Full scale X/D = 4.0/5.2165
-            lp_R = -0.750           # Effective longitudinal coordinate of rudder position (taken from KCS - value modified)
-            gamma_R1 = 0.6          # gamma_R for b_p > 0 (formula from from KCS structure - values modified)
-            gamma_R2 = 0.3          # gamma_R for b_p < 0 (formula from from KCS structure - values modified)
-        
-        elif self.name == 'kurma':
-
-            wp = 0.355              # Effective Wake Fraction of the Propeller (taken from KCS)
-            tp = 0.220              # Thrust Deduction Factor (taken from KVLCC2 MMG Paper)
-            xp_R = -0.5             # Rudder stock location based on geometry (calculated from Rhino)
-            tR = 0.387              # Steering resistance deduction factor - taken from KVLCC2 MMG Paper
-            aH = 0.312              # Rudder force increase factor - taken from KVLCC2 MMG Paper
-            xp_H = -0.464           # Longitudinal coordinate of acting point of the additional lateral force -  taken from KVLCC2 MMG Paper
-            eta = 0.6               # Ratio of propeller diameter to height of rudder in slipstream
-            eps = 1.09              # Ratio of (1 - wR) / (1 - wP)
-            X_by_Dp = 0.766797661   # Full scale X/D = 4.0/5.2165
-            lp_R = -0.710           # Effective longitudinal coordinate of rudder position (taken from KVLCC2 MMG Paper)
-            gamma_R1 = 0.640        # gamma_R for b_p > 0 (formula from from KVLCC2 MMG Paper)
-            gamma_R2 = 0.395        # gamma_R for b_p < 0 (formula from from KVLCC2 MMG Paper)
-
-        elif self.name == 'mavymini':
-            wp = 0.355              # Effective Wake Fraction of the Propeller
-            tp = 0.207              # Thrust Deduction Factor
-            xp_R = -0.5             # Rudder stock location
-            tR = 0.250              # Steering resistance deduction factor
-            aH = 0.0                # Rudder force increase factor
-            xp_H = xp_R             # Longitudinal coordinate of additional lateral force
-            eta = 0.6               # Ratio of propeller diameter to rudder height
-            eps = 1.0               # Ratio of wake fractions
-            X_by_Dp = 0.766797661   # X/D ratio
-            lp_R = -0.750           # Effective longitudinal coordinate
-            gamma_R1 = 0.6          # gamma_R for positive angles
-            gamma_R2 = 0.3          # gamma_R for negative angles
-
-            # Control surface positions
-            x_r1 = -0.5             # x position of upper rudder
-            x_r2 = -0.5             # x position of lower rudder
-            x_sf1 = -0.5            # x position of left fin
-            x_sf2 = -0.5            # x position of right fin
-            x_b1 = 0.5              # x position of left bow fin
-            x_b2 = 0.5              # x position of right bow fin
-
-            y_r1 = 0.0              # y position of upper rudder
-            y_r2 = 0.0              # y position of lower rudder
-            y_sf1 = -0.1            # y position of left fin
-            y_sf2 = 0.1             # y position of right fin
-            y_b1 = -0.1             # y position of left bow fin
-            y_b2 = 0.1              # y position of right bow fin
-
-            z_r1 = 0.1              # z position of upper rudder
-            z_r2 = -0.1             # z position of lower rudder
-            z_sf1 = 0.0             # z position of left fin
-            z_sf2 = 0.0             # z position of right fin
-            z_b1 = 0.0              # z position of left bow fin
-            z_b2 = 0.0              # z position of right bow fin
-
-            # Add control surface positions to options
-        self.ode_options['x_r1'] = x_r1
-        self.ode_options['x_r2'] = x_r2 
-        self.ode_options['x_sf1'] = x_sf1
-        self.ode_options['x_sf2'] = x_sf2
-        self.ode_options['x_b1'] = x_b1
-        self.ode_options['x_b2'] = x_b2
-        
-        self.ode_options['y_r1'] = y_r1
-        self.ode_options['y_r2'] = y_r2
-        self.ode_options['y_sf1'] = y_sf1
-        self.ode_options['y_sf2'] = y_sf2
-        self.ode_options['y_b1'] = y_b1
-        self.ode_options['y_b2'] = y_b2
-        
-        self.ode_options['z_r1'] = z_r1
-        self.ode_options['z_r2'] = z_r2
-        self.ode_options['z_sf1'] = z_sf1
-        self.ode_options['z_sf2'] = z_sf2
-        self.ode_options['z_b1'] = z_b1
-        self.ode_options['z_b2'] = z_b2
-        
-        self.ode_options['wp'] = wp
-        self.ode_options['tp'] = tp
-        self.ode_options['xp_R'] = xp_R
-        self.ode_options['tR'] = tR
-        self.ode_options['aH'] = aH
-        self.ode_options['xp_H'] = xp_H
-        self.ode_options['eta'] = eta
-        self.ode_options['eps'] = eps
-        self.ode_options['X_by_Dp'] = X_by_Dp
-        self.ode_options['lp_R'] = lp_R
-        self.ode_options['gamma_R1'] = gamma_R1
-        self.ode_options['gamma_R2'] = gamma_R2
-
-        # Added for Mavy Mini
-        n_prop = (800 / 60 ) * self.length / self.U_des
-
-        if self.name != 'mavymini':
-            up_prop = (1 - wp)
-            kappa_R = 0.5 + 0.5 * X_by_Dp / (X_by_Dp + 0.15)
-            f_alp = 6.13 * Lamda / (2.25 + Lamda)
-            
-            Kt_up2_by_J2 = pow_coeff[0] * (up_prop ** 2) + pow_coeff[1] * n_prop * D_prop * up_prop + pow_coeff[2] * (n_prop * D_prop) ** 2
-            Up_R = eps * np.sqrt( eta * (up_prop + kappa_R * (np.sqrt(up_prop ** 2 + 8/np.pi * Kt_up2_by_J2) - up_prop)) ** 2 + (1 - eta) * up_prop ** 2 )
-            F_N = A_R * f_alp * (Up_R ** 2)
-
-        if self.name != 'mavymini':
-            self.ode_options['X_d_d'] = - (1 - tR) * F_N
-            self.ode_options['Y_d'] = - (1 + aH) * F_N
-            self.ode_options['N_d'] = - (xp_R + aH * xp_H) * F_N
-            self.ode_options['X_n'] = 2 * (1 - tp) * (D_prop ** 2) * ((1 - wp) * D_prop * pow_coeff[1] + 2 * n_prop * (D_prop ** 2) * pow_coeff[2])
-            self.ode_options['X_n_n'] = 2 * (1 - tp) * (D_prop ** 2) * (2 * (D_prop ** 2) * pow_coeff[2])
-        else:
-            # TODO: Replace these dummy values with proper coefficients for mavymini
-            self.ode_options['X_d_d'] = -1.0
-            self.ode_options['Y_d'] = -1.0
-            self.ode_options['N_d'] = -1.0
-            self.ode_options['X_n'] = 1.0
-            self.ode_options['X_n_n'] = 1.0
-        
-        if self.name == 'kurma' and self.mmg_flag:
-            self.ode_options['R0'] = 0.022
-            self.ode_options['X_v_v'] = -0.040
-            self.ode_options['X_v_r'] = 0.002
-            self.ode_options['X_r_r'] = 0.011
-            self.ode_options['X_v_v_v_v'] = 0.771
-            
-            self.ode_options['Y_v'] = -0.315
-            self.ode_options['Y_R'] = 0.083
-            self.ode_options['Y_v_v_v'] = -1.607
-            self.ode_options['Y_v_v_r'] = 0.379
-            self.ode_options['Y_v_r_r'] = -0.391
-            self.ode_options['Y_r_r_r'] = 0.008
-            
-            self.ode_options['N_v'] = -0.137
-            self.ode_options['N_R'] = -0.049
-            self.ode_options['N_v_v_v'] = -0.03
-            self.ode_options['N_v_v_r'] = -0.294
-            self.ode_options['N_v_r_r'] = 0.055
-            self.ode_options['N_r_r_r'] = -0.013
-
-        # Add r_bg and r_bb to ode_options
-        self.ode_options['r_bg'] = self.r_bg
-        self.ode_options['r_bb'] = self.r_bb
-
-    def cross_flow_drag(self):
-        Cd_2D = self.hoerner()
-        x = self.grid.x_sec
-        T = self.grid.T_sec
-
-        v = np.linspace(-1, 1, 100)         # Non-dimensional sway velocity
-        r = np.linspace(-0.7, 0.7, 100)     # Non-dimensional yaw velocity - max value corresponds to turning radius of ~ 1.5L
-
-        v_grid, r_grid = np.meshgrid(v, r)
-        v_grid = v_grid.flatten()
-        r_grid = r_grid.flatten()
-
-        v_plus_xr_grid = v_grid[:, np.newaxis] @ np.ones(np.size(x))[np.newaxis, :] + r_grid[:, np.newaxis] @ x[np.newaxis, :]
-        Y_grid = - np.trapz(T[np.newaxis, :] * Cd_2D[np.newaxis, :] * v_plus_xr_grid * np.abs(v_plus_xr_grid), x) / (self.length ** 2)
-        N_grid = - np.trapz(T[np.newaxis, :] * x[np.newaxis, :] * Cd_2D[np.newaxis, :] * v_plus_xr_grid * np.abs(v_plus_xr_grid), x) / (self.length ** 3)
-
-        A = np.zeros((np.size(Y_grid), 4))
-        b = np.zeros((np.size(Y_grid), 2))
-
-        A[:, 0] = v_grid * np.abs(v_grid)
-        A[:, 1] = v_grid * np.abs(r_grid)
-        A[:, 2] = r_grid * np.abs(v_grid)
-        A[:, 3] = r_grid * np.abs(r_grid)
-
-        b[:, 0] = Y_grid
-        b[:, 1] = N_grid
-        
-        quad_coeff, residue, rank, sing_val = np.linalg.lstsq(A, b, rcond=-1)
-
-        self.ode_options['Y_v_av'] = quad_coeff[0, 0]
-        self.ode_options['Y_v_ar'] = quad_coeff[1, 0]
-        self.ode_options['Y_r_av'] = quad_coeff[2, 0]
-        self.ode_options['Y_r_ar'] = quad_coeff[3, 0]
-        self.ode_options['N_v_av'] = quad_coeff[0, 1]
-        self.ode_options['N_v_ar'] = quad_coeff[1, 1]
-        self.ode_options['N_r_av'] = quad_coeff[2, 1]
-        self.ode_options['N_r_ar'] = quad_coeff[3, 1]
-
-        Rn = self.U_des * self.length * 1e6
-        Cf = 0.075 / ((np.log10(Rn) - 2) ** 2)
-        Cr = 0.0
-        k = 0.0
-        Ct = Cr + Cf * (1 + k)
-
-        self.ode_options['X_u_au'] = -self.grid.WettedArea * Ct / (self.length ** 2)
-
-        for key, value in self.ode_options.items():
-            if key.startswith(("X_", "Y_", "N_")):
-                print(f"{key}: {value}")
-        # exit()
-
-    ## Function for AUV Cross Flow Drag
-    def cross_flow_drag_AUV(self):
-        Cd_2D = self.hoerner()
-        x = self.grid.x_sec
-        T = self.grid.T_sec
-
-        v = np.linspace(-1, 1, 100)         # Non-dimensional sway velocity
-        r = np.linspace(-0.7, 0.7, 100)     # Non-dimensional yaw velocity 
-
-        w = np.linspace(-1, 1, 100)         # Non-dimensional heave velocity
-        q = np.linspace(-0.7, 0.7, 100)     # Non-dimensional pitch velocity 
-
-        v_grid, r_grid = np.meshgrid(v, r)
-        v_grid = v_grid.flatten()
-        r_grid = r_grid.flatten()
-
-        w_grid, q_grid = np.meshgrid(w, q)
-        w_grid = w_grid.flatten()
-        q_grid = q_grid.flatten()
-
-        v_plus_xr_grid = v_grid[:, np.newaxis] @ np.ones(np.size(x))[np.newaxis, :] + r_grid[:, np.newaxis] @ x[np.newaxis, :]
-        Y_grid = - np.trapz(T[np.newaxis, :] * Cd_2D[np.newaxis, :] * v_plus_xr_grid * np.abs(v_plus_xr_grid), x) / (self.length ** 2)
-        N_grid = - np.trapz(T[np.newaxis, :] * x[np.newaxis, :] * Cd_2D[np.newaxis, :] * v_plus_xr_grid * np.abs(v_plus_xr_grid), x) / (self.length ** 3)
-
-        w_plus_xr_grid = w_grid[:, np.newaxis] @ np.ones(np.size(x))[np.newaxis, :] + q_grid[:, np.newaxis] @ x[np.newaxis, :]
-        Z_grid = - np.trapz(T[np.newaxis, :] * Cd_2D[np.newaxis, :] * w_plus_xr_grid * np.abs(w_plus_xr_grid), x) / (self.length ** 2)
-        M_grid = - np.trapz(T[np.newaxis, :] * x[np.newaxis, :] * Cd_2D[np.newaxis, :] * w_plus_xr_grid * np.abs(w_plus_xr_grid), x) / (self.length ** 3)
-
-        # For sway-yaw coefficients
-        A = np.zeros((np.size(Y_grid), 4))
-        b = np.zeros((np.size(Y_grid), 2))
-
-        A[:, 0] = v_grid * np.abs(v_grid)
-        A[:, 1] = v_grid * np.abs(r_grid)
-        A[:, 2] = r_grid * np.abs(v_grid)
-        A[:, 3] = r_grid * np.abs(r_grid)
-
-        b[:, 0] = Y_grid
-        b[:, 1] = N_grid
-        
-        quad_coeff, residue, rank, sing_val = np.linalg.lstsq(A, b, rcond=-1)
-
-        # Store sway-yaw coefficients
-        self.ode_options['Y_v_av'] = quad_coeff[0, 0]
-        self.ode_options['Y_v_ar'] = quad_coeff[1, 0]
-        self.ode_options['Y_r_av'] = quad_coeff[2, 0]
-        self.ode_options['Y_r_ar'] = quad_coeff[3, 0]
-        self.ode_options['N_v_av'] = quad_coeff[0, 1]
-        self.ode_options['N_v_ar'] = quad_coeff[1, 1]
-        self.ode_options['N_r_av'] = quad_coeff[2, 1]
-        self.ode_options['N_r_ar'] = quad_coeff[3, 1]
-
-        # For heave-pitch coefficients
-        A = np.zeros((np.size(Z_grid), 4))
-        b = np.zeros((np.size(Z_grid), 2))
-
-        A[:, 0] = w_grid * np.abs(w_grid)
-        A[:, 1] = w_grid * np.abs(q_grid)
-        A[:, 2] = q_grid * np.abs(w_grid)
-        A[:, 3] = q_grid * np.abs(q_grid)
-
-        b[:, 0] = Z_grid
-        b[:, 1] = M_grid
-
-        quad_coeff, residue, rank, sing_val = np.linalg.lstsq(A, b, rcond=-1)
-
-        # Store heave-pitch coefficients
-        self.ode_options['Z_w_aw'] = quad_coeff[0, 0]
-        self.ode_options['Z_w_aq'] = quad_coeff[1, 0]
-        self.ode_options['Z_q_aw'] = quad_coeff[2, 0]
-        self.ode_options['Z_q_aq'] = quad_coeff[3, 0]
-        self.ode_options['M_w_aw'] = quad_coeff[0, 1]
-        self.ode_options['M_w_aq'] = quad_coeff[1, 1]
-        self.ode_options['M_q_aw'] = quad_coeff[2, 1]
-        self.ode_options['M_q_aq'] = quad_coeff[3, 1]
-
-        Rn = self.U_des * self.length * 1e6
-        Cf = 0.075 / ((np.log10(Rn) - 2) ** 2)
-        Cr = 0.0
-        k = 0.0
-        Ct = Cr + Cf * (1 + k)
-
-        self.ode_options['X_u_au'] = -self.grid.WettedArea * Ct / (self.length ** 2)
-
-        for key, value in self.ode_options.items():
-            if key.startswith(("X_", "Y_", "N_", "M_", "Z_")):
-              print(f"{key}: {value}")
-        # exit()
-
-    def hoerner(self):
-
-        B_by_2T = self.grid.B_sec / 2 / self.grid.T_sec
-
-        Cd_data = np.array([[0.0108623, 1.96608], 
-            [0.176606, 1.96573],
-            [0.353025, 1.89756],
-            [0.451863, 1.78718],
-            [0.472838, 1.58374],
-            [0.492877, 1.27862],
-            [0.493252, 1.21082],
-            [0.558473, 1.08356],
-            [0.646401, 0.998631],
-            [0.833589, 0.87959],
-            [0.988002, 0.828415],
-            [1.30807, 0.759941],
-            [1.63918, 0.691442],
-            [1.85998, 0.657076],
-            [2.31288, 0.630693],
-            [2.59998, 0.596186],
-            [3.00877, 0.586846],
-            [3.45075, 0.585909],
-            [3.7379, 0.559877],
-            [4.00309, 0.559315]])
-
-        Cd_linear = np.interp(B_by_2T, Cd_data[:, 0], Cd_data[:, 1])
-        Cy_2d = np.zeros_like(B_by_2T)
-        Cy_2d = np.where(B_by_2T <= 4.00309, Cd_linear, 0.559315)
-        return Cy_2d
-
-    def step(self):  
-        state = self.current_state.copy()
-        tspan = (sh.current_time, (sh.current_time + sh.dt))
-
-        if self.U_des is not None:
-            state[0:3] = state[0:3] / self.U_des
-            state[3:6] = state[3:6] * (self.length / self.U_des)
-            state[6:9] = state[6:9] / self.length
-            state[14] = state[14] * (self.length / self.U_des)
-
-            tspan = (sh.current_time * self.U_des / self.length, (sh.current_time + sh.dt) * self.U_des / self.length)
-        
-        # For MAVYMINI, delta_c should be a 6x1 array
-        if self.name == 'mavymini':
-            delta_c = np.zeros(6)
-            delta_c[0] = 0  # Upper rudder
-            delta_c[1] = 0  # Lower rudder 
-            delta_c[2] = 0  # Left stern fin
-            delta_c[3] = 0  # Right stern fin
-            delta_c[4] = 0  # Left bow fin
-            delta_c[5] = 0  # Right bow fin
-        else:
-            delta_c = self.vessel_node.delta_c
-
-        n_c = self.vessel_node.n_c * self.length / self.U_des
-        
-        if np.isnan(delta_c).any():
-            delta_c = np.zeros_like(delta_c)
-
-        if np.isnan(n_c):
-            n_c = 0
-
-        sol = solve_ivp(self.ode, tspan, state, args=(delta_c, n_c, self.ode_options, True, self.mmg_flag))
-        new_state = np.array(sol.y)[:,-1]
-        
-        # Normalize the quaternion to a unit quaternion
-        new_state[9:13] = new_state[9:13]/np.linalg.norm(new_state[9:13])
-
-        # Calculate state derivative
-        new_state_der = self.ode((sh.current_time + sh.dt) * self.U_des / self.length, new_state, delta_c, n_c, self.ode_options, True)
-        
-        # Dimensionalize state
-        if self.U_des is not None:
-            new_state[0:3] = new_state[0:3] * self.U_des
-            new_state[3:6] = new_state[3:6] * (self.U_des / self.length)
-            new_state[6:9] = new_state[6:9] * self.length
-            
-            if self.name == 'mavymini':
-                new_state[19] = new_state[19] * (self.U_des / self.length)  # Propeller index for MAVYMINI
-            else:
-                new_state[14] = new_state[14] * (self.U_des / self.length)  # Propeller index for others
-            new_state_der[0:3] = new_state_der[0:3] * (self.U_des ** 2) / self.length
-            new_state_der[3:6] = new_state_der[3:6] * (self.U_des ** 2) / (self.length ** 2)
-            new_state_der[6:9] = new_state_der[6:9] * self.U_des
-            if self.name == 'mavymini':
-                new_state_der[19] = new_state_der[19] * (self.U_des ** 2) / (self.length ** 2)  # Propeller index for MAVYMINI
-            else:
-                new_state_der[14] = new_state_der[14] * (self.U_des ** 2) / (self.length ** 2)  # Propeller index for others
-            
-            self.current_state = new_state
-            self.current_state_der = new_state_der
-        else:
-            # self.current_state = np.array(sol.y)[:,-1]
-            self.current_state = new_state
-            self.current_state_der = new_state_der
+            # Split coefficient name into force direction and velocity components
+            # e.g., X_u_u splits into ['X', 'u', 'u'] where:
+            # - X is the force direction 
+            # - u_u indicates multiplication of u * u
+            parts = coeff_name.split('_')
+            if len(parts) < 2:
+                continue
                 
-        self.print_state()
+            # Extract force direction (X,Y,Z,K,M,N) and velocity components
+            force_dir = parts[0]
+            # Skip if not a valid force direction
+            if force_dir not in self.force_indices:
+                continue
+                
+            # Calculate the force component by multiplying coefficient with velocity terms
+            force = coeff_value
+            
+            # Handle velocity components
+            for vel_char in parts[1:]:
+                if vel_char in vel_map:
+                    # Multiply by the velocity component (u,v,w,p,q,r)
+                    force *= vel_map[vel_char]
+            
+            # Add the calculated force to the appropriate component in the force vector
+            # using the mapping from force direction to vector index
+            F[self.force_indices[force_dir]] += force
+                
+        return F
+
+    def control_forces(self, delta, stall_angle=15, Cl=None, Cd=None):
+        """Calculate control forces and moments
+        
+        Args:
+            delta (float): Rudder angle in radians
+            
+        Returns:
+            array: Forces and moments vector [X, Y, Z, K, M, N]
+        """
+        # Initialize control forces vector
+        tau = np.zeros(6)
+
+        # Extract velocities from current state
+        u = self.current_state[0]
+        v = self.current_state[1] 
+        w = self.current_state[2]
+        p = self.current_state[3]
+        q = self.current_state[4]
+        r = self.current_state[5]
+
+        # First calculate forces from hydrodynamic coefficients if they exist
+        if hasattr(self, 'hydrodynamics'):
+            for coeff_name, coeff_value in self.hydrodynamics.items():
+                if 'delta' in coeff_name and coeff_value != 0:
+                    force_dir = coeff_name.split('_')[0]
+                    if force_dir in self.force_indices:
+                        tau[self.force_indices[force_dir]] += coeff_value * delta
+
+        # Then calculate forces from control surfaces
+        for surface in self.control_surfaces['control_surfaces']:
+            # Get surface parameters
+            sd = surface['control_surface_location']  # [x,y,z] coordinates in body frame
+            area = surface['control_surface_area']
+            
+            # Create rotation matrix from Euler angles
+            phi, theta, psi = surface['control_surface_orientation']
+            cphi = np.cos(phi)
+            sphi = np.sin(phi)
+            cth = np.cos(theta)
+            sth = np.sin(theta)
+            cpsi = np.cos(psi)
+            spsi = np.sin(psi)
+            
+            # Rotation matrix from surface frame to body frame
+            R = np.array([
+                [cth*cpsi, -cth*spsi, sth],
+                [sphi*sth*cpsi + cphi*spsi, -sphi*sth*spsi + cphi*cpsi, -sphi*cth],
+                [-cphi*sth*cpsi + sphi*spsi, cphi*sth*spsi + sphi*cpsi, cphi*cth]
+            ])
+
+            # Calculate local velocities at control surface
+            netU = u
+            netV = v + r*sd[0] + p*sd[2]  # yaw and roll effects on sway
+            netW = w + p*sd[1] - q*sd[0]  # roll and pitch effects on heave
+           
+            # Transform velocities to surface frame
+            V_surface = R.T @ np.array([netU, netV, netW])
+        
+            # Get corresponding delta for this control surface based on surface ID
+            surface_id = surface['control_surface_id']
+            surface_delta = delta[surface_id - 1]  # Subtract 1 since IDs start at 1
+            
+            # Calculate effective angle of attack
+            alpha = np.arctan2(V_surface[2], V_surface[0]) + surface_delta
+            V_mag = np.sqrt(V_surface[0]**2 + V_surface[2]**2)
+            
+            # Calculate dynamic pressure
+            q_dyn = 0.5 * self.rho * V_mag**2 * area
+            
+            # Check if angle of attack is near vertical
+            # stall condition
+            if abs(np.rad2deg(alpha)) > stall_angle:
+                L = 0.0 #Lift is zero at stall
+                D = q_dyn * 0.1  # Use a high drag coefficient (~1.2) for stalled flat plate
+            else:
+                # Normal operation - calculate both lift and drag
+                if Cl is None or Cd is None:
+                    alpha_deg = np.clip(np.rad2deg(alpha), 
+                                      self.naca_data['Alpha'].min(), 
+                                      self.naca_data['Alpha'].max())
+                    Cl = np.interp(alpha_deg, self.naca_data['Alpha'], self.naca_data['Cl'])
+                    Cd = np.interp(alpha_deg, self.naca_data['Alpha'], self.naca_data['Cd'])
+                L = q_dyn * Cl
+                D = q_dyn * Cd
+            # Force vector in surface frame
+            F_surface = np.array([-D, 0.0, -L])  
+
+            # Transform forces to body frame
+            F_body = R @ F_surface
+            
+            # Add forces
+            tau[0:3] += F_body
+            
+            # Calculate and add moments
+            tau[3:6] += np.cross(sd, F_body)
+
+        
+        return tau
+
+    def thruster_forces(self, n_prop):
+        """Calculate thruster forces and moments
+        
+        Args:
+            n_prop (ndarray): Array of propeller RPMs
+            
+        Returns:
+            array: Forces and moments vector [X, Y, Z, K, M, N]
+        """
+        # Initialize thruster forces vector
+        tau = np.zeros(6)
+
+        # Extract forward velocity from current state
+        u = self.current_state[0]
+
+        # Maximum RPM from T200 thruster specs
+        n_max = 2668/60  # Convert to RPS
+        
+        # Convert input RPM to RPS
+        n_prop = n_prop/60
+
+        # Calculate thrust coefficient at zero advance ratio (J=0)
+        # 28.73 N thrust at 2668 RPM at 12V (from T200 datasheet)
+        KT_at_J0 = 28.73/(1024 * self.thrusters['thrusters'][0]['D_prop']**4 * n_max**2)
+
+        # For each thruster in the configuration
+        for i, thruster in enumerate(self.thrusters['thrusters']):
+            # Calculate advance ratio J with protection against division by zero
+            denominator = n_prop[i] * thruster['D_prop']
+            if abs(denominator) > 1e-6:  # Check if denominator is not too close to zero
+                J = u / denominator
+            else:
+                J = 0.0  # Set a default value when propeller is not rotating
+                
+            # Linear approximation of thrust coefficient
+            KT = KT_at_J0 * (1 - J)
+            # Calculate propeller thrust
+            X_prop = KT * 1024 * thruster['D_prop']**4 * np.abs(n_prop[i]) * n_prop[i]
+            # Apply thrust deduction if available
+            if hasattr(self, 'tp'):
+                X_prop *= (1 - self.tp)
+
+            # Add thrust force to surge direction
+            tau[0] += X_prop
+            
+            
+            # Get thruster location relative to body frame
+            pos = thruster['thruster_location']
+            # Calculate moments due to thrust
+            # Only X-direction force is considered as per the mavymini implementation
+            tau[3:6] += np.cross(pos, np.array([X_prop, 0, 0]))
+
+        return tau
     
-    def print_state(self):
-        eul = kin.quat_to_eul(self.current_state[9:13])
-        str0 = f"Vessel ID                : {self.vessel_id}"
-        str1 = f"Time (sec)               : {sh.current_time:.2f}"
-        str2 = f"Linear Velocity (m/s)    : {self.current_state[0]:.4f}, {self.current_state[1]:.4f}, {self.current_state[2]:.4f}"
-        str3 = f"Angular Velocity (rad/s) : {self.current_state[3]:.4f}, {self.current_state[4]:.4f}, {self.current_state[5]:.4f}"
-        str4 = f"Linear Position  (m)     : {self.current_state[6]:.4f}, {self.current_state[7]:.4f}, {self.current_state[8]:.4f}"
-        str5 = f"Orientation (deg)        : {eul[0]*180/np.pi:.2f}, {eul[1]*180/np.pi:.2f}, {eul[2]*180/np.pi:.2f}"
-        str6 = f"Unit Quaternion          : {self.current_state[9]:.2f}, {self.current_state[10]:.2f}, {self.current_state[11]:.2f}, {self.current_state[12]:.2f}"
+    def step(self):
+        """Step the vessel forward in time"""        
+        sol = solve_ivp(self.vessel_ode, [self.t, self.t + self.dt], self.current_state, method='RK45')        
+        self.current_state = sol.y[:, -1]
         
-        if self.name == 'mavymini':
-            str7 = (f"Control Surface Angles (deg):\n"
-                    f"  Upper Rudder: {self.current_state[13] * 180/np.pi:.2f}\n"
-                    f"  Lower Rudder: {self.current_state[14] * 180/np.pi:.2f}\n"
-                    f"  Left Stern Fin: {self.current_state[15] * 180/np.pi:.2f}\n"
-                    f"  Right Stern Fin: {self.current_state[16] * 180/np.pi:.2f}\n"
-                    f"  Left Bow Fin: {self.current_state[17] * 180/np.pi:.2f}\n"
-                    f"  Right Bow Fin: {self.current_state[18] * 180/np.pi:.2f}\n"
-                    f"Propeller Speed (RPM)    : {self.current_state[19] * 60:.2f}\n\n")
-        else:
-            str7 = f"Rudder Angle (deg)       : {self.current_state[13] * 180/np.pi:.2f}"
-            str8 = f"Propeller Speed (RPM)    : {self.current_state[14] * 60:.2f}\n\n"
+        # Calculate state derivative at new state
+        self.current_state_der = self.vessel_ode(self.t + self.dt, self.current_state)
+        
+        self.t = sol.t[-1]
 
-        print(str0); print(str1); print(str2); print(str3); print(str4); print(str5); print(str6)
-        print(str7)
-        if self.name != 'mavymini':
-            print(str8)
+        # Store current state in history
+        if not self.ros_flag:
+            self.history[self.time_index, :] = self.current_state
+            self.time_index += 1
 
     def reset(self):
-        pass
+        """Reset the vessel to the initial state"""
+        self.current_state = self.initial_state
+        self.t = 0.0
+    
+    def simulate(self):
+        """Simulate the vessel"""
+        
+        self.reset()
+        while self.t < self.Tmax:
+            self.step()
+        
+        # Trim history array to actual size
+        self.history = self.history[:self.time_index, :]
+
+    def gravitational_forces(self, phi, theta):
+        """Calculate gravitational and buoyancy forces.
+        
+        Args:
+            phi (float): Roll angle in radians
+            theta (float): Pitch angle in radians
+            
+        Returns:
+            np.ndarray: 6x1 vector of gravitational and buoyancy forces
+        """
+        sth = np.sin(theta)
+        cth = np.cos(theta)
+        sphi = np.sin(phi)
+        cphi = np.cos(phi)
+        
+        # Calculate forces and moments
+        g = np.array([
+            (self.W - self.B) * sth,
+            -(self.W - self.B) * cth * sphi,
+            -(self.W - self.B) * cth * cphi,
+            -(self.CG[1]*self.W - self.CB[1]*self.B) * cth * cphi + 
+             (self.CG[2]*self.W - self.CB[2]*self.B) * cth * sphi,
+            (self.CG[2]*self.W - self.CB[2]*self.B) * sth + 
+            (self.CG[0]*self.W - self.CB[0]*self.B) * cth * cphi,
+            -(self.CG[0]*self.W - self.CB[0]*self.B) * cth * sphi - 
+             (self.CG[1]*self.W - self.CB[1]*self.B) * sth
+        ])
+
+        return g
+
+    def calculate_coriolis_matrices(self, vel):
+        """Calculate rigid-body and added mass Coriolis-centripetal matrices.
+        
+        Args:
+            vel (np.ndarray): 6x1 velocity vector [u, v, w, p, q, r]
+            
+        Returns:
+            tuple: (C_RB, C_A) where:
+                - C_RB is the 6x6 rigid-body Coriolis-centripetal matrix
+                - C_A is the 6x6 added mass Coriolis-centripetal matrix
+        """
+        # Split velocity vector into linear and angular components
+        v1 = vel[0:3]  # Linear velocities [u, v, w]
+        v2 = vel[3:6]  # Angular velocities [p, q, r]
+        
+        # Split mass matrix into blocks
+        M_RB = self.mass_matrix
+        M11  = M_RB[0:3, 0:3]
+        M12  = M_RB[0:3, 3:6]
+        M21  = M_RB[3:6, 0:3]
+        M22  = M_RB[3:6, 3:6]
+        
+        # Calculate rigid-body Coriolis matrix
+        C_RB = np.zeros((6, 6))
+        C_RB[0:3, 3:6] = -Smat(M11 @ v1 + M12 @ v2)
+        C_RB[3:6, 0:3] = -Smat(M11 @ v1 + M12 @ v2)
+        C_RB[3:6, 3:6] = -Smat(M21 @ v1 + M22 @ v2)
+        
+        # Split added mass matrix into blocks
+        M_A = self.added_mass_matrix
+        A11 = M_A[0:3, 0:3]
+        A12 = M_A[0:3, 3:6]
+        A21 = M_A[3:6, 0:3]
+        A22 = M_A[3:6, 3:6]
+        
+        # Calculate added mass Coriolis matrix
+        C_A = np.zeros((6, 6))
+        C_A[0:3, 3:6] = -Smat(A11 @ v1 + A12 @ v2)
+        C_A[3:6, 0:3] = -Smat(A11 @ v1 + A12 @ v2)
+        C_A[3:6, 3:6] = -Smat(A21 @ v1 + A22 @ v2)
+        
+        return C_RB, C_A

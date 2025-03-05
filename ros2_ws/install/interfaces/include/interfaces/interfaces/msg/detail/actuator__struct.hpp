@@ -40,65 +40,25 @@ struct Actuator_
   explicit Actuator_(rosidl_runtime_cpp::MessageInitialization _init = rosidl_runtime_cpp::MessageInitialization::ALL)
   : header(_init)
   {
-    if (rosidl_runtime_cpp::MessageInitialization::ALL == _init ||
-      rosidl_runtime_cpp::MessageInitialization::ZERO == _init)
-    {
-      this->rudder = 0.0;
-      this->propeller = 0.0;
-      this->upper_rudder = 0.0;
-      this->lower_rudder = 0.0;
-      this->stern_fin_left = 0.0;
-      this->stern_fin_right = 0.0;
-      this->bow_fin_left = 0.0;
-      this->bow_fin_right = 0.0;
-    }
+    (void)_init;
   }
 
   explicit Actuator_(const ContainerAllocator & _alloc, rosidl_runtime_cpp::MessageInitialization _init = rosidl_runtime_cpp::MessageInitialization::ALL)
   : header(_alloc, _init)
   {
-    if (rosidl_runtime_cpp::MessageInitialization::ALL == _init ||
-      rosidl_runtime_cpp::MessageInitialization::ZERO == _init)
-    {
-      this->rudder = 0.0;
-      this->propeller = 0.0;
-      this->upper_rudder = 0.0;
-      this->lower_rudder = 0.0;
-      this->stern_fin_left = 0.0;
-      this->stern_fin_right = 0.0;
-      this->bow_fin_left = 0.0;
-      this->bow_fin_right = 0.0;
-    }
+    (void)_init;
   }
 
   // field types and members
   using _header_type =
     std_msgs::msg::Header_<ContainerAllocator>;
   _header_type header;
-  using _rudder_type =
-    double;
-  _rudder_type rudder;
-  using _propeller_type =
-    double;
-  _propeller_type propeller;
-  using _upper_rudder_type =
-    double;
-  _upper_rudder_type upper_rudder;
-  using _lower_rudder_type =
-    double;
-  _lower_rudder_type lower_rudder;
-  using _stern_fin_left_type =
-    double;
-  _stern_fin_left_type stern_fin_left;
-  using _stern_fin_right_type =
-    double;
-  _stern_fin_right_type stern_fin_right;
-  using _bow_fin_left_type =
-    double;
-  _bow_fin_left_type bow_fin_left;
-  using _bow_fin_right_type =
-    double;
-  _bow_fin_right_type bow_fin_right;
+  using _actuator_values_type =
+    std::vector<double, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<double>>;
+  _actuator_values_type actuator_values;
+  using _actuator_names_type =
+    std::vector<std::basic_string<char, std::char_traits<char>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<char>>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<std::basic_string<char, std::char_traits<char>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<char>>>>;
+  _actuator_names_type actuator_names;
   using _covariance_type =
     std::vector<double, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<double>>;
   _covariance_type covariance;
@@ -110,52 +70,16 @@ struct Actuator_
     this->header = _arg;
     return *this;
   }
-  Type & set__rudder(
-    const double & _arg)
+  Type & set__actuator_values(
+    const std::vector<double, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<double>> & _arg)
   {
-    this->rudder = _arg;
+    this->actuator_values = _arg;
     return *this;
   }
-  Type & set__propeller(
-    const double & _arg)
+  Type & set__actuator_names(
+    const std::vector<std::basic_string<char, std::char_traits<char>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<char>>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<std::basic_string<char, std::char_traits<char>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<char>>>> & _arg)
   {
-    this->propeller = _arg;
-    return *this;
-  }
-  Type & set__upper_rudder(
-    const double & _arg)
-  {
-    this->upper_rudder = _arg;
-    return *this;
-  }
-  Type & set__lower_rudder(
-    const double & _arg)
-  {
-    this->lower_rudder = _arg;
-    return *this;
-  }
-  Type & set__stern_fin_left(
-    const double & _arg)
-  {
-    this->stern_fin_left = _arg;
-    return *this;
-  }
-  Type & set__stern_fin_right(
-    const double & _arg)
-  {
-    this->stern_fin_right = _arg;
-    return *this;
-  }
-  Type & set__bow_fin_left(
-    const double & _arg)
-  {
-    this->bow_fin_left = _arg;
-    return *this;
-  }
-  Type & set__bow_fin_right(
-    const double & _arg)
-  {
-    this->bow_fin_right = _arg;
+    this->actuator_names = _arg;
     return *this;
   }
   Type & set__covariance(
@@ -210,28 +134,10 @@ struct Actuator_
     if (this->header != other.header) {
       return false;
     }
-    if (this->rudder != other.rudder) {
+    if (this->actuator_values != other.actuator_values) {
       return false;
     }
-    if (this->propeller != other.propeller) {
-      return false;
-    }
-    if (this->upper_rudder != other.upper_rudder) {
-      return false;
-    }
-    if (this->lower_rudder != other.lower_rudder) {
-      return false;
-    }
-    if (this->stern_fin_left != other.stern_fin_left) {
-      return false;
-    }
-    if (this->stern_fin_right != other.stern_fin_right) {
-      return false;
-    }
-    if (this->bow_fin_left != other.bow_fin_left) {
-      return false;
-    }
-    if (this->bow_fin_right != other.bow_fin_right) {
+    if (this->actuator_names != other.actuator_names) {
       return false;
     }
     if (this->covariance != other.covariance) {

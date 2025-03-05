@@ -5,7 +5,7 @@ from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, PointCloud2, Image, LaserScan, NavSatFix, NavSatStatus
 from geometry_msgs.msg import Point, Vector3, Pose, Quaternion, Twist, PoseWithCovarianceStamped
-# from mav_simulator.interfaces.msg import Actuator
+from interfaces.msg import Actuator
 import module_kinematics as kin
 from module_sensors import create_sensor
 
@@ -31,11 +31,26 @@ class Vessel_Pub_Sub():
         self.vessel_name = vessel.vessel_name
         self.topic_prefix = f'{self.vessel_name}_{self.vessel_id:02d}'
         
-        # Initialize commanded values for all actuators
-        self.delta_c = np.zeros(len(vessel.vessel_config.get('control_surfaces', {}).get('control_surfaces', [])))
-        self.n_c = np.zeros(len(vessel.vessel_config.get('thrusters', {}).get('thrusters', [])))
+        # Get control surfaces and thrusters directly from vessel
+        self.control_surfaces = vessel.control_surfaces['control_surfaces']
+        self.thrusters = vessel.thrusters['thrusters']
         
-
+        # Store actuator IDs with type prefixes
+        # cs_ for control surfaces, th_ for thrusters
+        self.control_surface_ids = {}  # Maps 'cs_id' to index
+        self.thruster_ids = {}        # Maps 'th_id' to index
+        
+        for idx, cs in enumerate(self.control_surfaces):
+            cs_id = cs.get('control_surface_id', idx+1)
+            self.control_surface_ids[f'cs_{cs_id}'] = idx
+            
+        for idx, th in enumerate(self.thrusters):
+            th_id = th.get('thruster_id', idx+1)
+            self.thruster_ids[f'th_{th_id}'] = idx
+        
+        # self.delta_c = np.zeros(len(self.control_surfaces))
+        # self.n_c = np.zeros(len(self.thrusters))
+        
         # Create sensors
         self.sensors = []
         if 'sensors' in vessel.vessel_config:
@@ -60,13 +75,13 @@ class Vessel_Pub_Sub():
             'timer': self.world_node.create_timer(self.vessel.vessel_config['time_step'], self.publish_odometry)
         }
         
-        # # Create actuator subscribers
-        # self.actuator_sub = self.create_subscription(
-        #     Actuator, 
-        #     f'{self.topic_prefix}/actuator_cmd', 
-        #     self.actuator_callback, 
-        #     1
-        # )
+        # Create actuator subscribers
+        self.actuator_sub = self.world_node.create_subscription(
+            Actuator, 
+            f'{self.topic_prefix}/actuator_cmd', 
+            self.actuator_callback, 
+            1
+        )
 
     def _get_msg_type(self, sensor_type):
         """Get the ROS message type for a given sensor type."""
@@ -161,12 +176,44 @@ class Vessel_Pub_Sub():
         return msg
 
     def actuator_callback(self, msg):
-        """Handle actuator command messages."""
-        # Update commanded values for all actuators
-        if len(self.delta_c) > 0:
-            self.delta_c[0] = msg.rudder * np.pi / 180.0  # Convert to radians
-        if len(self.n_c) > 0:
-            self.n_c[0] = msg.propeller / 60.0  # Convert to RPS
+        """Handle actuator command messages.
+        
+        The actuator values are received in their respective units:
+        - Control surfaces (e.g., rudder): degrees, converted to radians (prefix: cs_)
+        - Thrusters (e.g., propeller): RPM (prefix: th_)
+        
+        Expected format for actuator_names:
+        - Control surfaces: 'cs_ID' (e.g., 'cs_1', 'cs_2')
+        - Thrusters: 'th_ID' (e.g., 'th_1', 'th_2')
+        """
+        if len(msg.actuator_names) != len(msg.actuator_values):
+            self.world_node.get_logger().warn('Mismatch between actuator IDs and values length')
+            return
+            
+        for actuator_id, value in zip(msg.actuator_names, msg.actuator_values):
+            try:
+                if actuator_id.startswith('cs_'):
+                    # Handle control surface
+                    if actuator_id in self.control_surface_ids:
+                        idx = self.control_surface_ids[actuator_id]
+                        self.vessel.delta_c[idx] = value * np.pi / 180.0
+                        print(f"control_surface {actuator_id} idx: {idx}, value: {value} deg -> {self.vessel.delta_c[idx]} rad")
+                    else:
+                        self.world_node.get_logger().warn(f'Unknown control surface ID: {actuator_id}')
+                        
+                elif actuator_id.startswith('th_'):
+                    # Handle thruster
+                    if actuator_id in self.thruster_ids:
+                        idx = self.thruster_ids[actuator_id]
+                        self.vessel.n_c[idx] = value
+                        print(f"thruster {actuator_id} idx: {idx}, value: {value} RPM")
+                    else:
+                        self.world_node.get_logger().warn(f'Unknown thruster ID: {actuator_id}')
+                        
+                else:
+                    self.world_node.get_logger().warn(f'Invalid actuator ID format: {actuator_id}. Must start with cs_ or th_')
+            except (ValueError, IndexError):
+                self.world_node.get_logger().warn(f'Unknown actuator ID: {actuator_id}')
 
     def publish_odometry(self):
         """Publish vessel odometry data."""

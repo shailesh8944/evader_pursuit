@@ -17,8 +17,11 @@
 #include "std_msgs/msg/header.h"
 // Member `header`
 #include "std_msgs/msg/detail/header__rosidl_typesupport_introspection_c.h"
+// Member `actuator_values`
 // Member `covariance`
 #include "rosidl_runtime_c/primitives_sequence_functions.h"
+// Member `actuator_names`
+#include "rosidl_runtime_c/string_functions.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -37,6 +40,116 @@ void interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_ini
 void interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_fini_function(void * message_memory)
 {
   interfaces__msg__Actuator__fini(message_memory);
+}
+
+size_t interfaces__msg__Actuator__rosidl_typesupport_introspection_c__size_function__Actuator__actuator_values(
+  const void * untyped_member)
+{
+  const rosidl_runtime_c__double__Sequence * member =
+    (const rosidl_runtime_c__double__Sequence *)(untyped_member);
+  return member->size;
+}
+
+const void * interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_const_function__Actuator__actuator_values(
+  const void * untyped_member, size_t index)
+{
+  const rosidl_runtime_c__double__Sequence * member =
+    (const rosidl_runtime_c__double__Sequence *)(untyped_member);
+  return &member->data[index];
+}
+
+void * interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_function__Actuator__actuator_values(
+  void * untyped_member, size_t index)
+{
+  rosidl_runtime_c__double__Sequence * member =
+    (rosidl_runtime_c__double__Sequence *)(untyped_member);
+  return &member->data[index];
+}
+
+void interfaces__msg__Actuator__rosidl_typesupport_introspection_c__fetch_function__Actuator__actuator_values(
+  const void * untyped_member, size_t index, void * untyped_value)
+{
+  const double * item =
+    ((const double *)
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_const_function__Actuator__actuator_values(untyped_member, index));
+  double * value =
+    (double *)(untyped_value);
+  *value = *item;
+}
+
+void interfaces__msg__Actuator__rosidl_typesupport_introspection_c__assign_function__Actuator__actuator_values(
+  void * untyped_member, size_t index, const void * untyped_value)
+{
+  double * item =
+    ((double *)
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_function__Actuator__actuator_values(untyped_member, index));
+  const double * value =
+    (const double *)(untyped_value);
+  *item = *value;
+}
+
+bool interfaces__msg__Actuator__rosidl_typesupport_introspection_c__resize_function__Actuator__actuator_values(
+  void * untyped_member, size_t size)
+{
+  rosidl_runtime_c__double__Sequence * member =
+    (rosidl_runtime_c__double__Sequence *)(untyped_member);
+  rosidl_runtime_c__double__Sequence__fini(member);
+  return rosidl_runtime_c__double__Sequence__init(member, size);
+}
+
+size_t interfaces__msg__Actuator__rosidl_typesupport_introspection_c__size_function__Actuator__actuator_names(
+  const void * untyped_member)
+{
+  const rosidl_runtime_c__String__Sequence * member =
+    (const rosidl_runtime_c__String__Sequence *)(untyped_member);
+  return member->size;
+}
+
+const void * interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_const_function__Actuator__actuator_names(
+  const void * untyped_member, size_t index)
+{
+  const rosidl_runtime_c__String__Sequence * member =
+    (const rosidl_runtime_c__String__Sequence *)(untyped_member);
+  return &member->data[index];
+}
+
+void * interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_function__Actuator__actuator_names(
+  void * untyped_member, size_t index)
+{
+  rosidl_runtime_c__String__Sequence * member =
+    (rosidl_runtime_c__String__Sequence *)(untyped_member);
+  return &member->data[index];
+}
+
+void interfaces__msg__Actuator__rosidl_typesupport_introspection_c__fetch_function__Actuator__actuator_names(
+  const void * untyped_member, size_t index, void * untyped_value)
+{
+  const rosidl_runtime_c__String * item =
+    ((const rosidl_runtime_c__String *)
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_const_function__Actuator__actuator_names(untyped_member, index));
+  rosidl_runtime_c__String * value =
+    (rosidl_runtime_c__String *)(untyped_value);
+  *value = *item;
+}
+
+void interfaces__msg__Actuator__rosidl_typesupport_introspection_c__assign_function__Actuator__actuator_names(
+  void * untyped_member, size_t index, const void * untyped_value)
+{
+  rosidl_runtime_c__String * item =
+    ((rosidl_runtime_c__String *)
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_function__Actuator__actuator_names(untyped_member, index));
+  const rosidl_runtime_c__String * value =
+    (const rosidl_runtime_c__String *)(untyped_value);
+  *item = *value;
+}
+
+bool interfaces__msg__Actuator__rosidl_typesupport_introspection_c__resize_function__Actuator__actuator_names(
+  void * untyped_member, size_t size)
+{
+  rosidl_runtime_c__String__Sequence * member =
+    (rosidl_runtime_c__String__Sequence *)(untyped_member);
+  rosidl_runtime_c__String__Sequence__fini(member);
+  return rosidl_runtime_c__String__Sequence__init(member, size);
 }
 
 size_t interfaces__msg__Actuator__rosidl_typesupport_introspection_c__size_function__Actuator__covariance(
@@ -94,7 +207,7 @@ bool interfaces__msg__Actuator__rosidl_typesupport_introspection_c__resize_funct
   return rosidl_runtime_c__double__Sequence__init(member, size);
 }
 
-static rosidl_typesupport_introspection_c__MessageMember interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_message_member_array[10] = {
+static rosidl_typesupport_introspection_c__MessageMember interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_message_member_array[4] = {
   {
     "header",  // name
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
@@ -113,140 +226,38 @@ static rosidl_typesupport_introspection_c__MessageMember interfaces__msg__Actuat
     NULL  // resize(index) function pointer
   },
   {
-    "rudder",  // name
+    "actuator_values",  // name
     rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
-    false,  // is array
+    true,  // is array
     0,  // array size
     false,  // is upper bound
-    offsetof(interfaces__msg__Actuator, rudder),  // bytes offset in struct
+    offsetof(interfaces__msg__Actuator, actuator_values),  // bytes offset in struct
     NULL,  // default value
-    NULL,  // size() function pointer
-    NULL,  // get_const(index) function pointer
-    NULL,  // get(index) function pointer
-    NULL,  // fetch(index, &value) function pointer
-    NULL,  // assign(index, value) function pointer
-    NULL  // resize(index) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__size_function__Actuator__actuator_values,  // size() function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_const_function__Actuator__actuator_values,  // get_const(index) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_function__Actuator__actuator_values,  // get(index) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__fetch_function__Actuator__actuator_values,  // fetch(index, &value) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__assign_function__Actuator__actuator_values,  // assign(index, value) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__resize_function__Actuator__actuator_values  // resize(index) function pointer
   },
   {
-    "propeller",  // name
-    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
+    "actuator_names",  // name
+    rosidl_typesupport_introspection_c__ROS_TYPE_STRING,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
-    false,  // is array
+    true,  // is array
     0,  // array size
     false,  // is upper bound
-    offsetof(interfaces__msg__Actuator, propeller),  // bytes offset in struct
+    offsetof(interfaces__msg__Actuator, actuator_names),  // bytes offset in struct
     NULL,  // default value
-    NULL,  // size() function pointer
-    NULL,  // get_const(index) function pointer
-    NULL,  // get(index) function pointer
-    NULL,  // fetch(index, &value) function pointer
-    NULL,  // assign(index, value) function pointer
-    NULL  // resize(index) function pointer
-  },
-  {
-    "upper_rudder",  // name
-    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
-    0,  // upper bound of string
-    NULL,  // members of sub message
-    false,  // is array
-    0,  // array size
-    false,  // is upper bound
-    offsetof(interfaces__msg__Actuator, upper_rudder),  // bytes offset in struct
-    NULL,  // default value
-    NULL,  // size() function pointer
-    NULL,  // get_const(index) function pointer
-    NULL,  // get(index) function pointer
-    NULL,  // fetch(index, &value) function pointer
-    NULL,  // assign(index, value) function pointer
-    NULL  // resize(index) function pointer
-  },
-  {
-    "lower_rudder",  // name
-    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
-    0,  // upper bound of string
-    NULL,  // members of sub message
-    false,  // is array
-    0,  // array size
-    false,  // is upper bound
-    offsetof(interfaces__msg__Actuator, lower_rudder),  // bytes offset in struct
-    NULL,  // default value
-    NULL,  // size() function pointer
-    NULL,  // get_const(index) function pointer
-    NULL,  // get(index) function pointer
-    NULL,  // fetch(index, &value) function pointer
-    NULL,  // assign(index, value) function pointer
-    NULL  // resize(index) function pointer
-  },
-  {
-    "stern_fin_left",  // name
-    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
-    0,  // upper bound of string
-    NULL,  // members of sub message
-    false,  // is array
-    0,  // array size
-    false,  // is upper bound
-    offsetof(interfaces__msg__Actuator, stern_fin_left),  // bytes offset in struct
-    NULL,  // default value
-    NULL,  // size() function pointer
-    NULL,  // get_const(index) function pointer
-    NULL,  // get(index) function pointer
-    NULL,  // fetch(index, &value) function pointer
-    NULL,  // assign(index, value) function pointer
-    NULL  // resize(index) function pointer
-  },
-  {
-    "stern_fin_right",  // name
-    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
-    0,  // upper bound of string
-    NULL,  // members of sub message
-    false,  // is array
-    0,  // array size
-    false,  // is upper bound
-    offsetof(interfaces__msg__Actuator, stern_fin_right),  // bytes offset in struct
-    NULL,  // default value
-    NULL,  // size() function pointer
-    NULL,  // get_const(index) function pointer
-    NULL,  // get(index) function pointer
-    NULL,  // fetch(index, &value) function pointer
-    NULL,  // assign(index, value) function pointer
-    NULL  // resize(index) function pointer
-  },
-  {
-    "bow_fin_left",  // name
-    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
-    0,  // upper bound of string
-    NULL,  // members of sub message
-    false,  // is array
-    0,  // array size
-    false,  // is upper bound
-    offsetof(interfaces__msg__Actuator, bow_fin_left),  // bytes offset in struct
-    NULL,  // default value
-    NULL,  // size() function pointer
-    NULL,  // get_const(index) function pointer
-    NULL,  // get(index) function pointer
-    NULL,  // fetch(index, &value) function pointer
-    NULL,  // assign(index, value) function pointer
-    NULL  // resize(index) function pointer
-  },
-  {
-    "bow_fin_right",  // name
-    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
-    0,  // upper bound of string
-    NULL,  // members of sub message
-    false,  // is array
-    0,  // array size
-    false,  // is upper bound
-    offsetof(interfaces__msg__Actuator, bow_fin_right),  // bytes offset in struct
-    NULL,  // default value
-    NULL,  // size() function pointer
-    NULL,  // get_const(index) function pointer
-    NULL,  // get(index) function pointer
-    NULL,  // fetch(index, &value) function pointer
-    NULL,  // assign(index, value) function pointer
-    NULL  // resize(index) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__size_function__Actuator__actuator_names,  // size() function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_const_function__Actuator__actuator_names,  // get_const(index) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__get_function__Actuator__actuator_names,  // get(index) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__fetch_function__Actuator__actuator_names,  // fetch(index, &value) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__assign_function__Actuator__actuator_names,  // assign(index, value) function pointer
+    interfaces__msg__Actuator__rosidl_typesupport_introspection_c__resize_function__Actuator__actuator_names  // resize(index) function pointer
   },
   {
     "covariance",  // name
@@ -270,7 +281,7 @@ static rosidl_typesupport_introspection_c__MessageMember interfaces__msg__Actuat
 static const rosidl_typesupport_introspection_c__MessageMembers interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_message_members = {
   "interfaces__msg",  // message namespace
   "Actuator",  // message name
-  10,  // number of fields
+  4,  // number of fields
   sizeof(interfaces__msg__Actuator),
   interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_message_member_array,  // message members
   interfaces__msg__Actuator__rosidl_typesupport_introspection_c__Actuator_init_function,  // function to initialize message memory (memory has to be allocated)

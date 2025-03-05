@@ -14,8 +14,11 @@
 // Include directives for member types
 // Member `header`
 #include "std_msgs/msg/detail/header__functions.h"
+// Member `actuator_values`
 // Member `covariance`
 #include "rosidl_runtime_c/primitives_sequence_functions.h"
+// Member `actuator_names`
+#include "rosidl_runtime_c/string_functions.h"
 
 bool
 interfaces__msg__Actuator__init(interfaces__msg__Actuator * msg)
@@ -28,14 +31,16 @@ interfaces__msg__Actuator__init(interfaces__msg__Actuator * msg)
     interfaces__msg__Actuator__fini(msg);
     return false;
   }
-  // rudder
-  // propeller
-  // upper_rudder
-  // lower_rudder
-  // stern_fin_left
-  // stern_fin_right
-  // bow_fin_left
-  // bow_fin_right
+  // actuator_values
+  if (!rosidl_runtime_c__double__Sequence__init(&msg->actuator_values, 0)) {
+    interfaces__msg__Actuator__fini(msg);
+    return false;
+  }
+  // actuator_names
+  if (!rosidl_runtime_c__String__Sequence__init(&msg->actuator_names, 0)) {
+    interfaces__msg__Actuator__fini(msg);
+    return false;
+  }
   // covariance
   if (!rosidl_runtime_c__double__Sequence__init(&msg->covariance, 0)) {
     interfaces__msg__Actuator__fini(msg);
@@ -52,14 +57,10 @@ interfaces__msg__Actuator__fini(interfaces__msg__Actuator * msg)
   }
   // header
   std_msgs__msg__Header__fini(&msg->header);
-  // rudder
-  // propeller
-  // upper_rudder
-  // lower_rudder
-  // stern_fin_left
-  // stern_fin_right
-  // bow_fin_left
-  // bow_fin_right
+  // actuator_values
+  rosidl_runtime_c__double__Sequence__fini(&msg->actuator_values);
+  // actuator_names
+  rosidl_runtime_c__String__Sequence__fini(&msg->actuator_names);
   // covariance
   rosidl_runtime_c__double__Sequence__fini(&msg->covariance);
 }
@@ -76,36 +77,16 @@ interfaces__msg__Actuator__are_equal(const interfaces__msg__Actuator * lhs, cons
   {
     return false;
   }
-  // rudder
-  if (lhs->rudder != rhs->rudder) {
+  // actuator_values
+  if (!rosidl_runtime_c__double__Sequence__are_equal(
+      &(lhs->actuator_values), &(rhs->actuator_values)))
+  {
     return false;
   }
-  // propeller
-  if (lhs->propeller != rhs->propeller) {
-    return false;
-  }
-  // upper_rudder
-  if (lhs->upper_rudder != rhs->upper_rudder) {
-    return false;
-  }
-  // lower_rudder
-  if (lhs->lower_rudder != rhs->lower_rudder) {
-    return false;
-  }
-  // stern_fin_left
-  if (lhs->stern_fin_left != rhs->stern_fin_left) {
-    return false;
-  }
-  // stern_fin_right
-  if (lhs->stern_fin_right != rhs->stern_fin_right) {
-    return false;
-  }
-  // bow_fin_left
-  if (lhs->bow_fin_left != rhs->bow_fin_left) {
-    return false;
-  }
-  // bow_fin_right
-  if (lhs->bow_fin_right != rhs->bow_fin_right) {
+  // actuator_names
+  if (!rosidl_runtime_c__String__Sequence__are_equal(
+      &(lhs->actuator_names), &(rhs->actuator_names)))
+  {
     return false;
   }
   // covariance
@@ -131,22 +112,18 @@ interfaces__msg__Actuator__copy(
   {
     return false;
   }
-  // rudder
-  output->rudder = input->rudder;
-  // propeller
-  output->propeller = input->propeller;
-  // upper_rudder
-  output->upper_rudder = input->upper_rudder;
-  // lower_rudder
-  output->lower_rudder = input->lower_rudder;
-  // stern_fin_left
-  output->stern_fin_left = input->stern_fin_left;
-  // stern_fin_right
-  output->stern_fin_right = input->stern_fin_right;
-  // bow_fin_left
-  output->bow_fin_left = input->bow_fin_left;
-  // bow_fin_right
-  output->bow_fin_right = input->bow_fin_right;
+  // actuator_values
+  if (!rosidl_runtime_c__double__Sequence__copy(
+      &(input->actuator_values), &(output->actuator_values)))
+  {
+    return false;
+  }
+  // actuator_names
+  if (!rosidl_runtime_c__String__Sequence__copy(
+      &(input->actuator_names), &(output->actuator_names)))
+  {
+    return false;
+  }
   // covariance
   if (!rosidl_runtime_c__double__Sequence__copy(
       &(input->covariance), &(output->covariance)))

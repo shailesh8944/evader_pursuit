@@ -36,59 +36,39 @@ inline void to_flow_style_yaml(
     out << ", ";
   }
 
-  // member: rudder
+  // member: actuator_values
   {
-    out << "rudder: ";
-    rosidl_generator_traits::value_to_yaml(msg.rudder, out);
+    if (msg.actuator_values.size() == 0) {
+      out << "actuator_values: []";
+    } else {
+      out << "actuator_values: [";
+      size_t pending_items = msg.actuator_values.size();
+      for (auto item : msg.actuator_values) {
+        rosidl_generator_traits::value_to_yaml(item, out);
+        if (--pending_items > 0) {
+          out << ", ";
+        }
+      }
+      out << "]";
+    }
     out << ", ";
   }
 
-  // member: propeller
+  // member: actuator_names
   {
-    out << "propeller: ";
-    rosidl_generator_traits::value_to_yaml(msg.propeller, out);
-    out << ", ";
-  }
-
-  // member: upper_rudder
-  {
-    out << "upper_rudder: ";
-    rosidl_generator_traits::value_to_yaml(msg.upper_rudder, out);
-    out << ", ";
-  }
-
-  // member: lower_rudder
-  {
-    out << "lower_rudder: ";
-    rosidl_generator_traits::value_to_yaml(msg.lower_rudder, out);
-    out << ", ";
-  }
-
-  // member: stern_fin_left
-  {
-    out << "stern_fin_left: ";
-    rosidl_generator_traits::value_to_yaml(msg.stern_fin_left, out);
-    out << ", ";
-  }
-
-  // member: stern_fin_right
-  {
-    out << "stern_fin_right: ";
-    rosidl_generator_traits::value_to_yaml(msg.stern_fin_right, out);
-    out << ", ";
-  }
-
-  // member: bow_fin_left
-  {
-    out << "bow_fin_left: ";
-    rosidl_generator_traits::value_to_yaml(msg.bow_fin_left, out);
-    out << ", ";
-  }
-
-  // member: bow_fin_right
-  {
-    out << "bow_fin_right: ";
-    rosidl_generator_traits::value_to_yaml(msg.bow_fin_right, out);
+    if (msg.actuator_names.size() == 0) {
+      out << "actuator_names: []";
+    } else {
+      out << "actuator_names: [";
+      size_t pending_items = msg.actuator_names.size();
+      for (auto item : msg.actuator_names) {
+        rosidl_generator_traits::value_to_yaml(item, out);
+        if (--pending_items > 0) {
+          out << ", ";
+        }
+      }
+      out << "]";
+    }
     out << ", ";
   }
 
@@ -124,84 +104,44 @@ inline void to_block_style_yaml(
     to_block_style_yaml(msg.header, out, indentation + 2);
   }
 
-  // member: rudder
+  // member: actuator_values
   {
     if (indentation > 0) {
       out << std::string(indentation, ' ');
     }
-    out << "rudder: ";
-    rosidl_generator_traits::value_to_yaml(msg.rudder, out);
-    out << "\n";
+    if (msg.actuator_values.size() == 0) {
+      out << "actuator_values: []\n";
+    } else {
+      out << "actuator_values:\n";
+      for (auto item : msg.actuator_values) {
+        if (indentation > 0) {
+          out << std::string(indentation, ' ');
+        }
+        out << "- ";
+        rosidl_generator_traits::value_to_yaml(item, out);
+        out << "\n";
+      }
+    }
   }
 
-  // member: propeller
+  // member: actuator_names
   {
     if (indentation > 0) {
       out << std::string(indentation, ' ');
     }
-    out << "propeller: ";
-    rosidl_generator_traits::value_to_yaml(msg.propeller, out);
-    out << "\n";
-  }
-
-  // member: upper_rudder
-  {
-    if (indentation > 0) {
-      out << std::string(indentation, ' ');
+    if (msg.actuator_names.size() == 0) {
+      out << "actuator_names: []\n";
+    } else {
+      out << "actuator_names:\n";
+      for (auto item : msg.actuator_names) {
+        if (indentation > 0) {
+          out << std::string(indentation, ' ');
+        }
+        out << "- ";
+        rosidl_generator_traits::value_to_yaml(item, out);
+        out << "\n";
+      }
     }
-    out << "upper_rudder: ";
-    rosidl_generator_traits::value_to_yaml(msg.upper_rudder, out);
-    out << "\n";
-  }
-
-  // member: lower_rudder
-  {
-    if (indentation > 0) {
-      out << std::string(indentation, ' ');
-    }
-    out << "lower_rudder: ";
-    rosidl_generator_traits::value_to_yaml(msg.lower_rudder, out);
-    out << "\n";
-  }
-
-  // member: stern_fin_left
-  {
-    if (indentation > 0) {
-      out << std::string(indentation, ' ');
-    }
-    out << "stern_fin_left: ";
-    rosidl_generator_traits::value_to_yaml(msg.stern_fin_left, out);
-    out << "\n";
-  }
-
-  // member: stern_fin_right
-  {
-    if (indentation > 0) {
-      out << std::string(indentation, ' ');
-    }
-    out << "stern_fin_right: ";
-    rosidl_generator_traits::value_to_yaml(msg.stern_fin_right, out);
-    out << "\n";
-  }
-
-  // member: bow_fin_left
-  {
-    if (indentation > 0) {
-      out << std::string(indentation, ' ');
-    }
-    out << "bow_fin_left: ";
-    rosidl_generator_traits::value_to_yaml(msg.bow_fin_left, out);
-    out << "\n";
-  }
-
-  // member: bow_fin_right
-  {
-    if (indentation > 0) {
-      out << std::string(indentation, ' ');
-    }
-    out << "bow_fin_right: ";
-    rosidl_generator_traits::value_to_yaml(msg.bow_fin_right, out);
-    out << "\n";
   }
 
   // member: covariance

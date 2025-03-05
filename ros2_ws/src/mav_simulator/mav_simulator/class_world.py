@@ -2,7 +2,7 @@
 
 import numpy as np
 import yaml
-from class_vessel_lat import Vessel
+from class_vessel import Vessel
 from class_vessel_pub_sub_ros2 import Vessel_Pub_Sub
 from read_input import read_input
 
