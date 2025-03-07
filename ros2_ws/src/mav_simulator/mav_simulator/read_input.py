@@ -1,3 +1,22 @@
+"""
+File: read_input.py
+Description: This file provides utilities for reading and processing input configuration files
+             for the MAV simulator. It includes functions for:
+             
+             - Loading and parsing YAML configuration files
+             - Resolving file paths with vessel name substitution
+             - Processing vessel and world configuration parameters
+             - Handling hydrodynamic data inputs
+             - Setting up initial conditions for simulation
+             - Coordinating the loading of various input files needed for simulation
+             
+             This module serves as the configuration interface for the simulator,
+             allowing users to define vessel properties, simulation parameters,
+             and environmental conditions through external configuration files.
+             
+Author: MAV Simulator Team
+"""
+
 from typing import Dict, Tuple, List
 import numpy as np
 import yaml

@@ -1,3 +1,22 @@
+"""
+File: plot_results.py
+Description: This file provides visualization utilities for the MAV simulator results.
+             It includes functions for:
+             
+             - Creating and initializing live plots during simulation
+             - Updating plots with real-time simulation data
+             - Generating comprehensive post-simulation visualizations
+             - Animating vessel trajectories and state evolution
+             - Displaying multiple vessel states and parameters simultaneously
+             
+             This module enhances the simulator with visual feedback capabilities,
+             making it easier to interpret simulation results and verify vessel behavior.
+             It supports both real-time visualization during simulation and
+             post-processing of recorded simulation data.
+             
+Author: MAV Simulator Team
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation

@@ -1,3 +1,21 @@
+"""
+File: class_grid.py
+Description: This file defines the Grid class which handles vessel geometry processing for
+             hydrodynamic calculations in the MAV simulator. The Grid class:
+             
+             - Loads and parses GDF (Geometry Data File) files containing vessel hull geometry
+             - Processes 3D vessel geometry into usable data structures
+             - Calculates geometric properties like centroids, areas, and unit vectors
+             - Creates 2D cross-sections of the vessel for strip theory calculations
+             - Computes vessel characteristics like displacement and wetted area
+             - Provides geometric data needed for hydrodynamic coefficient calculation
+             
+             This module serves as the geometric foundation for hydrodynamic modeling,
+             enabling accurate force and moment calculations based on the vessel's shape.
+             
+Author: MAV Simulator Team
+"""
+
 import numpy as np
 
 class Grid:

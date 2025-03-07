@@ -1,3 +1,21 @@
+"""
+File: simulate.py
+Description: This is the main entry point for running the MAV simulator with ROS2 integration.
+             This script:
+             
+             - Initializes the ROS2 environment
+             - Creates the World simulation instance
+             - Sets up the World_Node for ROS2 communication
+             - Establishes connections between the simulation and ROS2
+             - Runs the ROS2 spin loop in a separate thread
+             - Manages the overall execution of the simulation
+             
+             This file serves as the bridge between the simulation core and the ROS2
+             middleware, enabling distributed simulation and external control.
+             
+Author: MAV Simulator Team
+"""
+
 #!/usr/bin/env python3
 
 from class_world import World

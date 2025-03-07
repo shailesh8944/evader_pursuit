@@ -1,3 +1,24 @@
+"""
+File: module_control.py
+Description: This file provides control strategies for marine autonomous vessels in the simulator.
+             The module implements various control functions for:
+             
+             - Rudder/control surface angle commands:
+               * Fixed angle control for maintaining constant rudder angles
+               * Switching angle control for alternating between different angles
+               
+             - Thruster/propeller control:
+               * Fixed RPM control for constant thrust
+               * Variable thrust patterns
+               
+             These control functions can be used as building blocks for more complex
+             control strategies or as simple test inputs for vessel dynamics validation.
+             The functions take the current simulation time and vessel state as inputs
+             and return appropriate control commands.
+             
+Author: MAV Simulator Team
+"""
+
 import numpy as np
 
 """

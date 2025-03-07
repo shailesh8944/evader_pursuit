@@ -1,3 +1,21 @@
+"""
+File: calculate_hydrodynamics.py
+Description: This file contains the CalculateHydrodynamics class which is responsible for
+             computing hydrodynamic forces and coefficients for marine vessels.
+             
+             Key functionalities include:
+             - Generating mass matrices for vessel dynamics
+             - Calculating added mass from hydrodynamic data files
+             - Computing cross-flow drag for different vessel types
+             - Implementing Hoerner's method for hydrodynamic coefficient estimation
+             - Supporting various hydrodynamic modeling approaches for marine vessels
+             
+             This module is used by the Vessel class to obtain the hydrodynamic properties
+             needed for accurate simulation of vessel motion in water.
+             
+Author: MAV Simulator Team
+"""
+
 import numpy as np
 import json
 from module_kinematics import Smat

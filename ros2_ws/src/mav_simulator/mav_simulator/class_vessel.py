@@ -1,3 +1,23 @@
+"""
+File: class_vessel.py
+Description: This file defines the Vessel class which is the core component of the MAV simulator.
+             It models a marine autonomous vessel with complete 6-DOF dynamics including:
+             - Mass and inertia properties
+             - Hydrodynamic forces (added mass, damping)
+             - Control forces (rudder, thruster)
+             - Gravitational and buoyancy forces
+             - Coriolis and centripetal effects
+             
+             The class provides methods for:
+             - Initializing vessel parameters
+             - Simulating vessel dynamics through ODE integration
+             - Computing various force components
+             - Handling vessel state and control inputs
+             - Supporting ROS2 integration for distributed simulation
+             
+Author: MAV Simulator Team
+"""
+
 from typing import Dict, Optional, List
 import numpy as np
 from scipy.integrate import solve_ivp

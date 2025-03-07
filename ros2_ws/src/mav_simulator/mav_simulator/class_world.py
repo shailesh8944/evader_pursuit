@@ -1,3 +1,21 @@
+"""
+File: class_world.py
+Description: This file defines the World class which serves as the simulation environment
+             container for the MAV simulator. The World class:
+             
+             - Manages multiple vessel instances within a unified simulation environment
+             - Handles initialization of the simulation world from configuration files
+             - Coordinates the simulation time stepping across all vessels
+             - Provides ROS2 integration for distributed simulation
+             - Maintains global simulation parameters like GPS datum and world boundaries
+             - Orchestrates the overall simulation execution
+             
+             The World class acts as the top-level controller for the entire simulation,
+             bringing together vessels, environmental conditions, and simulation parameters.
+             
+Author: MAV Simulator Team
+"""
+
 #!/usr/bin/env python3
 
 import numpy as np

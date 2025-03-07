@@ -1,3 +1,36 @@
+"""
+File: module_kinematics.py
+Description: This file provides a comprehensive set of functions for handling kinematics
+             transformations in the MAV simulator. It includes utilities for:
+             
+             - Coordinate frame transformations between:
+               * Earth Centered Inertial (ECI) frame
+               * Earth Centered Earth Fixed (ECEF) frame
+               * North-East-Down (NED) frame
+               * Body frame
+               * Flow frame
+               
+             - Conversion between different rotation representations:
+               * Euler angles (with different rotation orders)
+               * Quaternions
+               * Rotation matrices
+               
+             - Kinematic calculations:
+               * Angular velocity transformations
+               * Rate matrices
+               * Skew-symmetric matrices
+               
+             - Navigation utilities:
+               * Latitude/longitude/height conversions
+               * Waypoint generation
+               * Angle normalization
+               
+             This module serves as the mathematical foundation for all spatial transformations
+             in the simulator.
+             
+Author: MAV Simulator Team
+"""
+
 import numpy as np
 import warnings
 

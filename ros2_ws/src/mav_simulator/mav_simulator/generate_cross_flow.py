@@ -1,3 +1,22 @@
+"""
+File: generate_cross_flow.py
+Description: This file provides functionality for generating cross-flow hydrodynamic coefficients
+             for marine vessels. The CrossFlowGenerator class:
+             
+             - Processes vessel geometry from GDF (Geometry Data File) files
+             - Calculates hydrodynamic coefficients using strip theory
+             - Handles different vessel types (AUV, surface vessels)
+             - Updates hydrodynamic YAML configuration files with calculated coefficients
+             - Integrates with the Grid class for geometry processing
+             - Supports both command-line and programmatic usage
+             
+             This module is essential for accurately modeling the hydrodynamic forces
+             on vessels, particularly for cross-flow effects that occur during non-zero
+             sideslip angles or during turning maneuvers.
+             
+Author: MAV Simulator Team
+"""
+
 #!/usr/bin/env python3
 
 import numpy as np

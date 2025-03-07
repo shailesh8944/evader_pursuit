@@ -1,3 +1,22 @@
+"""
+File: class_vessel_pub_sub_ros2.py
+Description: This file implements the ROS2 communication interface for vessel objects in the
+             MAV simulator. The Vessel_Pub_Sub class:
+             
+             - Creates and manages ROS2 publishers for vessel state and sensor data
+             - Sets up subscribers for actuator commands and control inputs
+             - Handles message conversion between simulator data structures and ROS2 messages
+             - Manages sensor data publication at appropriate rates
+             - Provides callback functions for processing incoming ROS2 messages
+             - Bridges the gap between the simulation core and ROS2 ecosystem
+             
+             This class enables the integration of the MAV simulator with other ROS2 nodes,
+             allowing for distributed simulation, external control systems, visualization,
+             and data recording.
+             
+Author: MAV Simulator Team
+"""
+
 import numpy as np
 import rclpy
 from rclpy.node import Node

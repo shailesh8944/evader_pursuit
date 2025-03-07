@@ -1,3 +1,23 @@
+"""
+File: simulate_noros.py
+Description: This file provides a standalone simulation environment for the MAV simulator
+             without requiring ROS2. It:
+             
+             - Initializes the simulation environment from configuration files
+             - Creates and configures vessel instances
+             - Runs the simulation loop with time stepping
+             - Displays simulation progress and results
+             - Calculates and reports various forces acting on the vessel
+             
+             This module is useful for:
+             - Quick testing of vessel dynamics without ROS2 overhead
+             - Debugging core simulation functionality
+             - Running batch simulations for parameter studies
+             - Providing a simpler entry point for users unfamiliar with ROS2
+             
+Author: MAV Simulator Team
+"""
+
 from typing import NoReturn
 import numpy as np
 import sys

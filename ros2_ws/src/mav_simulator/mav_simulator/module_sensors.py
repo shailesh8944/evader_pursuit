@@ -1,3 +1,29 @@
+"""
+File: module_sensors.py
+Description: This file implements various sensor models for the MAV simulator. It provides:
+             
+             - A BaseSensor class that defines the common interface for all sensors
+             - Specific sensor implementations including:
+               * IMU (Inertial Measurement Unit)
+               * GPS (Global Positioning System)
+               * UWB (Ultra-Wideband positioning)
+               * Encoders (for measuring actuator positions)
+               * DVL (Doppler Velocity Log)
+               
+             - Realistic sensor modeling with:
+               * Appropriate noise models
+               * Configurable update rates
+               * Placement and orientation offsets
+               * ROS2 message type conversion
+               
+             - A factory function for creating sensor instances from configuration
+             
+             This module enables realistic sensing capabilities for simulated vessels,
+             allowing for the development and testing of perception and estimation algorithms.
+             
+Author: MAV Simulator Team
+"""
+
 import numpy as np
 from rclpy.node import Node
 from std_msgs.msg import Float64
