@@ -4,8 +4,8 @@ from rclpy.node import Node
 from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, PointCloud2, Image, LaserScan, NavSatFix, NavSatStatus
-from geometry_msgs.msg import Point, Vector3, Pose, Quaternion, Twist, PoseWithCovarianceStamped
-from interfaces.msg import Actuator
+from geometry_msgs.msg import Point, Vector3, Pose, Quaternion, Twist, PoseWithCovarianceStamped, TwistWithCovarianceStamped
+from interfaces.msg import Actuator, DVL
 import module_kinematics as kin
 from module_sensors import create_sensor
 
@@ -89,7 +89,8 @@ class Vessel_Pub_Sub():
             'IMU': Imu,
             'GPS': NavSatFix,
             'UWB': PoseWithCovarianceStamped,
-            # 'encoders': Actuator
+            'DVL': DVL,
+            'encoders': Actuator
         }
         return msg_types.get(sensor_type)
 
@@ -166,12 +167,23 @@ class Vessel_Pub_Sub():
             msg.pose.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
             msg.pose.covariance = measurement['covariance']
             
-        # elif sensor_type == 'encoders':
-        #     msg = Actuator()
-        #     msg.header.stamp = current_time
-        #     msg.rudder = measurement['rudder']
-        #     msg.propeller = measurement['propeller']
-        #     msg.covariance = measurement['covariance']
+        elif sensor_type == 'DVL':
+            msg = DVL()
+            msg.header.stamp = current_time
+            msg.header.frame_id = f'{self.topic_prefix}_dvl_frame'
+            msg.velocity = Vector3(
+                x=measurement['velocity'][0],
+                y=measurement['velocity'][1],
+                z=measurement['velocity'][2]
+            )
+            msg.covariance = measurement['covariance']
+            
+        elif sensor_type == 'encoders':
+            msg = Actuator()
+            msg.header.stamp = current_time
+            msg.actuator_values = measurement['actuator_values']
+            msg.actuator_names = measurement['actuator_names']
+            # msg.covariance = measurement['covariance']
             
         return msg
 

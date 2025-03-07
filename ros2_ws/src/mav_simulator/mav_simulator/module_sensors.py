@@ -80,10 +80,19 @@ class GPSSensor(BaseSensor):
         self.gps_rms = np.array([3, 3, 3], dtype=np.float64)
         self.gps_cov = np.diag(self.gps_rms ** 2)
 
-    def get_measurement(self):
+    def get_measurement(self, quat=False):
         state = self.vessel_node.vessel.current_state
         llh0 = self.vessel_node.vessel.gps_datum
-        ned = state[6:9] + kin.quat_to_rotm(state[9:13]) @ self.location
+        
+        # Handle both quaternion and euler angle inputs
+        if not quat:
+            # Convert euler angles to quaternion
+            eul = state[9:12]
+            orientation = kin.eul_to_quat(eul)
+        else:
+            orientation = state[9:13]
+            
+        ned = state[6:9] + kin.quat_to_rotm(orientation) @ self.location
         ned = ned + np.random.multivariate_normal(np.zeros(3), self.gps_cov)
         llh = kin.ned_to_llh(ned, llh0)
 
@@ -105,10 +114,19 @@ class UWBSensor(BaseSensor):
         self.uwb_cov_full = -np.eye(6)
         self.uwb_cov_full[0:3][:, 0:3] = self.uwb_cov
 
-    def get_measurement(self):
+    def get_measurement(self, quat=False):
         state = self.vessel_node.vessel.current_state
         ned = state[6:9]
-        r_sen = ned + kin.quat_to_rotm(state[9:13]) @ self.location
+        
+        # Handle both quaternion and euler angle inputs
+        if not quat:
+            # Convert euler angles to quaternion
+            eul = state[9:12]
+            orientation = kin.eul_to_quat(eul)
+        else:
+            orientation = state[9:13]
+            
+        r_sen = ned + kin.quat_to_rotm(orientation) @ self.location
         r_sen = r_sen + np.random.multivariate_normal(np.zeros(3), self.uwb_cov)
 
         return {
@@ -120,16 +138,60 @@ class EncoderSensor(BaseSensor):
     def __init__(self, sensor_config, vessel_id, topic_prefix, vessel_node):
         super().__init__(sensor_config, vessel_id, topic_prefix, vessel_node)
         
-        # Noise parameters
-        self.encoders_rms = np.array([1e-1 * np.pi / 180, 1e-1 / 60])
+        # Get number of control surfaces and thrusters from vessel
+        self.num_control_surfaces = len(vessel_node.vessel.control_surfaces['control_surfaces'])
+        self.num_thrusters = len(vessel_node.vessel.thrusters['thrusters'])
+        
+        # Calculate indices in state vector for actuators
+        # From vessel_ode: state vector structure is:
+        # - state[0:6]: Velocities [u, v, w, p, q, r]
+        # - state[6:9]: Positions [x, y, z]
+        # - state[9:12/13]: Euler angles [phi, theta, psi] or Quaternions [q0, q1, q2, q3]
+        # - state[control_start:thruster_start]: Control surface angles
+        # - state[thruster_start:]: Thruster states
+        use_quaternion = vessel_node.vessel.use_quaternion
+        attitude_size = 4 if use_quaternion else 3
+        self.control_start = 9 + attitude_size
+        self.thruster_start = self.control_start + self.num_control_surfaces
+        
+        # Create noise parameters for all actuators
+        # Control surfaces in radians, thrusters in RPM
+        self.encoders_rms = np.concatenate([
+            np.ones(self.num_control_surfaces) * 1e-1 * np.pi / 180,  # 0.1 deg for control surfaces
+            np.ones(self.num_thrusters) * 1e-1 / 60  # 0.1 RPM for thrusters
+        ])
         self.encoders_cov = np.diag(self.encoders_rms ** 2)
 
     def get_measurement(self):
         state = self.vessel_node.vessel.current_state
         
+        # Get control surface angles from state vector (convert to degrees)
+        control_surface_values = [
+            state[self.control_start + i] * 180.0 / np.pi 
+            for i in range(self.num_control_surfaces)
+        ]
+        
+        # Get thruster RPMs from state vector (convert to RPM)
+        thruster_values = [
+            state[self.thruster_start + i] * 60.0 
+            for i in range(self.num_thrusters)
+        ]
+        
+        # Add noise to measurements
+        actuator_values = np.concatenate([control_surface_values, thruster_values])
+        actuator_values += np.random.multivariate_normal(np.zeros(len(actuator_values)), self.encoders_cov)
+        
+        # Split back into control surfaces and thrusters
+        control_surface_values = actuator_values[:self.num_control_surfaces].tolist()
+        thruster_values = actuator_values[self.num_control_surfaces:].tolist()
+        
+        # Create actuator names
+        control_surface_names = [f'cs_{i+1}' for i in range(self.num_control_surfaces)]
+        thruster_names = [f'th_{i+1}' for i in range(self.num_thrusters)]
+        
         return {
-            'rudder': state[13] * 180.0 / np.pi,
-            'propeller': state[14] * 60.0,
+            'actuator_values': control_surface_values + thruster_values,
+            'actuator_names': control_surface_names + thruster_names,
             'covariance': self.encoders_cov.flatten()
         }
 
@@ -141,7 +203,7 @@ class DVLSensor(BaseSensor):
         self.vel_rms = np.array([0.05, 0.05, 0.05])  # 5cm/s RMS noise in each axis
         self.vel_cov = np.diag(self.vel_rms ** 2)
 
-    def get_measurement(self):
+    def get_measurement(self, quat=False):
         state = self.vessel_node.vessel.current_state
         
         # Get body-frame velocity and add noise
@@ -150,7 +212,7 @@ class DVLSensor(BaseSensor):
         
         return {
             'velocity': v_body_noisy,
-            'covariance': self.vel_cov.flatten()
+            'covariance': self.vel_cov.flatten()  # Return 3x3 covariance matrix
         }
 
 def create_sensor(sensor_config, vessel_id, topic_prefix, vessel_node):
