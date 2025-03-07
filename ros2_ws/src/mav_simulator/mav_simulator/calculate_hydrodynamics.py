@@ -1,10 +1,13 @@
 import numpy as np
 import json
-from ros2_ws.src.mav_simulator.mav_simulator.module_kinematics import Smat
+from module_kinematics import Smat
 
 class CalculateHydrodynamics:
     def __init__(self):
-        pass
+        self.grid = None
+        self.length = None
+        self.U_des = None
+        self.ode_options = {}
 
     def _generate_mass_matrix(self,CG,mass,gyration):
     
@@ -102,20 +105,25 @@ class CalculateHydrodynamics:
         return A
     
     def cross_flow_drag(self):
+        """Calculate cross-flow drag coefficients for surface ships.
+        
+        This method calculates the hydrodynamic coefficients for 
+        sway-yaw motions using strip theory and Hoerner's cross-flow drag formulation.
+        """
         Cd_2D = self.hoerner()
         x = self.grid.x_sec
         T = self.grid.T_sec
 
-        v = np.linspace(-1, 1, 100)         # Non-dimensional sway velocity
-        r = np.linspace(-0.7, 0.7, 100)     # Non-dimensional yaw velocity - max value corresponds to turning radius of ~ 1.5L
+        v = np.linspace(-2, 2, 100)         # Sway velocity [m/s]
+        r = np.linspace(-1.4, 1.4, 100)     # Yaw velocity [rad/s] - max value corresponds to turning radius of ~ 1.5L
 
         v_grid, r_grid = np.meshgrid(v, r)
         v_grid = v_grid.flatten()
         r_grid = r_grid.flatten()
 
         v_plus_xr_grid = v_grid[:, np.newaxis] @ np.ones(np.size(x))[np.newaxis, :] + r_grid[:, np.newaxis] @ x[np.newaxis, :]
-        Y_grid = - np.trapz(T[np.newaxis, :] * Cd_2D[np.newaxis, :] * v_plus_xr_grid * np.abs(v_plus_xr_grid), x) / (self.length ** 2)
-        N_grid = - np.trapz(T[np.newaxis, :] * x[np.newaxis, :] * Cd_2D[np.newaxis, :] * v_plus_xr_grid * np.abs(v_plus_xr_grid), x) / (self.length ** 3)
+        Y_grid = - np.trapz(T[np.newaxis, :] * Cd_2D[np.newaxis, :] * v_plus_xr_grid * np.abs(v_plus_xr_grid), x)
+        N_grid = - np.trapz(T[np.newaxis, :] * x[np.newaxis, :] * Cd_2D[np.newaxis, :] * v_plus_xr_grid * np.abs(v_plus_xr_grid), x)
 
         A = np.zeros((np.size(Y_grid), 4))
         b = np.zeros((np.size(Y_grid), 2))
@@ -145,23 +153,30 @@ class CalculateHydrodynamics:
         k = 0.0
         Ct = Cr + Cf * (1 + k)
 
-        self.ode_options['X_u_au'] = -self.grid.WettedArea * Ct / (self.length ** 2)
+        self.ode_options['X_u_au'] = -self.grid.WettedArea * Ct
 
         for key, value in self.ode_options.items():
             if key.startswith(("X_", "Y_", "N_")):
                 print(f"{key}: {value}")
-        # exit()
-    ## Function for AUV Cross Flow Drag
+
     def cross_flow_drag_AUV(self):
+        """Calculate cross-flow drag coefficients for an AUV.
+        
+        This method calculates the hydrodynamic coefficients for both
+        sway-yaw and heave-pitch motions using strip theory and Hoerner's
+        cross-flow drag formulation.
+        """
+        if not all([self.grid, self.length, self.U_des]):
+            raise ValueError("grid, length, and U_des must be set before calling this method")
+            
         Cd_2D = self.hoerner()
         x = self.grid.x_sec
         T = self.grid.T_sec
 
-        v = np.linspace(-1, 1, 100)         # Non-dimensional sway velocity
-        r = np.linspace(-0.7, 0.7, 100)     # Non-dimensional yaw velocity 
-
-        w = np.linspace(-1, 1, 100)         # Non-dimensional heave velocity
-        q = np.linspace(-0.7, 0.7, 100)     # Non-dimensional pitch velocity 
+        v = np.linspace(-2, 2, 100)         # Sway velocity [m/s]
+        r = np.linspace(-1.4, 1.4, 100)     # Yaw velocity [rad/s]
+        w = np.linspace(-2, 2, 100)         # Heave velocity [m/s]
+        q = np.linspace(-1.4, 1.4, 100)     # Pitch velocity [rad/s]
 
         v_grid, r_grid = np.meshgrid(v, r)
         v_grid = v_grid.flatten()
@@ -172,12 +187,12 @@ class CalculateHydrodynamics:
         q_grid = q_grid.flatten()
 
         v_plus_xr_grid = v_grid[:, np.newaxis] @ np.ones(np.size(x))[np.newaxis, :] + r_grid[:, np.newaxis] @ x[np.newaxis, :]
-        Y_grid = - np.trapz(T[np.newaxis, :] * Cd_2D[np.newaxis, :] * v_plus_xr_grid * np.abs(v_plus_xr_grid), x) / (self.length ** 2)
-        N_grid = - np.trapz(T[np.newaxis, :] * x[np.newaxis, :] * Cd_2D[np.newaxis, :] * v_plus_xr_grid * np.abs(v_plus_xr_grid), x) / (self.length ** 3)
+        Y_grid = - np.trapz(T[np.newaxis, :] * Cd_2D[np.newaxis, :] * v_plus_xr_grid * np.abs(v_plus_xr_grid), x)
+        N_grid = - np.trapz(T[np.newaxis, :] * x[np.newaxis, :] * Cd_2D[np.newaxis, :] * v_plus_xr_grid * np.abs(v_plus_xr_grid), x)
 
         w_plus_xr_grid = w_grid[:, np.newaxis] @ np.ones(np.size(x))[np.newaxis, :] + q_grid[:, np.newaxis] @ x[np.newaxis, :]
-        Z_grid = - np.trapz(T[np.newaxis, :] * Cd_2D[np.newaxis, :] * w_plus_xr_grid * np.abs(w_plus_xr_grid), x) / (self.length ** 2)
-        M_grid = - np.trapz(T[np.newaxis, :] * x[np.newaxis, :] * Cd_2D[np.newaxis, :] * w_plus_xr_grid * np.abs(w_plus_xr_grid), x) / (self.length ** 3)
+        Z_grid = - np.trapz(T[np.newaxis, :] * Cd_2D[np.newaxis, :] * w_plus_xr_grid * np.abs(w_plus_xr_grid), x)
+        M_grid = - np.trapz(T[np.newaxis, :] * x[np.newaxis, :] * Cd_2D[np.newaxis, :] * w_plus_xr_grid * np.abs(w_plus_xr_grid), x)
 
         # For sway-yaw coefficients
         A = np.zeros((np.size(Y_grid), 4))
@@ -233,12 +248,11 @@ class CalculateHydrodynamics:
         k = 0.0
         Ct = Cr + Cf * (1 + k)
 
-        self.ode_options['X_u_au'] = -self.grid.WettedArea * Ct / (self.length ** 2)
+        self.ode_options['X_u_au'] = -self.grid.WettedArea * Ct
 
         for key, value in self.ode_options.items():
             if key.startswith(("X_", "Y_", "N_", "M_", "Z_")):
               print(f"{key}: {value}")
-        # exit()
 
     def hoerner(self):
 

@@ -1,4 +1,4 @@
 mass: 1 # in kg
 buoyancy_mass: 1 # in kg
-inertia_matrix: [[0.000000, 0.000000, 0.000000], [0.000000, 0.000000, 0.000000], [0.000000, 0.000000, 0.000000]] # in kg*m^2
-added_mass_matrix: [[0.000000, 0.000000, 0.000000], [0.000000, 0.000000, 0.000000], [0.000000, 0.000000, 0.000000]] # in kg*m^2/s
+inertia_matrix: None # in kg*m^2
+added_mass_matrix: None # in kg*m^2/s

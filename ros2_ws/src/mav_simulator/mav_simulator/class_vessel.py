@@ -63,9 +63,13 @@ class Vessel:
         self.CG = vessel_params['geometry']['CG']
         self.gyration = vessel_params['geometry']['gyration']
         
-        hydrodynamics = CalculateHydrodynamics()
-        self.mass_matrix = hydrodynamics._generate_mass_matrix(self.CG,self.mass,self.gyration)
-        self.added_mass_matrix = hydrodynamics.calculate_added_mass_from_hydra(hydrodynamic_data['hydra_file'])
+        if vessel_params['inertia']['inertia_matrix'] is None or vessel_params['inertia']['added_mass_matrix'] is None:
+            hydrodynamics = CalculateHydrodynamics()
+            self.mass_matrix = hydrodynamics._generate_mass_matrix(self.CG,self.mass,self.gyration)
+            self.added_mass_matrix = hydrodynamics.calculate_added_mass_from_hydra(hydrodynamic_data['hydra_file'])
+        else:
+            self.mass_matrix = vessel_params['inertia']['inertia_matrix']
+            self.added_mass_matrix = vessel_params['inertia']['added_mass_matrix']
         # Buoyancy parameters
         self.W = self.mass * self.g  # Weight
         self.buoyancy_mass = vessel_params['inertia']['buoyancy_mass']  # Buoyancy force, default to neutral

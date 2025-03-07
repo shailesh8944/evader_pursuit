@@ -1,5 +1,6 @@
 hydra_file: /workspaces/mavlab/inputs/mavymini/HydRA/MAVYMINI_hydra.json
 dim_flag: false
+cross_flow_drag: false
 
 # Surge hydrodynamic derivatives
 X_u_u: -0.01
