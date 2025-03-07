@@ -63,7 +63,7 @@ class Vessel:
         self.CG = vessel_params['geometry']['CG']
         self.gyration = vessel_params['geometry']['gyration']
         
-        if vessel_params['inertia']['inertia_matrix'] is None or vessel_params['inertia']['added_mass_matrix'] is None:
+        if vessel_params['inertia']['inertia_matrix'] == "None" or vessel_params['inertia']['added_mass_matrix'] == "None":
             hydrodynamics = CalculateHydrodynamics()
             self.mass_matrix = hydrodynamics._generate_mass_matrix(self.CG,self.mass,self.gyration)
             self.added_mass_matrix = hydrodynamics.calculate_added_mass_from_hydra(hydrodynamic_data['hydra_file'])
@@ -114,10 +114,10 @@ class Vessel:
         # Build initial state vector
         initial_velocity = vessel_params['initial_conditions']['start_velocity']
         initial_position = vessel_params['initial_conditions']['start_location']
-        initial_attitude = vessel_params['initial_conditions']['start_attitude']
+        initial_orientation = vessel_params['initial_conditions']['start_orientation']
         if self.use_quaternion:
             # Convert Euler angles to quaternion if needed
-            initial_attitude = eul_to_quat(initial_attitude)
+            initial_orientation = eul_to_quat(initial_orientation)
             
         initial_control = np.zeros(n_control_surfaces)  # Initial control surface angles
         initial_thrust = np.zeros(n_thrusters)  # Initial thruster states
@@ -125,7 +125,7 @@ class Vessel:
         self.current_state = np.concatenate([
             initial_velocity,
             initial_position,
-            initial_attitude,
+            initial_orientation,
             initial_control,
             initial_thrust
         ])

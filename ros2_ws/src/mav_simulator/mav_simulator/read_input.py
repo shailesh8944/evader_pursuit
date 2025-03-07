@@ -3,6 +3,7 @@ import numpy as np
 import yaml
 import os
 from pathlib import Path
+from generate_cross_flow import CrossFlowGenerator
 
 def load_yaml(file_path: str) -> Dict:
     """Load a YAML file and return its contents.
@@ -43,6 +44,7 @@ def read_input(input_file: str = None) -> Tuple[Dict, List[Dict]]:
             sim_params (Dict): Global simulation parameters
             agents (List[Dict]): List of agents, each containing vessel config and hydrodynamics
     """    
+    
     base_path = str(Path(input_file).parent.parent)
     sim_config = load_yaml(input_file)
     
@@ -67,6 +69,13 @@ def read_input(input_file: str = None) -> Tuple[Dict, List[Dict]]:
             'name': vessel_name,
             'type': agent['type']
         }
+        
+        gdf_file = load_yaml(resolve_path(base_path, agent['geometry'], vessel_name))['geometry_file']
+        hydra_file = load_yaml(resolve_path(base_path, agent['hydrodynamics'], vessel_name))['hydra_file']
+        hydrodynamics_file = resolve_path(base_path, agent['hydrodynamics'], vessel_name)
+        initial_conditions_file = resolve_path(base_path, agent['initial_conditions'], vessel_name)
+        cross_flow_generator = CrossFlowGenerator(gdf_file, hydra_file, hydrodynamics_file, initial_conditions_file, agent['type'])
+        cross_flow_generator.update_yaml_file()
         
         # Load all referenced configuration files
         for config_type in ['geometry', 'inertia', 'hydrodynamics', 'control_surfaces', 

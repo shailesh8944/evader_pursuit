@@ -7,6 +7,6 @@ CO: [0.0, 0.0, 0.0]
 CG: [0.0, 0.0, 0.0]
 CB: [0.0, 0.0, 0.0]
 
-geometry_file: /workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/Mavymini/Mavymini.gdf
+geometry_file: /workspaces/mavlab/inputs/mavymini/HydRA/input/MavyMini.gdf
 
 
