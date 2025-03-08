@@ -1,197 +1,147 @@
 class ThreeScene {
     constructor() {
+        // Initialize properties
         this.scene = new THREE.Scene();
-        const aspect = window.innerWidth / window.innerHeight;
-        this.camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-        this.camera.position.set(5, 5, 5);
-        this.camera.lookAt(0, 0, 0);
+        this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
-        this.renderer.setPixelRatio(window.devicePixelRatio);
-        this.updateRendererSize();
-        this.controls = null;
-        this.grid = null;
+        this.selectedObject = null;
+        this.raycaster = new THREE.Raycaster();
+        this.mouse = new THREE.Vector2();
+        this.needsRender = true;
+        this.modelMeshes = new Map();
+        
+        // Initialize component maps
         this.vessel = null;
         this.controlSurfaces = new Map();
         this.thrusters = new Map();
         this.sensors = new Map();
+        this.transformMode = 'translate';
         this.transformControls = null;
-        this.raycaster = new THREE.Raycaster();
-        this.mouse = new THREE.Vector2();
-        this.selectedObject = null;
-        this.transformMode = 'translate'; // 'translate', 'rotate', 'scale'
         
-        this.updateSceneHierarchy = this.updateSceneHierarchy.bind(this);
-        
-        this.init();
+        // Ensure DOM is loaded before initializing
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                this.init();
+            });
+        } else {
+            try {
+                this.init();
+            } catch (error) {
+                console.error('Error initializing ThreeScene:', error);
+                // Attempt delayed initialization as a fallback
+                setTimeout(() => {
+                    try {
+                        this.init();
+                    } catch (retryError) {
+                        console.error('Failed to initialize ThreeScene after retry:', retryError);
+                    }
+                }, 500);
+            }
+        }
     }
 
     init() {
-        // Setup renderer
-        this.renderer.setSize(window.innerWidth * 0.75, window.innerHeight);
-        this.renderer.setClearColor(0x1a1a1a);
+        // Get container
+        this.container = document.getElementById('viewer3D');
+        
+        // Initialize scene
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x1e293b);
+        
+        // Create renderer with hardware acceleration
+        this.renderer = new THREE.WebGLRenderer({ 
+            antialias: true,
+            powerPreference: 'high-performance',
+            precision: 'highp'
+        });
+        this.renderer.setPixelRatio(window.devicePixelRatio); // Adapt to device
         this.renderer.shadowMap.enabled = true;
-        document.getElementById('viewer3D').appendChild(this.renderer.domElement);
-
-        // Setup camera
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.outputEncoding = THREE.sRGBEncoding;
+        this.renderer.physicallyCorrectLights = true;
+        this.container.appendChild(this.renderer.domElement);
+        
+        // Performance optimization - set fixed size buffer based on container size
+        const containerRect = this.container.getBoundingClientRect();
+        this.renderer.setSize(containerRect.width, containerRect.height);
+        
+        // Initialize camera
+        this.camera = new THREE.PerspectiveCamera(45, containerRect.width / containerRect.height, 0.1, 1000);
         this.camera.position.set(5, 5, 5);
         this.camera.lookAt(0, 0, 0);
-
-        // Setup orbit controls
-        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
-        this.controls.enableDamping = true;
-        this.controls.dampingFactor = 0.05;
-
-        // Setup transform controls
+        
+        // Initialize orbit controls
+        this.orbitControls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.orbitControls.enableDamping = true;
+        this.orbitControls.dampingFactor = 0.25;
+        this.orbitControls.screenSpacePanning = false;
+        this.orbitControls.maxPolarAngle = Math.PI / 1.5;
+        this.orbitControls.update();
+        
+        // Initialize transform controls
         this.transformControls = new THREE.TransformControls(this.camera, this.renderer.domElement);
-        this.scene.add(this.transformControls);
-
-        // Disable orbit controls when using transform controls
         this.transformControls.addEventListener('dragging-changed', (event) => {
-            this.controls.enabled = !event.value;
-            if (event.value) {
-                // Disable other controls while dragging
-                this.renderer.domElement.style.cursor = 'move';
-            } else {
-                this.renderer.domElement.style.cursor = 'auto';
-                // Update transform info after dragging
-                if (this.selectedObject) {
-                    this.updateTransformInfo();
-                    if (this.onObjectTransformed) {
-                        this.onObjectTransformed(this.selectedObject);
-                    }
-                }
-            }
+            this.orbitControls.enabled = !event.value;
         });
-
-        // Listen for changes during transform
-        this.transformControls.addEventListener('change', () => {
-            if (this.selectedObject) {
-                requestAnimationFrame(() => {
-                    this.updateTransformInfo();
-                    this.render();
-                });
-            }
-        });
-
-        // Listen for object changes
-        this.transformControls.addEventListener('objectChange', () => {
-            if (this.selectedObject) {
-                requestAnimationFrame(() => {
-                    this.updateTransformInfo();
-                    if (this.onObjectTransformed) {
-                        this.onObjectTransformed(this.selectedObject);
-                    }
-                    this.render();
-                });
-            }
-        });
-
-        // Add key listeners for transform modes
-        window.addEventListener('keydown', (event) => {
-            if (this.selectedObject) {
-                switch (event.key.toLowerCase()) {
-                    case 'g':
-                        this.setTransformMode('translate');
-                        break;
-                    case 'r':
-                        this.setTransformMode('rotate');
-                        break;
-                    case 's':
-                        this.setTransformMode('scale');
-                        break;
-                    case 'escape':
-                        this.transformControls.detach();
-                        this.selectedObject = null;
-                        this.render();
-                        break;
-                }
-            }
-        });
-
-        // Add grid
+        this.scene.add(this.transformControls);
+        
+        // Setup raycaster for object selection
+        this.raycaster = new THREE.Raycaster();
+        this.mouse = new THREE.Vector2();
+        
+        // Add basic scene elements
         this.addGrid();
-
-        // Add lights
         this.addLights();
-
-        // Add event listeners
-        window.addEventListener('resize', this.onWindowResize.bind(this));
-        this.renderer.domElement.addEventListener('mousemove', (event) => this.onMouseMove(event), false);
-        this.renderer.domElement.addEventListener('click', (event) => this.onClick(event), false);
-
-        // Setup transform mode buttons
-        document.getElementById('translateMode').addEventListener('click', () => this.setTransformMode('translate'));
-        document.getElementById('rotateMode').addEventListener('click', () => this.setTransformMode('rotate'));
-        document.getElementById('scaleMode').addEventListener('click', () => this.setTransformMode('scale'));
-
-        // Setup hierarchy panel collapse
-        const hierarchyPanel = document.querySelector('.scene-hierarchy');
-        const collapseBtn = document.getElementById('collapseHierarchy');
-        collapseBtn.addEventListener('click', () => {
-            hierarchyPanel.classList.toggle('collapsed');
-            const icon = collapseBtn.querySelector('i');
-            if (hierarchyPanel.classList.contains('collapsed')) {
-                icon.className = 'bi bi-chevron-down';
-            } else {
-                icon.className = 'bi bi-chevron-up';
-            }
-        });
-
-        // Setup visibility toggles
-        const stlToggle = document.getElementById('toggleSTLVisibility');
-        const boxToggle = document.getElementById('toggleBoxVisibility');
-
-        if (stlToggle) {
-            stlToggle.addEventListener('change', () => {
-                if (this.vessel?.userData.isSTLModel && this.vessel.userData.stlMesh) {
-                    this.vessel.userData.stlMesh.visible = stlToggle.checked;
-                    this.render();
-                }
-            });
+        
+        // Initialize event listeners
+        this.initializeEventListeners();
+        
+        // Add performance monitoring
+        if (window.location.search.includes('stats=1')) {
+            this.addPerformanceMonitor();
         }
-
-        if (boxToggle) {
-            boxToggle.addEventListener('change', () => {
-                if (this.vessel?.userData.isSTLModel && this.vessel.userData.boxMesh) {
-                    this.vessel.userData.boxMesh.visible = boxToggle.checked;
-                    this.render();
-                }
-            });
-        }
-
+        
+        // Flag for controlling render frequency
+        this.needsRender = true;
+        
         // Start animation loop
         this.animate();
     }
 
     addGrid() {
-        this.grid = new THREE.GridHelper(20, 20);
+        // Remove existing grid if any
+        if (this.grid) {
+            this.scene.remove(this.grid);
+        }
+        
+        // Create a grid helper
+        const size = 20;
+        const divisions = 20;
+        this.grid = new THREE.GridHelper(size, divisions);
+        this.grid.material.opacity = 0.2;
+        this.grid.material.transparent = true;
         this.scene.add(this.grid);
-
-        // Add axes helper
-        const axesHelper = new THREE.AxesHelper(5);
-        this.scene.add(axesHelper);
     }
 
     addLights() {
-        // Ambient light
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        // Add ambient light
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
         this.scene.add(ambientLight);
 
-        // Directional lights from different angles
+        // Add directional lights from different angles
         const createDirLight = (x, y, z) => {
-            const light = new THREE.DirectionalLight(0xffffff, 0.8);
-            light.position.set(x, y, z);
-            light.castShadow = true;
-            return light;
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            dirLight.position.set(x, y, z);
+            return dirLight;
         };
 
         this.scene.add(createDirLight(5, 5, 5));
-        this.scene.add(createDirLight(-5, -5, -5));
-        this.scene.add(createDirLight(5, -5, 5));
-
-        // Hemisphere light for better ambient illumination
-        const hemisphereLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 0.5);
-        this.scene.add(hemisphereLight);
+        this.scene.add(createDirLight(-5, 5, -5));
+        this.scene.add(createDirLight(0, -5, 0));
+        
+        // Add a hemisphere light
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x404040, 0.6);
+        this.scene.add(hemiLight);
     }
 
     async loadModelGeometry(file) {
@@ -382,64 +332,154 @@ class ThreeScene {
     }
 
     createVessel(length, breadth, depth) {
-        // Don't create default vessel if we have an STL model loaded
-        if (this.vessel && this.vessel.userData.isSTLModel) {
+        try {
+            console.log(`Creating vessel with dimensions: ${length} x ${breadth} x ${depth}`);
+            
+            // Don't create default vessel if we have an STL model loaded
+            if (this.vessel && this.vessel.userData.isSTLModel) {
+                console.log('Skipping default vessel creation as STL model is loaded');
+                return;
+            }
+
+            // Remove existing vessel if any
+            if (this.vessel) {
+                this.scene.remove(this.vessel);
+            }
+
+            // Create vessel container group
+            this.vessel = new THREE.Group();
+            this.vessel.userData.type = 'vessel';
+            this.vessel.userData.isSTLModel = false;
+            this.vessel.name = 'Vessel';
+
+            // Create vessel box for visualization
+            const geometry = new THREE.BoxGeometry(length, depth, breadth);
+            const material = new THREE.MeshPhongMaterial({
+                color: 0x3c78d8,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            const vesselMesh = new THREE.Mesh(geometry, material);
+            vesselMesh.userData.type = 'vesselBody';
+            vesselMesh.name = 'Hull';
+
+            // Add wireframe
+            const edgeGeometry = new THREE.EdgesGeometry(geometry);
+            const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+            const wireframe = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+            wireframe.userData.isWireframe = true;
+            vesselMesh.add(wireframe);
+
+            // Store original size
+            this.vessel.userData.dimensions = { length, breadth, depth };
+
+            // Add mesh to vessel container
+            this.vessel.add(vesselMesh);
+
+            // Add vessel to scene
+            this.scene.add(this.vessel);
+
+            // Add local coordinate axes
+            const axes = this.createLocalAxes(Math.max(length, breadth, depth) * 0.5);
+            this.vessel.add(axes);
+
+            // Reattach components if any
+            this.reattachComponents();
+
+            // Update scene
+            this.render();
+            this.updateSceneHierarchy();
+            
+            return this.vessel;
+        } catch (error) {
+            console.error('Error creating vessel:', error);
+            return null;
+        }
+    }
+
+    updateVesselDimensions(length, breadth, depth) {
+        if (!this.vessel || this.vessel.userData.isSTLModel) {
             return;
         }
 
-        // Remove existing vessel if any
-        if (this.vessel) {
-            this.scene.remove(this.vessel);
+        // Update stored dimensions
+        this.vessel.userData.dimensions = {
+            length: length || 1,
+            breadth: breadth || 1,
+            depth: depth || 1
+        };
+
+        // Update vessel mesh geometry
+        const vesselMesh = this.vessel.userData.vesselMesh;
+        if (vesselMesh) {
+            const newGeometry = new THREE.BoxGeometry(length || 1, depth || 1, breadth || 1);
+            vesselMesh.geometry.dispose();
+            vesselMesh.geometry = newGeometry;
         }
 
-        // Create vessel geometry
-        const geometry = new THREE.BoxGeometry(length || 1, depth || 1, breadth || 1);
-        const material = new THREE.MeshStandardMaterial({
-            color: 0x3498db,
-            metalness: 0.3,
-            roughness: 0.4,
-            transparent: true,
-            opacity: 0.8
-        });
+        // Update axes size
+        const axesGroup = this.vessel.userData.axesGroup;
+        if (axesGroup) {
+            const axesLength = Math.max(length, breadth, depth) * 0.5;
+            axesGroup.children.forEach((axis, index) => {
+                if (axis instanceof THREE.ArrowHelper) {
+                    axis.setLength(axesLength, axesLength * 0.2, axesLength * 0.1);
+                }
+            });
+        }
 
-        this.vessel = new THREE.Mesh(geometry, material);
-        this.vessel.castShadow = true;
-        this.vessel.receiveShadow = true;
-        this.vessel.userData.type = 'vessel';
-        this.vessel.userData.isSTLModel = false;  // Flag to indicate this is not an STL model
-        this.scene.add(this.vessel);
-
-        // Reset camera
-        this.resetCamera();
-
-        // Reattach existing components
+        // Reposition components based on new dimensions
         this.reattachComponents();
+
+        // Update scene
+        this.render();
+        this.updateSceneHierarchy();
     }
 
     reattachComponents() {
-        // Reattach control surfaces
-        this.controlSurfaces.forEach((surface, id) => {
-            if (surface.parent) {
-                surface.parent.remove(surface);
+        try {
+            // Only proceed if vessel exists
+            if (!this.vessel) {
+                console.warn('Cannot reattach components: vessel does not exist');
+                return;
             }
-            this.vessel.add(surface);
-        });
+            
+            // Reattach control surfaces
+            if (this.controlSurfaces) {
+                this.controlSurfaces.forEach((surface, id) => {
+                    if (surface.parent) {
+                        surface.parent.remove(surface);
+                    }
+                    this.vessel.add(surface);
+                });
+            }
 
-        // Reattach thrusters
-        this.thrusters.forEach((thruster, id) => {
-            if (thruster.parent) {
-                thruster.parent.remove(thruster);
+            // Reattach thrusters
+            if (this.thrusters) {
+                this.thrusters.forEach((thruster, id) => {
+                    if (thruster.parent) {
+                        thruster.parent.remove(thruster);
+                    }
+                    this.vessel.add(thruster);
+                });
             }
-            this.vessel.add(thruster);
-        });
 
-        // Reattach sensors
-        this.sensors.forEach((sensor, id) => {
-            if (sensor.parent) {
-                sensor.parent.remove(sensor);
+            // Reattach sensors
+            if (this.sensors) {
+                this.sensors.forEach((sensor, id) => {
+                    if (sensor.parent) {
+                        sensor.parent.remove(sensor);
+                    }
+                    this.vessel.add(sensor);
+                });
             }
-            this.vessel.add(sensor);
-        });
+            
+            // Mark for rendering
+            this.render();
+        } catch (error) {
+            console.error('Error in reattachComponents:', error);
+        }
     }
 
     createLocalAxes(size = 0.3) {
@@ -506,48 +546,40 @@ class ThreeScene {
         return axes;
     }
 
-    addControlSurface(id, type, position, orientation) {
-        const group = new THREE.Group();
-        group.userData.id = id;
-        group.userData.type = 'control_surface';
-        group.userData.isTransformable = true;
-        group.name = `${type} ${id}`;
+    addControlSurface(id, type, position, orientation, area = 0.1) {
+        // Create a simple mesh to represent the control surface
+        const width = Math.sqrt(area);
+        const height = width;
+        const depth = width * 0.1;
         
-        // Create the control surface geometry
-        const width = 0.2;
-        const height = 0.3;
-        const geometry = new THREE.PlaneGeometry(width, height);
-        const material = new THREE.MeshPhongMaterial({
-            color: 0x3498db,
+        const geometry = new THREE.BoxGeometry(width, height, depth);
+        const material = new THREE.MeshStandardMaterial({ 
+            color: 0x6699cc, 
             transparent: true,
             opacity: 0.7,
             side: THREE.DoubleSide
         });
         
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.userData.isControlSurface = true;
-        mesh.userData.parentId = id;
-        group.add(mesh);
-
-        // Add axes to the group
-        this.addComponentAxes(group);
-
-        // Store dimensions in userData
-        group.userData.dimensions = { width, height };
-        group.userData.parameters = {
-            type: type,
-            area: width * height,
-            naca: "0015"
-        };
-
-        // Set position and orientation
-        group.position.copy(position);
-        if (orientation) {
-            group.rotation.setFromVector3(orientation);
+        const controlSurface = new THREE.Mesh(geometry, material);
+        controlSurface.name = `${type}_${id}`;
+        controlSurface.userData.type = 'controlSurface';
+        controlSurface.userData.componentId = id;
+        
+        // Position and orient the control surface
+        controlSurface.position.set(position[0], position[1], position[2]);
+        controlSurface.rotation.set(orientation[0], orientation[1], orientation[2]);
+        
+        // Add to scene
+        this.scene.add(controlSurface);
+        
+        // Store reference
+        if (!this.controlSurfaces) {
+            this.controlSurfaces = new Map();
         }
-
-        this.scene.add(group);
-        return group;
+        this.controlSurfaces.set(id, controlSurface);
+        
+        this.render();
+        return controlSurface;
     }
 
     updateControlSurfaceDimensions(id, width, height) {
@@ -583,30 +615,41 @@ class ThreeScene {
         }
     }
 
-    addThruster(id, position, orientation) {
-        if (!this.vessel) {
-            this.createVessel(1, 1, 1);
-        }
-
-        const geometry = new THREE.CylinderGeometry(0.2, 0.3, 0.6);
-        const material = new THREE.MeshPhongMaterial({
-            color: 0x2ecc71,
+    addThruster(id, position, orientation, diameter = 0.2) {
+        // Create a cylinder to represent the thruster
+        const geometry = new THREE.CylinderGeometry(diameter / 2, diameter / 2, diameter, 16);
+        const material = new THREE.MeshStandardMaterial({ 
+            color: 0xcc6633, 
             transparent: true,
-            opacity: 0.8
+            opacity: 0.7 
         });
-
+        
         const thruster = new THREE.Mesh(geometry, material);
+        thruster.name = `Thruster_${id}`;
         thruster.userData.type = 'thruster';
-        thruster.userData.id = id;
-
-        // Create container with thruster and axes
-        const container = this.addComponentAxes(thruster);
-        container.position.set(...position);
-        container.rotation.set(...orientation);
-
-        this.thrusters.set(id, container);
-        this.vessel.add(container);
-        return container;
+        thruster.userData.componentId = id;
+        
+        // Position and orient the thruster
+        thruster.position.set(position[0], position[1], position[2]);
+        
+        // Adjust rotation for proper orientation
+        // Cylinders in Three.js have their axis along y, but thrusters typically have their axis along z
+        thruster.rotation.x = Math.PI / 2;
+        thruster.rotation.x += orientation[0];
+        thruster.rotation.y += orientation[1];
+        thruster.rotation.z += orientation[2];
+        
+        // Add to scene
+        this.scene.add(thruster);
+        
+        // Store reference
+        if (!this.thrusters) {
+            this.thrusters = new Map();
+        }
+        this.thrusters.set(id, thruster);
+        
+        this.render();
+        return thruster;
     }
 
     getWorldPositionFromMouse(event) {
@@ -626,54 +669,59 @@ class ThreeScene {
         return point;
     }
 
-    addSensor(id, type, position) {
-        if (!this.vessel) {
-            this.createVessel(1, 1, 1);
-        }
-
-        let geometry, material;
-        switch (type) {
-            case 'IMU':
-                geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-                material = new THREE.MeshPhongMaterial({ color: 0xf1c40f });
+    addSensor(id, type, position, orientation) {
+        // Create a small box to represent the sensor
+        const size = 0.1;
+        const geometry = new THREE.BoxGeometry(size, size, size);
+        
+        // Color based on sensor type
+        let color;
+        switch (type.toLowerCase()) {
+            case 'imu':
+                color = 0x33cc33; // Green
                 break;
-            case 'GPS':
-                geometry = new THREE.SphereGeometry(0.1);
-                material = new THREE.MeshPhongMaterial({ color: 0x9b59b6 });
+            case 'gps':
+                color = 0x3366cc; // Blue
                 break;
-            case 'DVL':
-                geometry = new THREE.ConeGeometry(0.1, 0.2);
-                material = new THREE.MeshPhongMaterial({ color: 0xe67e22 });
+            case 'dvl':
+                color = 0xcc3333; // Red
+                break;
+            case 'camera':
+                color = 0xffcc00; // Yellow
+                break;
+            case 'sonar':
+                color = 0x9933cc; // Purple
                 break;
             default:
-                geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-                material = new THREE.MeshPhongMaterial({ color: 0x95a5a6 });
+                color = 0xaaaaaa; // Grey
         }
+        
+        const material = new THREE.MeshStandardMaterial({ 
+            color, 
+            transparent: true, 
+            opacity: 0.7 
+        });
 
         const sensor = new THREE.Mesh(geometry, material);
+        sensor.name = `${type}_${id}`;
         sensor.userData.type = 'sensor';
-        sensor.userData.id = id;
-        sensor.userData.sensorType = type;
-        sensor.name = `${type} ${id}`;  // Set initial name
-
-        // Create container with sensor and axes
-        const container = new THREE.Group();
-        container.userData = { ...sensor.userData };  // Copy userData to container
-        container.name = sensor.name;  // Copy name to container
-        container.add(sensor);
+        sensor.userData.componentId = id;
         
-        // Add axes to container
-        const axes = this.createLocalAxes();
-        axes.userData.isAxes = true;
-        axes.userData.parentId = id;
-        container.add(axes);
-
-        // Set position
-        container.position.set(...position);
-
-        this.sensors.set(id, container);
-        this.vessel.add(container);
-        return container;
+        // Position and orient the sensor
+        sensor.position.set(position[0], position[1], position[2]);
+        sensor.rotation.set(orientation[0], orientation[1], orientation[2]);
+        
+        // Add to scene
+        this.scene.add(sensor);
+        
+        // Store reference
+        if (!this.sensors) {
+            this.sensors = new Map();
+        }
+        this.sensors.set(id, sensor);
+        
+        this.render();
+        return sensor;
     }
 
     removeControlSurface(id) {
@@ -800,381 +848,351 @@ class ThreeScene {
     }
 
     onMouseMove(event) {
-        const rect = this.renderer.domElement.getBoundingClientRect();
-        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        // Update normalized mouse position
+        this.mouse.x = (event.offsetX / this.renderer.domElement.clientWidth) * 2 - 1;
+        this.mouse.y = -(event.offsetY / this.renderer.domElement.clientHeight) * 2 + 1;
     }
 
     onClick(event) {
-        if (event.target !== this.renderer.domElement) return;
-
+        // Update raycaster with camera and mouse position
         this.raycaster.setFromCamera(this.mouse, this.camera);
         
-        // Create array of selectable objects
-        const selectableObjects = [];
+        // Find intersected objects (include all scene objects for FBX component selection)
+        const intersects = this.raycaster.intersectObjects(this.scene.children, true);
         
-        if (this.vessel) {
-            // For STL models, add both the group and the STL mesh
-            if (this.vessel.userData.isSTLModel) {
-                selectableObjects.push(this.vessel.userData.stlMesh);
-            }
-            selectableObjects.push(this.vessel);
-            
-            // Add components
-            this.controlSurfaces.forEach(surface => selectableObjects.push(surface));
-            this.thrusters.forEach(thruster => selectableObjects.push(thruster));
-            this.sensors.forEach(sensor => selectableObjects.push(sensor));
-        }
-
-        const intersects = this.raycaster.intersectObjects(selectableObjects, true);
-
         if (intersects.length > 0) {
-            let selectedObject = intersects[0].object;
+            // Find the first selectable object
+            const selectedIntersect = intersects.find(intersect => 
+                intersect.object.isMesh && 
+                intersect.object.userData && 
+                intersect.object.userData.selectable
+            );
             
-            // If we clicked the STL mesh, select the vessel group
-            if (this.vessel?.userData.isSTLModel && selectedObject === this.vessel.userData.stlMesh) {
-                selectedObject = this.vessel;
+            if (selectedIntersect) {
+                console.log('Selected object:', selectedIntersect.object.name);
+                this.selectObject(selectedIntersect.object);
+            } else {
+                // No selectable object found, deselect current
+                this.selectObject(null);
             }
-            
-            this.selectObject(selectedObject);
         } else {
-            if (this.selectedObject) {
-                this.transformControls.detach();
-                this.selectedObject = null;
-                document.querySelectorAll('.component-card').forEach(card => {
-                    card.classList.remove('selected');
-                });
-            }
+            // No intersection, deselect current
+            this.selectObject(null);
         }
-        
-        this.render();
     }
 
     selectObject(object) {
-        if (this.selectedObject === object) return;
+        // Reset previous selection
+        if (this.selectedObject && this.selectedObject !== object) {
+            // Restore original material
+            this.restoreOriginalMaterial(this.selectedObject);
+        }
         
         // Update selection
-        if (this.selectedObject) {
-            this.selectedObject.userData.previousColor = undefined;
-        }
-        
         this.selectedObject = object;
         
-        // Highlight selected object
-        if (object && object.material) {
-            object.userData.previousColor = object.material.color.clone();
-            object.material.color.setHex(0x3498db);
-        }
-        
-        // Update transform controls
-        if (object && object.userData.isTransformable) {
-            this.transformControls.attach(object);
-        } else {
+        // Clear transform controls
+        if (this.transformControls) {
             this.transformControls.detach();
         }
         
-        // Update UI
-        this.updateTransformInfo();
-        this.updateSceneHierarchy();
+        // Setup new selection
+        if (object && object.isMesh) {
+            // Highlight the object
+            this.highlightObject(object);
+            
+            // Attach transform controls
+            if (this.transformControls) {
+                this.transformControls.attach(object);
+            }
+            
+            // Show component info in the UI
+            this.showComponentInfo(object);
+        } else {
+            // If nothing is selected, clear the property panel
+            document.getElementById('object-properties').innerHTML = `
+                <div class="no-selection-message">
+                    Select an object to view its properties
+                </div>
+            `;
+        }
         
-        // Show appropriate parameter panel
-        this.showComponentParams(object);
+        // Mark scene for rendering
+        this.render();
     }
 
-    showComponentParams(object) {
-        const paramsContainer = document.querySelector('.component-params');
-        if (!paramsContainer) return;
-        
-        paramsContainer.innerHTML = '';
-        
-        if (!object || !object.userData.type) return;
-        
-        switch (object.userData.type) {
-            case 'controlSurface':
-                this.createControlSurfaceParams(object);
-                break;
-            case 'thruster':
-                this.createThrusterParams(object);
-                break;
-            case 'sensor':
-                this.createSensorParams(object);
-                break;
+    // Helper method to restore the original material
+    restoreOriginalMaterial(object) {
+        if (object && object.isMesh) {
+            if (Array.isArray(object.material)) {
+                // For multi-material objects, restore each material
+                if (object.userData.originalMaterials) {
+                    object.material = object.userData.originalMaterials.map(m => m.clone());
+                }
+            } else {
+                // For single material objects
+                if (object.userData.originalMaterial) {
+                    object.material = object.userData.originalMaterial.clone();
+                }
+            }
         }
     }
 
-    createControlSurfaceParams(object) {
-        const container = document.createElement('div');
-        container.className = 'component-params';
+    // Helper method to highlight an object
+    highlightObject(object) {
+        if (object && object.isMesh) {
+            if (Array.isArray(object.material)) {
+                // For multi-material objects, highlight each material
+                object.material.forEach(material => {
+                    material.emissive = new THREE.Color(0x333333);
+                    material.emissiveIntensity = 0.5;
+                });
+            } else {
+                // For single material objects
+                object.material.emissive = new THREE.Color(0x333333);
+                object.material.emissiveIntensity = 0.5;
+            }
+        }
+    }
+
+    // Display component info in the UI
+    showComponentInfo(object) {
+        // Get component data if it exists
+        const vesselModel = window.currentVesselModel;
+        const componentData = vesselModel?.getModelComponentData(object.uuid);
         
-        container.innerHTML = `
-            <div class="mb-3">
-                <label>Type</label>
-                <select class="form-select" id="surfaceType">
-                    <option value="Rudder" ${object.userData.surfaceType === 'Rudder' ? 'selected' : ''}>Rudder</option>
-                    <option value="Fin" ${object.userData.surfaceType === 'Fin' ? 'selected' : ''}>Fin</option>
-                </select>
+        // Create HTML for component info
+        let html = `
+            <div class="property-group">
+                <div class="property-group-title">Component Properties</div>
+                <div class="property-row">
+                    <div class="property-label">Name</div>
+                    <div class="property-value">${object.name || 'Unnamed'}</div>
+                </div>
+                <div class="property-row">
+                    <div class="property-label">Type</div>
+                    <div class="property-value">
+                        <select id="componentTypeSelect" class="form-control">
+                            <option value="none" ${!componentData ? 'selected' : ''}>Regular Component</option>
+                            <option value="controlSurface" ${componentData?.type === 'controlSurface' ? 'selected' : ''}>Control Surface</option>
+                            <option value="thruster" ${componentData?.type === 'thruster' ? 'selected' : ''}>Thruster</option>
+                            <option value="sensor" ${componentData?.type === 'sensor' ? 'selected' : ''}>Sensor</option>
+                        </select>
+                    </div>
+                </div>
             </div>
-            <div class="mb-3">
-                <label>Name</label>
-                <input type="text" class="form-control" id="surfaceName" value="${object.name || ''}">
-            </div>
-            <div class="mb-3">
-                <label>NACA Profile</label>
-                <input type="text" class="form-control" id="nacaProfile" value="${object.userData.nacaProfile || '0015'}">
+            
+            <div class="property-group">
+                <div class="property-group-title">Transform</div>
+                <div class="property-row">
+                    <div class="property-label">Position</div>
+                    <div class="property-value">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="posX" value="${object.position.x.toFixed(3)}" step="0.1">
+                            <input type="number" class="form-control" id="posY" value="${object.position.y.toFixed(3)}" step="0.1">
+                            <input type="number" class="form-control" id="posZ" value="${object.position.z.toFixed(3)}" step="0.1">
+                        </div>
+                    </div>
+                </div>
+                <div class="property-row">
+                    <div class="property-label">Rotation (deg)</div>
+                    <div class="property-value">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="rotX" value="${THREE.MathUtils.radToDeg(object.rotation.x).toFixed(1)}" step="1">
+                            <input type="number" class="form-control" id="rotY" value="${THREE.MathUtils.radToDeg(object.rotation.y).toFixed(1)}" step="1">
+                            <input type="number" class="form-control" id="rotZ" value="${THREE.MathUtils.radToDeg(object.rotation.z).toFixed(1)}" step="1">
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
         
-        // Add event listeners
-        container.querySelector('#surfaceType').addEventListener('change', (e) => {
-            object.userData.surfaceType = e.target.value;
-            this.updateSceneHierarchy();
-        });
+        // Add button to apply/configure component
+        html += `
+            <div class="mt-3">
+                <button id="btnConfigureComponent" class="btn btn-primary">Configure Component</button>
+            </div>
+        `;
         
-        container.querySelector('#surfaceName').addEventListener('change', (e) => {
-            object.name = e.target.value;
-            this.updateSceneHierarchy();
-        });
-        
-        container.querySelector('#nacaProfile').addEventListener('change', (e) => {
-            object.userData.nacaProfile = e.target.value;
-        });
-        
-        document.querySelector('.component-params').replaceWith(container);
-    }
-
-    createThrusterParams(object) {
-        const paramsDiv = document.createElement('div');
-        paramsDiv.className = 'component-params';
-
-        // Type selection
-        const typeGroup = document.createElement('div');
-        typeGroup.className = 'param-group';
-        const typeLabel = document.createElement('label');
-        typeLabel.textContent = 'Thruster Type';
-        const typeSelect = document.createElement('select');
-        typeSelect.className = 'form-select form-select-sm';
-        ['Propeller', 'Tunnel', 'Vectored', 'Jet'].forEach(type => {
-            const option = document.createElement('option');
-            option.value = type;
-            option.textContent = type;
-            if (object.userData.thrusterType === type) {
-                option.selected = true;
+        // Update UI
+        const propertiesPanel = document.getElementById('object-properties');
+        if (propertiesPanel) {
+            propertiesPanel.innerHTML = html;
+            
+            // Add event listener for type selection
+            const typeSelect = document.getElementById('componentTypeSelect');
+            if (typeSelect) {
+                typeSelect.addEventListener('change', () => {
+                    this.showComponentConfigModal(object, typeSelect.value);
+                });
             }
-            typeSelect.appendChild(option);
-        });
-        typeSelect.addEventListener('change', (e) => {
-            object.userData.thrusterType = e.target.value;
-            object.name = `${e.target.value} #${object.userData.id}`;
-            this.updateSceneHierarchy();
-        });
-        typeGroup.appendChild(typeLabel);
-        typeGroup.appendChild(typeSelect);
-        paramsDiv.appendChild(typeGroup);
-
-        // Max Thrust
-        const thrustGroup = document.createElement('div');
-        thrustGroup.className = 'param-group';
-        const thrustLabel = document.createElement('label');
-        thrustLabel.textContent = 'Max Thrust (N)';
-        const thrustInput = document.createElement('input');
-        thrustInput.type = 'number';
-        thrustInput.className = 'form-control form-control-sm';
-        thrustInput.value = object.userData.maxThrust || 1000;
-        thrustInput.min = 0;
-        thrustInput.step = 100;
-        thrustInput.addEventListener('change', (e) => {
-            object.userData.maxThrust = parseFloat(e.target.value);
-            this.updateThrusterSize(object.userData.id, e.target.value);
-        });
-        thrustGroup.appendChild(thrustLabel);
-        thrustGroup.appendChild(thrustInput);
-        paramsDiv.appendChild(thrustGroup);
-
-        // Name input
-        const nameGroup = document.createElement('div');
-        nameGroup.className = 'param-group';
-        const nameLabel = document.createElement('label');
-        nameLabel.textContent = 'Name';
-        const nameInput = document.createElement('input');
-        nameInput.type = 'text';
-        nameInput.className = 'form-control form-control-sm';
-        nameInput.value = object.name || '';
-        nameInput.addEventListener('change', (e) => {
-            object.name = e.target.value;
-            this.updateSceneHierarchy();
-        });
-        nameGroup.appendChild(nameLabel);
-        nameGroup.appendChild(nameInput);
-        paramsDiv.appendChild(nameGroup);
-
-        // Replace the current parameter container in DOM
-        const container = document.querySelector('.component-params');
-        if (container) {
-            container.replaceWith(paramsDiv);
+            
+            // Add event listener for configure button
+            const configBtn = document.getElementById('btnConfigureComponent');
+            if (configBtn) {
+                configBtn.addEventListener('click', () => {
+                    const typeValue = document.getElementById('componentTypeSelect').value;
+                    this.showComponentConfigModal(object, typeValue);
+                });
+            }
+            
+            // Add event listeners for transform inputs
+            ['posX', 'posY', 'posZ'].forEach(id => {
+                document.getElementById(id)?.addEventListener('change', () => {
+                    const x = parseFloat(document.getElementById('posX').value);
+                    const y = parseFloat(document.getElementById('posY').value);
+                    const z = parseFloat(document.getElementById('posZ').value);
+                    object.position.set(x, y, z);
+                    this.render();
+                });
+            });
+            
+            ['rotX', 'rotY', 'rotZ'].forEach(id => {
+                document.getElementById(id)?.addEventListener('change', () => {
+                    const x = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotX').value));
+                    const y = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotY').value));
+                    const z = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotZ').value));
+                    object.rotation.set(x, y, z);
+                    this.render();
+                });
+            });
         }
     }
 
-    createSensorParams(object) {
-        const paramsDiv = document.createElement('div');
-        paramsDiv.className = 'component-params';
-
-        // Type selection
-        const typeGroup = document.createElement('div');
-        typeGroup.className = 'param-group mb-3';
-        const typeLabel = document.createElement('label');
-        typeLabel.textContent = 'Sensor Type';
-        const typeSelect = document.createElement('select');
-        typeSelect.className = 'form-select form-select-sm';
-        ['IMU', 'GPS', 'DVL', 'Pressure', 'Camera', 'Sonar'].forEach(type => {
-            const option = document.createElement('option');
-            option.value = type;
-            option.textContent = type;
-            if (object.userData.sensorType === type) {
-                option.selected = true;
+    // Show modal to configure component based on selected type
+    showComponentConfigModal(object, type) {
+        // Get relevant modal based on component type
+        let modalId;
+        if (type === 'controlSurface') {
+            modalId = 'fbxComponentModal';
+            // Show control surface settings
+            document.getElementById('fbxControlSurfaceSettings').style.display = 'block';
+            document.getElementById('fbxThrusterSettings').style.display = 'none';
+            document.getElementById('fbxSensorSettings').style.display = 'none';
+        } else if (type === 'thruster') {
+            modalId = 'fbxComponentModal';
+            // Show thruster settings
+            document.getElementById('fbxControlSurfaceSettings').style.display = 'none';
+            document.getElementById('fbxThrusterSettings').style.display = 'block';
+            document.getElementById('fbxSensorSettings').style.display = 'none';
+        } else if (type === 'sensor') {
+            modalId = 'fbxComponentModal';
+            // Show sensor settings
+            document.getElementById('fbxControlSurfaceSettings').style.display = 'none';
+            document.getElementById('fbxThrusterSettings').style.display = 'none';
+            document.getElementById('fbxSensorSettings').style.display = 'block';
+        } else {
+            // If none/regular, just remove any component mapping
+            const vesselModel = window.currentVesselModel;
+            if (vesselModel && vesselModel.isModelComponentMapped(object.uuid)) {
+                vesselModel.unmapModelComponent(object.uuid);
+                this.showComponentInfo(object); // Refresh UI
             }
-            typeSelect.appendChild(option);
-        });
-        typeSelect.addEventListener('change', (e) => {
-            object.userData.sensorType = e.target.value;
-            // Update name if it follows the default pattern
-            if (object.name.match(/^[A-Za-z]+ #\d+$/)) {
-                object.name = `${e.target.value} #${object.userData.id}`;
-            }
-            this.updateSceneHierarchy();
-        });
-        typeGroup.appendChild(typeLabel);
-        typeGroup.appendChild(typeSelect);
-        paramsDiv.appendChild(typeGroup);
-
-        // Sensor Name input
-        const nameGroup = document.createElement('div');
-        nameGroup.className = 'param-group mb-3';
-        const nameLabel = document.createElement('label');
-        nameLabel.textContent = 'Name';
-        const nameInput = document.createElement('input');
-        nameInput.type = 'text';
-        nameInput.className = 'form-control form-control-sm';
-        nameInput.value = object.name || `${object.userData.sensorType} #${object.userData.id}`;
-        nameInput.addEventListener('change', (e) => {
-            object.name = e.target.value;
-            this.updateSceneHierarchy();
-        });
-        nameGroup.appendChild(nameLabel);
-        nameGroup.appendChild(nameInput);
-        paramsDiv.appendChild(nameGroup);
-
-        // Update Rate
-        const rateGroup = document.createElement('div');
-        rateGroup.className = 'param-group mb-3';
-        const rateLabel = document.createElement('label');
-        rateLabel.textContent = 'Update Rate (Hz)';
-        const rateInput = document.createElement('input');
-        rateInput.type = 'number';
-        rateInput.className = 'form-control form-control-sm';
-        rateInput.value = object.userData.updateRate || 50;
-        rateInput.min = 1;
-        rateInput.max = 1000;
-        rateInput.step = 1;
-        rateInput.addEventListener('change', (e) => {
-            object.userData.updateRate = parseFloat(e.target.value);
-        });
-        rateGroup.appendChild(rateLabel);
-        rateGroup.appendChild(rateInput);
-        paramsDiv.appendChild(rateGroup);
-
-        // Replace the current parameter container in DOM
-        const container = document.querySelector('.component-params');
-        if (container) {
-            container.replaceWith(paramsDiv);
+            return;
+        }
+        
+        // Set the component type in the modal
+        document.getElementById('fbxComponentType').value = type;
+        
+        // Store the reference to the object in the modal for later use
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.dataset.objectUuid = object.uuid;
+            
+            // Show the modal
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
         }
     }
 
     toggleGrid() {
+        if (this.grid) {
         this.grid.visible = !this.grid.visible;
+            this.render();
+            return this.grid.visible;
+        }
+        return false;
     }
 
     toggleWireframe() {
-        if (this.vessel) {
-            if (this.vessel.userData.isSTLModel) {
-                if (this.vessel.userData.stlMesh) {
-                    this.vessel.userData.stlMesh.material.wireframe = !this.vessel.userData.stlMesh.material.wireframe;
-                }
+        let changed = false;
+        this.scene.traverse((object) => {
+            if (object.isMesh && object.material) {
+                if (Array.isArray(object.material)) {
+                    object.material.forEach(material => {
+                        material.wireframe = !material.wireframe;
+                    });
             } else {
-                this.vessel.material.wireframe = !this.vessel.material.wireframe;
+                    object.material.wireframe = !object.material.wireframe;
+                }
+                changed = true;
             }
-            
-            // Also toggle wireframe for components
-            this.controlSurfaces.forEach(surface => {
-                surface.material.wireframe = !surface.material.wireframe;
-            });
-            this.thrusters.forEach(thruster => {
-                thruster.material.wireframe = !thruster.material.wireframe;
-            });
-            this.sensors.forEach(sensor => {
-                sensor.material.wireframe = !sensor.material.wireframe;
-            });
-            
+        });
+        
+        if (changed) {
             this.render();
         }
     }
 
     resetCamera() {
-        // Calculate bounding box of the entire scene
-        const bbox = new THREE.Box3().setFromObject(this.vessel);
-        const center = new THREE.Vector3();
-        bbox.getCenter(center);
-        const size = new THREE.Vector3();
-        bbox.getSize(size);
-        
-        // Calculate camera position
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const fov = this.camera.fov * (Math.PI / 180);
-        const cameraZ = Math.abs(maxDim / Math.tan(fov / 2)) * 2.5; // Multiply by 2.5 to add some padding
-        
-        // Position camera
-        this.camera.position.set(
-            center.x + cameraZ * 0.5,
-            center.y + cameraZ * 0.5,
-            center.z + cameraZ
-        );
-        
-        // Look at center of model
-        this.controls.target.copy(center);
-        this.camera.lookAt(center);
-        
-        // Update camera
-        this.camera.near = cameraZ / 100;
-        this.camera.far = cameraZ * 100;
-        this.camera.updateProjectionMatrix();
-        
-        // Update controls
-        this.controls.update();
-        
-        console.log('Camera reset:', {
-            position: this.camera.position.clone(),
-            target: this.controls.target.clone(),
-            distance: cameraZ
-        });
+        // Reset camera position and target
+        this.camera.position.set(5, 5, 5);
+        this.camera.lookAt(0, 0, 0);
+        this.orbitControls.target.set(0, 0, 0);
+        this.orbitControls.update();
+        this.render();
     }
 
     animate() {
-        requestAnimationFrame(() => this.animate());
-        this.controls.update();
-        this.renderer.render(this.scene, this.camera);
+        // Use requestAnimationFrame with the proper binding
+        requestAnimationFrame(this.animate.bind(this));
+        
+        // Performance monitoring
+        if (this.stats) this.stats.begin();
+        
+        // Only update controls if they exist and are enabled
+        if (this.orbitControls && this.orbitControls.enabled) {
+            this.orbitControls.update();
+            // Orbit controls update should trigger a render
+            this.needsRender = true;
+        }
+        
+        // Only render when needed (needsRender flag is true)
+        if (this.needsRender) {
+            this.renderer.render(this.scene, this.camera);
+            this.needsRender = false;
+        }
+        
+        // Performance monitoring
+        if (this.stats) this.stats.end();
     }
 
     updateRendererSize() {
-        const container = document.getElementById('viewer3D');
-        const width = container.clientWidth;
-        const height = container.clientHeight;
+        if (!this.container) return;
         
-        this.renderer.setSize(width, height);
-        this.camera.aspect = width / height;
-        this.camera.updateProjectionMatrix();
+        const rect = this.container.getBoundingClientRect();
+        
+        // Only update if the size actually changed
+        if (this.lastWidth !== rect.width || this.lastHeight !== rect.height) {
+            this.lastWidth = rect.width;
+            this.lastHeight = rect.height;
+            
+            this.camera.aspect = rect.width / rect.height;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(rect.width, rect.height);
+            
+            // Force a render to update the viewport
+            this.forceRender();
+        }
     }
 
     render() {
+        this.needsRender = true;
+    }
+
+    forceRender() {
         this.renderer.render(this.scene, this.camera);
+        this.needsRender = false;
     }
 
     getObjectById(id) {
@@ -1346,91 +1364,819 @@ class ThreeScene {
     }
 
     removeBodyCenterSystem() {
-        if (this.bodyCenter) {
-            this.scene.remove(this.bodyCenter);
-            this.bodyCenter = null;
+        if (this.bodyCenterSystem) {
+            this.scene.remove(this.bodyCenterSystem);
+            this.bodyCenterSystem = null;
+            this.render();
         }
-        this.updateSceneHierarchy();
     }
 
     // Add new method to update scene hierarchy
     updateSceneHierarchy() {
-        const sceneHierarchy = document.getElementById('sceneHierarchy');
-        if (!sceneHierarchy) return;
-        
-        // Clear existing content
-        sceneHierarchy.innerHTML = '';
-        
-        const createHierarchyItem = (object, level = 0) => {
-            const item = document.createElement('div');
-            item.className = 'hierarchy-item';
-            if (object === this.selectedObject) {
-                item.classList.add('selected');
-            }
-            
-            // Add toggle button if object has children
-            if (object.children.length > 0 && !object.userData.isAxes) {
-                const toggleBtn = document.createElement('button');
-                toggleBtn.className = 'toggle-children';
-                toggleBtn.innerHTML = '<i class="bi bi-chevron-right"></i>';
-                item.appendChild(toggleBtn);
+        // Placeholder for scene hierarchy update
+        console.log("Scene hierarchy updated");
+    }
+
+    async loadFBXModel(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const fileContents = event.target.result;
                 
-                // Create container for children
-                const childrenDiv = document.createElement('div');
-                childrenDiv.className = 'hierarchy-children';
-                childrenDiv.style.display = 'none';
-                
-                // Add children that aren't axes
-                object.children.forEach(child => {
-                    if (!child.userData.isAxes) {
-                        childrenDiv.appendChild(createHierarchyItem(child, level + 1));
+                const loader = new THREE.FBXLoader();
+                try {
+                    const object = loader.parse(fileContents);
+                    
+                    // Clean up any existing model
+                    if (this.vessel) {
+                        this.scene.remove(this.vessel);
+                        this.vessel = null;
+                        this.updateSceneHierarchy();
                     }
-                });
-                
-                // Toggle children visibility
-                toggleBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const isExpanded = childrenDiv.style.display !== 'none';
-                    childrenDiv.style.display = isExpanded ? 'none' : 'block';
-                    toggleBtn.innerHTML = isExpanded ? 
-                        '<i class="bi bi-chevron-right"></i>' : 
-                        '<i class="bi bi-chevron-down"></i>';
-                });
-                
-                // Append children container
-                item.appendChild(childrenDiv);
+                    
+                    // Set up the vessel container
+                    this.vessel = new THREE.Group();
+                    this.vessel.name = 'Vessel';
+                    
+                    // Create a mapping of original meshes
+                    this.modelMeshes = new Map();
+                    
+                    // Process the loaded model to make every mesh selectable
+                    let index = 0;
+                    object.traverse(child => {
+                        if (child.isMesh) {
+                            // Store original materials for later reference
+                            if (Array.isArray(child.material)) {
+                                child.userData.originalMaterials = child.material.map(m => m.clone());
+                            } else {
+                                child.userData.originalMaterial = child.material.clone();
+                            }
+                            
+                            // Make sure the mesh has a name for identification
+                            if (!child.name || child.name === '') {
+                                child.name = `Component_${index++}`;
+                            }
+                            
+                            // Store in our mesh map
+                            this.modelMeshes.set(child.uuid, child);
+                            
+                            // Make mesh selectable
+                            child.userData.selectable = true;
+                            
+                            // Log the component for debugging
+                            console.log(`FBX component found: ${child.name} (${child.uuid})`);
+                        }
+                    });
+                    
+                    // Add the model to the vessel container
+                    this.vessel.add(object);
+                    
+                    // Calculate the bounding box
+                    const boundingBox = new THREE.Box3().setFromObject(this.vessel);
+                    const size = new THREE.Vector3();
+                    boundingBox.getSize(size);
+                    
+                    // Determine scale to normalize the model
+                    const maxDimension = Math.max(size.x, size.y, size.z);
+                    const scale = 5 / maxDimension;
+                    
+                    // Center the model
+                    const center = new THREE.Vector3();
+                    boundingBox.getCenter(center);
+                    this.vessel.position.sub(center.multiplyScalar(scale));
+                    
+                    // Scale the model
+                    this.vessel.scale.set(scale, scale, scale);
+                    
+                    // Add vessel to scene
+                    this.scene.add(this.vessel);
+                    
+                    // Add axes to help visualize orientation
+                    const axes = this.createLocalAxes(2);
+                    this.vessel.add(axes);
+                    
+                    // Update scene hierarchy
+                    this.updateSceneHierarchy();
+                    
+                    // Update camera to focus on the model
+                    this.resetCamera();
+                    
+                    // Force a render to show the model immediately
+                    this.forceRender();
+                    
+                    // Return the loaded model
+                    resolve(this.vessel);
+                } catch (error) {
+                    console.error('Error loading FBX model:', error);
+                    reject(error);
+                }
+            };
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    selectModelComponent(object) {
+        // Deselect previous object if any
+        if (this.selectedObject) {
+            // Restore original material
+            if (this.selectedObject.isMesh) {
+                this.selectedObject.material = this.selectedObject.userData.originalMaterial.clone();
             }
             
-            // Add icon based on object type
-            const icon = document.createElement('i');
-            if (object.userData.type === 'controlSurface') {
-                icon.className = 'bi bi-box';
-            } else if (object.userData.type === 'thruster') {
-                icon.className = 'bi bi-circle';
-            } else if (object.userData.type === 'sensor') {
-                icon.className = 'bi bi-cpu';
-            } else {
-                icon.className = 'bi bi-box';
-            }
-            item.appendChild(icon);
-            
-            // Add label
-            const label = document.createElement('span');
-            label.textContent = object.name || 'Unnamed Object';
-            item.appendChild(label);
-            
-            // Add click handler
-            item.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.selectObject(object);
-            });
-            
-            return item;
-        };
+            // Remove transform controls
+            this.transformControls.detach();
+        }
         
-        // Add vessel and its components
-        if (this.vessel) {
-            sceneHierarchy.appendChild(createHierarchyItem(this.vessel));
+        // Update selected object
+        this.selectedObject = object;
+        
+        if (object) {
+            // Highlight selected object
+            if (object.isMesh) {
+                // Clone the original material and modify it to show selection
+                const highlightMaterial = object.userData.originalMaterial.clone();
+                highlightMaterial.emissive = new THREE.Color(0x333333);
+                highlightMaterial.emissiveIntensity = 0.5;
+                object.material = highlightMaterial;
+            }
+            
+            // Attach transform controls
+            this.transformControls.attach(object);
+            
+            // Update UI with selection info
+            this.showComponentSettings(object);
+            } else {
+            // Clear UI if no selection
+            document.getElementById('object-properties').innerHTML = `
+                <div class="no-selection-message">
+                    Select an object to view its properties
+                </div>
+            `;
+        }
+        
+        // Update scene
+        this.render();
+    }
+
+    showComponentSettings(object) {
+        // First check if this object is already mapped to a component
+        const vesselModel = window.currentVesselModel; // This should be set in the main.js
+        
+        if (!vesselModel) return;
+        
+        const componentData = vesselModel.getModelComponentData(object.uuid);
+        let componentType = componentData ? componentData.type : 'none';
+        
+        // Create HTML for properties panel
+        let html = `
+            <div class="property-group">
+                <div class="property-group-title">Object Properties</div>
+                <div class="property-row">
+                    <div class="property-label">Name</div>
+                    <div class="property-value">${object.name || 'Unnamed Object'}</div>
+                </div>
+                <div class="property-row">
+                    <div class="property-label">Type</div>
+                    <div class="property-value">
+                        <select id="componentTypeSelect" class="form-control">
+                            <option value="none" ${componentType === 'none' ? 'selected' : ''}>Regular Object</option>
+                            <option value="controlSurface" ${componentType === 'controlSurface' ? 'selected' : ''}>Control Surface</option>
+                            <option value="thruster" ${componentType === 'thruster' ? 'selected' : ''}>Thruster</option>
+                            <option value="sensor" ${componentType === 'sensor' ? 'selected' : ''}>Sensor</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="property-group">
+                <div class="property-group-title">Transform</div>
+                <div class="property-row">
+                    <div class="property-label">Position</div>
+                    <div class="property-value">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="posX" value="${object.position.x.toFixed(2)}" step="0.1">
+                            <input type="number" class="form-control" id="posY" value="${object.position.y.toFixed(2)}" step="0.1">
+                            <input type="number" class="form-control" id="posZ" value="${object.position.z.toFixed(2)}" step="0.1">
+                        </div>
+                    </div>
+                </div>
+                <div class="property-row">
+                    <div class="property-label">Rotation (deg)</div>
+                    <div class="property-value">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="rotX" value="${THREE.MathUtils.radToDeg(object.rotation.x).toFixed(1)}" step="1">
+                            <input type="number" class="form-control" id="rotY" value="${THREE.MathUtils.radToDeg(object.rotation.y).toFixed(1)}" step="1">
+                            <input type="number" class="form-control" id="rotZ" value="${THREE.MathUtils.radToDeg(object.rotation.z).toFixed(1)}" step="1">
+                        </div>
+                    </div>
+                </div>
+                <div class="property-row">
+                    <div class="property-label">Scale</div>
+                    <div class="property-value">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="scaleX" value="${object.scale.x.toFixed(2)}" step="0.1" min="0.1">
+                            <input type="number" class="form-control" id="scaleY" value="${object.scale.y.toFixed(2)}" step="0.1" min="0.1">
+                            <input type="number" class="form-control" id="scaleZ" value="${object.scale.z.toFixed(2)}" step="0.1" min="0.1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add specific component settings if this is a component
+        if (componentType !== 'none' && componentData) {
+            // Add component-specific properties based on the component type
+            html += this.createComponentSpecificProperties(componentType, componentData.id, vesselModel);
+        }
+        
+        // Add button to apply changes
+        html += `
+            <div class="mt-3">
+                <button id="btnApplyComponentChanges" class="btn btn-primary">Apply Changes</button>
+                <button id="btnRemoveComponent" class="btn btn-danger" ${componentType === 'none' ? 'style="display:none"' : ''}>Remove Component</button>
+            </div>
+        `;
+        
+        // Update the properties panel
+        document.getElementById('object-properties').innerHTML = html;
+        
+        // Set up event listeners for the form fields
+        this.setupComponentPropertyListeners(object);
+    }
+
+    createComponentSpecificProperties(componentType, componentId, vesselModel) {
+        let html = '';
+        
+        switch (componentType) {
+            case 'controlSurface':
+                const surface = vesselModel.getControlSurface(componentId);
+                if (surface) {
+                    html += `
+                        <div class="property-group">
+                            <div class="property-group-title">Control Surface Properties</div>
+                            <div class="property-row">
+                                <div class="property-label">Type</div>
+                                <div class="property-value">
+                                    <select id="csSurfaceType" class="form-control">
+                                        <option value="Rudder" ${surface.control_surface_type === 'Rudder' ? 'selected' : ''}>Rudder</option>
+                                        <option value="Fins" ${surface.control_surface_type === 'Fins' ? 'selected' : ''}>Fins</option>
+                                        <option value="Elevator" ${surface.control_surface_type === 'Elevator' ? 'selected' : ''}>Elevator</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="property-row">
+                                <div class="property-label">Area (m²)</div>
+                                <div class="property-value">
+                                    <input type="number" class="form-control" id="csSurfaceArea" value="${surface.control_surface_area}" step="0.01" min="0.01">
+                                </div>
+                            </div>
+                            <div class="property-row">
+                                <div class="property-label">Time Constant</div>
+                                <div class="property-value">
+                                    <input type="number" class="form-control" id="csSurfaceTimeConstant" value="${surface.control_surface_T}" step="0.01" min="0.01">
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                break;
+                
+            case 'thruster':
+                const thruster = vesselModel.getThruster(componentId);
+                if (thruster) {
+                    html += `
+                        <div class="property-group">
+                            <div class="property-group-title">Thruster Properties</div>
+                            <div class="property-row">
+                                <div class="property-label">Name</div>
+                                <div class="property-value">
+                                    <input type="text" class="form-control" id="thrusterName" value="${thruster.thruster_name}">
+                                </div>
+                            </div>
+                            <div class="property-row">
+                                <div class="property-label">Type</div>
+                                <div class="property-value">
+                                    <select id="thrusterType" class="form-control">
+                                        <option value="Propeller" ${thruster.thruster_type === 'Propeller' ? 'selected' : ''}>Propeller</option>
+                                        <option value="Jet" ${thruster.thruster_type === 'Jet' ? 'selected' : ''}>Jet</option>
+                                        <option value="Tunnel" ${thruster.thruster_type === 'Tunnel' ? 'selected' : ''}>Tunnel</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="property-row">
+                                <div class="property-label">Diameter (m)</div>
+                                <div class="property-value">
+                                    <input type="number" class="form-control" id="thrusterDiameter" value="${thruster.D_prop}" step="0.01" min="0.01">
+                                </div>
+                            </div>
+                            <div class="property-row">
+                                <div class="property-label">Thrust Coefficient</div>
+                                <div class="property-value">
+                                    <input type="number" class="form-control" id="thrusterCoefficient" value="${thruster.T_prop}" step="0.1" min="0.1">
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                break;
+                
+            case 'sensor':
+                const sensor = vesselModel.getSensor(componentId);
+                if (sensor) {
+                    html += `
+                        <div class="property-group">
+                            <div class="property-group-title">Sensor Properties</div>
+                            <div class="property-row">
+                                <div class="property-label">Type</div>
+                                <div class="property-value">
+                                    <select id="sensorType" class="form-control">
+                                        <option value="IMU" ${sensor.sensor_type === 'IMU' ? 'selected' : ''}>IMU</option>
+                                        <option value="GPS" ${sensor.sensor_type === 'GPS' ? 'selected' : ''}>GPS</option>
+                                        <option value="DVL" ${sensor.sensor_type === 'DVL' ? 'selected' : ''}>DVL</option>
+                                        <option value="Depth" ${sensor.sensor_type === 'Depth' ? 'selected' : ''}>Depth</option>
+                                        <option value="Camera" ${sensor.sensor_type === 'Camera' ? 'selected' : ''}>Camera</option>
+                                        <option value="Sonar" ${sensor.sensor_type === 'Sonar' ? 'selected' : ''}>Sonar</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="property-row">
+                                <div class="property-label">Publish Rate (Hz)</div>
+                                <div class="property-value">
+                                    <input type="number" class="form-control" id="sensorPublishRate" value="${sensor.publish_rate}" step="0.1" min="0.1">
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                break;
+        }
+        
+        return html;
+    }
+
+    setupComponentPropertyListeners(object) {
+        const vesselModel = window.currentVesselModel;
+        if (!vesselModel) return;
+        
+        // Component type selection change
+        const componentTypeSelect = document.getElementById('componentTypeSelect');
+        if (componentTypeSelect) {
+            componentTypeSelect.addEventListener('change', (e) => {
+                const newType = e.target.value;
+                const oldType = vesselModel.getModelComponentData(object.uuid)?.type;
+                
+                // If changing from one type to another, remove the old mapping
+                if (oldType && oldType !== 'none') {
+                    const componentData = vesselModel.getModelComponentData(object.uuid);
+                    if (componentData) {
+                        const componentId = componentData.id;
+                        
+                        // Remove the old component
+                        if (oldType === 'controlSurface') {
+                            vesselModel.removeControlSurface(componentId);
+                        } else if (oldType === 'thruster') {
+                            vesselModel.removeThruster(componentId);
+                        } else if (oldType === 'sensor') {
+                            vesselModel.removeSensor(componentId);
+                        }
+                        
+                        // Remove the mapping
+                        vesselModel.unmapModelComponent(object.uuid);
+                    }
+                }
+                
+                // If changing to a component type, create a new component
+                if (newType !== 'none') {
+                    // Get the object's world position and orientation
+                    const worldPosition = new THREE.Vector3();
+                    object.getWorldPosition(worldPosition);
+                    
+                    // Convert to world rotation (Euler angles)
+                    const worldQuaternion = new THREE.Quaternion();
+                    object.getWorldQuaternion(worldQuaternion);
+                    const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
+                    
+                    // Create the component based on type
+                    let componentId;
+                    if (newType === 'controlSurface') {
+                        componentId = vesselModel.addControlSurface(
+                            'Rudder',
+                            [worldPosition.x, worldPosition.y, worldPosition.z],
+                            [worldEuler.x, worldEuler.y, worldEuler.z],
+                            0.1
+                        );
+                    } else if (newType === 'thruster') {
+                        componentId = vesselModel.addThruster(
+                            'Propeller',
+                            [worldPosition.x, worldPosition.y, worldPosition.z],
+                            [worldEuler.x, worldEuler.y, worldEuler.z],
+                            0.2
+                        );
+                    } else if (newType === 'sensor') {
+                        componentId = vesselModel.addSensor(
+                            'IMU',
+                            [worldPosition.x, worldPosition.y, worldPosition.z],
+                            [worldEuler.x, worldEuler.y, worldEuler.z],
+                            10
+                        );
+                    }
+                    
+                    // Map the object to the component
+                    if (componentId) {
+                        vesselModel.mapModelComponent(object.uuid, newType, componentId);
+                    }
+                }
+                
+                // Refresh the component settings display
+                this.showComponentSettings(object);
+                
+                // Make the remove button visible if needed
+                const removeBtn = document.getElementById('btnRemoveComponent');
+                if (removeBtn) {
+                    removeBtn.style.display = newType !== 'none' ? 'inline-block' : 'none';
+                }
+            });
+        }
+        
+        // Transform properties change
+        ['posX', 'posY', 'posZ'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('change', () => {
+                    const x = parseFloat(document.getElementById('posX').value);
+                    const y = parseFloat(document.getElementById('posY').value);
+                    const z = parseFloat(document.getElementById('posZ').value);
+                    
+                    object.position.set(x, y, z);
+                    this.updateComponentPositionFromObject(object);
+                    this.render();
+                });
+            }
+        });
+        
+        ['rotX', 'rotY', 'rotZ'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('change', () => {
+                    const x = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotX').value));
+                    const y = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotY').value));
+                    const z = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotZ').value));
+                    
+                    object.rotation.set(x, y, z);
+                    this.updateComponentOrientationFromObject(object);
+                    this.render();
+                });
+            }
+        });
+        
+        ['scaleX', 'scaleY', 'scaleZ'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('change', () => {
+                    const x = parseFloat(document.getElementById('scaleX').value);
+                    const y = parseFloat(document.getElementById('scaleY').value);
+                    const z = parseFloat(document.getElementById('scaleZ').value);
+                    
+                    object.scale.set(x, y, z);
+                    this.render();
+                });
+            }
+        });
+        
+        // Component-specific properties change
+        const componentData = vesselModel.getModelComponentData(object.uuid);
+        if (componentData) {
+            const componentType = componentData.type;
+            const componentId = componentData.id;
+            
+            // Control Surface properties
+            if (componentType === 'controlSurface') {
+                const surfaceTypeSelect = document.getElementById('csSurfaceType');
+                const surfaceAreaInput = document.getElementById('csSurfaceArea');
+                const timeConstantInput = document.getElementById('csSurfaceTimeConstant');
+                
+                if (surfaceTypeSelect) {
+                    surfaceTypeSelect.addEventListener('change', () => {
+                        vesselModel.updateControlSurface(componentId, {
+                            control_surface_type: surfaceTypeSelect.value
+                        });
+                    });
+                }
+                
+                if (surfaceAreaInput) {
+                    surfaceAreaInput.addEventListener('change', () => {
+                        vesselModel.updateControlSurface(componentId, {
+                            control_surface_area: parseFloat(surfaceAreaInput.value)
+                        });
+                    });
+                }
+                
+                if (timeConstantInput) {
+                    timeConstantInput.addEventListener('change', () => {
+                        vesselModel.updateControlSurface(componentId, {
+                            control_surface_T: parseFloat(timeConstantInput.value)
+                        });
+                    });
+                }
+            }
+            
+            // Thruster properties
+            else if (componentType === 'thruster') {
+                const thrusterNameInput = document.getElementById('thrusterName');
+                const thrusterTypeSelect = document.getElementById('thrusterType');
+                const thrusterDiameterInput = document.getElementById('thrusterDiameter');
+                const thrusterCoefficientInput = document.getElementById('thrusterCoefficient');
+                
+                if (thrusterNameInput) {
+                    thrusterNameInput.addEventListener('change', () => {
+                        vesselModel.updateThruster(componentId, {
+                            thruster_name: thrusterNameInput.value
+                        });
+                    });
+                }
+                
+                if (thrusterTypeSelect) {
+                    thrusterTypeSelect.addEventListener('change', () => {
+                        vesselModel.updateThruster(componentId, {
+                            thruster_type: thrusterTypeSelect.value
+                        });
+                    });
+                }
+                
+                if (thrusterDiameterInput) {
+                    thrusterDiameterInput.addEventListener('change', () => {
+                        vesselModel.updateThruster(componentId, {
+                            D_prop: parseFloat(thrusterDiameterInput.value)
+                        });
+                    });
+                }
+                
+                if (thrusterCoefficientInput) {
+                    thrusterCoefficientInput.addEventListener('change', () => {
+                        vesselModel.updateThruster(componentId, {
+                            T_prop: parseFloat(thrusterCoefficientInput.value)
+                        });
+                    });
+                }
+            }
+            
+            // Sensor properties
+            else if (componentType === 'sensor') {
+                const sensorTypeSelect = document.getElementById('sensorType');
+                const sensorPublishRateInput = document.getElementById('sensorPublishRate');
+                
+                if (sensorTypeSelect) {
+                    sensorTypeSelect.addEventListener('change', () => {
+                        vesselModel.updateSensor(componentId, {
+                            sensor_type: sensorTypeSelect.value
+                        });
+                    });
+                }
+                
+                if (sensorPublishRateInput) {
+                    sensorPublishRateInput.addEventListener('change', () => {
+                        vesselModel.updateSensor(componentId, {
+                            publish_rate: parseFloat(sensorPublishRateInput.value)
+                        });
+                    });
+                }
+            }
+        }
+        
+        // Apply changes button
+        const applyButton = document.getElementById('btnApplyComponentChanges');
+        if (applyButton) {
+            applyButton.addEventListener('click', () => {
+                // Update transform
+                const x = parseFloat(document.getElementById('posX').value);
+                const y = parseFloat(document.getElementById('posY').value);
+                const z = parseFloat(document.getElementById('posZ').value);
+                object.position.set(x, y, z);
+                
+                const rotX = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotX').value));
+                const rotY = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotY').value));
+                const rotZ = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotZ').value));
+                object.rotation.set(rotX, rotY, rotZ);
+                
+                const scaleX = parseFloat(document.getElementById('scaleX').value);
+                const scaleY = parseFloat(document.getElementById('scaleY').value);
+                const scaleZ = parseFloat(document.getElementById('scaleZ').value);
+                object.scale.set(scaleX, scaleY, scaleZ);
+                
+                // Update component position & orientation if applicable
+                this.updateComponentPositionFromObject(object);
+                this.updateComponentOrientationFromObject(object);
+                
+                // Refresh view
+                this.render();
+            });
+        }
+        
+        // Remove component button
+        const removeButton = document.getElementById('btnRemoveComponent');
+        if (removeButton) {
+            removeButton.addEventListener('click', () => {
+                const componentData = vesselModel.getModelComponentData(object.uuid);
+                if (componentData) {
+                    const componentType = componentData.type;
+                    const componentId = componentData.id;
+                    
+                    // Remove the component
+                    if (componentType === 'controlSurface') {
+                        vesselModel.removeControlSurface(componentId);
+                    } else if (componentType === 'thruster') {
+                        vesselModel.removeThruster(componentId);
+                    } else if (componentType === 'sensor') {
+                        vesselModel.removeSensor(componentId);
+                    }
+                    
+                    // Remove the mapping
+                    vesselModel.unmapModelComponent(object.uuid);
+                    
+                    // Update UI
+                    componentTypeSelect.value = 'none';
+                    removeButton.style.display = 'none';
+                    
+                    // Refresh component settings
+                    this.showComponentSettings(object);
+                }
+            });
+        }
+    }
+
+    updateComponentPositionFromObject(object) {
+        const vesselModel = window.currentVesselModel;
+        if (!vesselModel) return;
+        
+        const componentData = vesselModel.getModelComponentData(object.uuid);
+        if (!componentData) return;
+        
+        // Get world position
+        const worldPosition = new THREE.Vector3();
+        object.getWorldPosition(worldPosition);
+        
+        // Update component position based on type
+        const componentType = componentData.type;
+        const componentId = componentData.id;
+        
+        if (componentType === 'controlSurface') {
+            vesselModel.updateControlSurface(componentId, {
+                control_surface_location: [worldPosition.x, worldPosition.y, worldPosition.z]
+            });
+        } else if (componentType === 'thruster') {
+            vesselModel.updateThruster(componentId, {
+                thruster_location: [worldPosition.x, worldPosition.y, worldPosition.z]
+            });
+        } else if (componentType === 'sensor') {
+            vesselModel.updateSensor(componentId, {
+                sensor_location: [worldPosition.x, worldPosition.y, worldPosition.z]
+            });
+        }
+    }
+
+    updateComponentOrientationFromObject(object) {
+        const vesselModel = window.currentVesselModel;
+        if (!vesselModel) return;
+        
+        const componentData = vesselModel.getModelComponentData(object.uuid);
+        if (!componentData) return;
+        
+        // Get world orientation
+        const worldQuaternion = new THREE.Quaternion();
+        object.getWorldQuaternion(worldQuaternion);
+        const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
+        
+        // Update component orientation based on type
+        const componentType = componentData.type;
+        const componentId = componentData.id;
+        
+        if (componentType === 'controlSurface') {
+            vesselModel.updateControlSurface(componentId, {
+                control_surface_orientation: [worldEuler.x, worldEuler.y, worldEuler.z]
+            });
+        } else if (componentType === 'thruster') {
+            vesselModel.updateThruster(componentId, {
+                thruster_orientation: [worldEuler.x, worldEuler.y, worldEuler.z]
+            });
+        } else if (componentType === 'sensor') {
+            vesselModel.updateSensor(componentId, {
+                sensor_orientation: [worldEuler.x, worldEuler.y, worldEuler.z]
+            });
+        }
+    }
+
+    // Selection methods
+    setTransformMode(mode) {
+        if (this.transformControls && mode) {
+            this.transformControls.setMode(mode);
+        }
+    }
+
+    // Add performance monitoring if needed
+    addPerformanceMonitor() {
+        // Import Stats.js dynamically
+        const script = document.createElement('script');
+        script.onload = () => {
+            this.stats = new Stats();
+            this.stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+            document.body.appendChild(this.stats.dom);
+            console.log('Performance monitor enabled');
+        };
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.min.js';
+        document.head.appendChild(script);
+    }
+
+    // Implement batched updates for transform inputs
+    updateTransformFromInputs(object, position, rotation) {
+        if (!object) return;
+        
+        // Update in a single batch to minimize renders
+        object.position.set(position.x, position.y, position.z);
+        object.rotation.set(
+            THREE.MathUtils.degToRad(rotation.x),
+            THREE.MathUtils.degToRad(rotation.y),
+            THREE.MathUtils.degToRad(rotation.z)
+        );
+        
+        // Trigger a single render
+        this.render();
+    }
+
+    // Initialize event listeners
+    initializeEventListeners() {
+        // Window resize event - debounced for performance
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            if (resizeTimeout) clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                this.updateRendererSize();
+            }, 100);
+        });
+        
+        // Mouse events for object selection
+        this.renderer.domElement.addEventListener('mousemove', (event) => {
+            // Calculate mouse position in normalized device coordinates
+            const rect = this.renderer.domElement.getBoundingClientRect();
+            this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        });
+        
+        this.renderer.domElement.addEventListener('click', this.onClick.bind(this));
+        
+        // Transform controls mode switching
+        window.addEventListener('keydown', (event) => {
+            // Only process if the 3D view is active (not typing in an input field)
+            if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+                return;
+            }
+            
+            switch (event.key) {
+                case 'g': // Translate
+                    this.setTransformMode('translate');
+                    break;
+                case 'r': // Rotate
+                    this.setTransformMode('rotate');
+                    break;
+                case 's': // Scale
+                    this.setTransformMode('scale');
+                    break;
+                case 'Escape': // Deselect
+                    this.selectObject(null);
+                    break;
+            }
+        });
+        
+        // Optimize rendering during scroll events
+        this.renderer.domElement.addEventListener('wheel', () => {
+            this.needsRender = true;
+        });
+        
+        // Handle low-level GL context loss
+        this.renderer.domElement.addEventListener('webglcontextlost', (event) => {
+            event.preventDefault();
+            console.warn('WebGL context lost. Trying to restore...');
+        });
+        
+        this.renderer.domElement.addEventListener('webglcontextrestored', () => {
+            console.log('WebGL context restored');
+            this.forceRender();
+        });
+    }
+
+    // Set the enabled state of the controls
+    setControlsEnabled(enabled) {
+        if (this.orbitControls) {
+            this.orbitControls.enabled = enabled;
+        }
+    }
+
+    // Update the target position of orbit controls
+    updateOrbitTarget(position) {
+        if (this.orbitControls) {
+            this.orbitControls.target.copy(position);
+            this.orbitControls.update();
+            this.render();
         }
     }
 }

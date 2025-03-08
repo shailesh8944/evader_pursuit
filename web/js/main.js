@@ -1,1021 +1,820 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // Initialize Three.js scene and vessel model
-    const threeScene = new ThreeScene();
-    const vesselModel = new VesselModel();
-    const yamlGenerator = new YAMLGenerator();
-
-    // Create initial vessel with default dimensions
-    threeScene.createVessel(1, 1, 1);
-    vesselModel.updateBasicProperties('New Vessel', 'auv', 1, 1, 1);
-
-    // UI Elements
-    const vesselNameInput = document.getElementById('vesselName');
-    const vesselTypeSelect = document.getElementById('vesselType');
-    const lengthInput = document.getElementById('length');
-    const breadthInput = document.getElementById('breadth');
-    const depthInput = document.getElementById('depth');
-
-    // Physical Properties
-    const massInput = document.getElementById('mass');
-    const cgInputs = {
-        x: document.getElementById('cg_x'),
-        y: document.getElementById('cg_y'),
-        z: document.getElementById('cg_z')
-    };
-
-    // Inertia Matrix
-    const inertiaInputs = {
-        xx: document.getElementById('i_xx'),
-        xy: document.getElementById('i_xy'),
-        xz: document.getElementById('i_xz'),
-        yx: document.getElementById('i_yx'),
-        yy: document.getElementById('i_yy'),
-        yz: document.getElementById('i_yz'),
-        zx: document.getElementById('i_zx'),
-        zy: document.getElementById('i_zy'),
-        zz: document.getElementById('i_zz')
-    };
-
-    // Transform Info Inputs
-    const positionInputs = {
-        x: document.getElementById('pos_x'),
-        y: document.getElementById('pos_y'),
-        z: document.getElementById('pos_z')
-    };
-
-    const rotationInputs = {
-        x: document.getElementById('rot_x'),
-        y: document.getElementById('rot_y'),
-        z: document.getElementById('rot_z')
-    };
-
-    const scaleInputs = {
-        x: document.getElementById('scale_x'),
-        y: document.getElementById('scale_y'),
-        z: document.getElementById('scale_z')
-    };
-
-    // Buttons
-    const addControlSurfaceBtn = document.getElementById('addControlSurface');
-    const addThrusterBtn = document.getElementById('addThruster');
-    const addSensorBtn = document.getElementById('addSensor');
-    const generateYAMLBtn = document.getElementById('generateYAML');
-    const saveConfigBtn = document.getElementById('saveConfig');
-    const loadConfigBtn = document.getElementById('loadConfig');
-    const resetCameraBtn = document.getElementById('resetCamera');
-    const toggleGridBtn = document.getElementById('toggleGrid');
-    const toggleWireframeBtn = document.getElementById('toggleWireframe');
-    const sidebarToggle = document.querySelector('.sidebar-toggle');
-
-    // Context Menu
-    const contextMenu = document.querySelector('.context-menu');
-    let contextMenuPosition = null;
-
-    // Sidebar resize functionality
-    const sidebar = document.querySelector('.sidebar');
-    const resizeHandle = document.querySelector('.sidebar-resize-handle');
-    const mainContent = document.querySelector('.main-content');
-    let isResizing = false;
-    let lastDownX = 0;
-
-    resizeHandle.addEventListener('mousedown', (e) => {
-        isResizing = true;
-        lastDownX = e.clientX;
-        resizeHandle.classList.add('active');
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-    });
-
-    document.addEventListener('mousemove', (e) => {
-        if (!isResizing) return;
-
-        const delta = e.clientX - lastDownX;
-        const newWidth = sidebar.offsetWidth + delta;
-
-        // Constrain width between min and max values
-        if (newWidth >= 300 && newWidth <= 600) {
-            sidebar.style.width = `${newWidth}px`;
-            lastDownX = e.clientX;
-            
-            // Update Three.js renderer size
-            threeScene.onWindowResize();
-        }
-    });
-
-    document.addEventListener('mouseup', () => {
-        if (isResizing) {
-            isResizing = false;
-            resizeHandle.classList.remove('active');
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-        }
-    });
-
-    // Sidebar Toggle
-    sidebarToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('collapsed');
-        mainContent.classList.toggle('expanded');
-        sidebarToggle.querySelector('i').classList.toggle('bi-chevron-right');
-        sidebarToggle.querySelector('i').classList.toggle('bi-chevron-left');
-        threeScene.onWindowResize();
-    });
-
-    // Setup visibility toggles
-    const stlToggle = document.getElementById('toggleSTLVisibility');
-    const boxToggle = document.getElementById('toggleBoxVisibility');
+// Main application logic for the Marine Vessel CAD Configurator
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("Initializing Marine Vessel CAD Configurator...");
     
-    stlToggle.addEventListener('change', (e) => {
-        threeScene.toggleSTL(e.target.checked);
-    });
-    
-    boxToggle.addEventListener('change', (e) => {
-        threeScene.toggleBox(e.target.checked);
-    });
-
-    // Setup context menu
-    threeScene.renderer.domElement.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        contextMenu.style.display = 'block';
-        contextMenu.style.left = `${e.clientX}px`;
-        contextMenu.style.top = `${e.clientY}px`;
-        contextMenuPosition = new THREE.Vector2(
-            ((e.clientX - threeScene.renderer.domElement.offsetLeft) / threeScene.renderer.domElement.clientWidth) * 2 - 1,
-            -((e.clientY - threeScene.renderer.domElement.offsetTop) / threeScene.renderer.domElement.clientHeight) * 2 + 1
-        );
-    });
-    
-    document.addEventListener('click', (e) => {
-        if (!contextMenu.contains(e.target)) {
-            contextMenu.style.display = 'none';
-        }
-    });
-    
-    // Setup context menu actions
-    document.querySelectorAll('.context-menu-item').forEach(item => {
-        item.addEventListener('click', (e) => {
-            const action = e.currentTarget.dataset.action;
-            const position = threeScene.getWorldPositionFromMouse(contextMenuPosition);
-            
-            switch(action) {
-                case 'add-rudder':
-                    threeScene.addControlSurface(vesselModel.nextControlSurfaceId++, 'Rudder', position);
-                    break;
-                case 'add-fin':
-                    threeScene.addControlSurface(vesselModel.nextControlSurfaceId++, 'Fin', position);
-                    break;
-                case 'add-thruster':
-                    threeScene.addThruster(vesselModel.nextThrusterId++, position);
-                    break;
-                case 'add-sensor':
-                    threeScene.showSensorDialog(position);
-                    break;
-            }
-            
-            contextMenu.style.display = 'none';
-        });
-    });
-
-    // Transform Controls Event Listeners
-    Object.entries(positionInputs).forEach(([axis, input]) => {
-        input.addEventListener('change', () => {
-            if (threeScene.selectedObject) {
-                threeScene.selectedObject.position[axis] = parseFloat(input.value) || 0;
-                onObjectTransformed(threeScene.selectedObject);
-            }
-        });
-    });
-
-    Object.entries(rotationInputs).forEach(([axis, input]) => {
-        input.addEventListener('change', () => {
-            if (threeScene.selectedObject) {
-                threeScene.selectedObject.rotation[axis] = parseFloat(input.value) || 0;
-                onObjectTransformed(threeScene.selectedObject);
-            }
-        });
-    });
-
-    Object.entries(scaleInputs).forEach(([axis, input]) => {
-        input.addEventListener('change', () => {
-            if (threeScene.selectedObject) {
-                threeScene.selectedObject.scale[axis] = parseFloat(input.value) || 1;
-                onObjectTransformed(threeScene.selectedObject);
-            }
-        });
-    });
-
-    // Event Listeners for Basic Properties
-    function updateBasicProperties() {
-        const name = vesselNameInput.value || 'New Vessel';
-        const type = vesselTypeSelect.value || 'auv';
-        const length = parseFloat(lengthInput.value) || 1;
-        const breadth = parseFloat(breadthInput.value) || 1;
-        const depth = parseFloat(depthInput.value) || 1;
-
-        vesselModel.updateBasicProperties(name, type, length, breadth, depth);
-        threeScene.createVessel(length, breadth, depth);
+    // Initialize core objects
+    try {
+        initializeApplication();
+    } catch (error) {
+        console.error("Error initializing application:", error);
+        // Try again with a delay in case DOM elements aren't fully ready
+        setTimeout(initializeApplication, 100);
     }
-
-    vesselNameInput.addEventListener('input', updateBasicProperties);
-    vesselTypeSelect.addEventListener('change', updateBasicProperties);
-    lengthInput.addEventListener('input', updateBasicProperties);
-    breadthInput.addEventListener('input', updateBasicProperties);
-    depthInput.addEventListener('input', updateBasicProperties);
-
-    // Physical Properties Event Listeners
-    function updatePhysicalProperties() {
-        const mass = parseFloat(massInput.value) || 0;
-        const cg = [
-            parseFloat(cgInputs.x.value) || 0,
-            parseFloat(cgInputs.y.value) || 0,
-            parseFloat(cgInputs.z.value) || 0
-        ];
-
-        const inertiaMatrix = [
-            [parseFloat(inertiaInputs.xx.value) || 0, parseFloat(inertiaInputs.xy.value) || 0, parseFloat(inertiaInputs.xz.value) || 0],
-            [parseFloat(inertiaInputs.yx.value) || 0, parseFloat(inertiaInputs.yy.value) || 0, parseFloat(inertiaInputs.yz.value) || 0],
-            [parseFloat(inertiaInputs.zx.value) || 0, parseFloat(inertiaInputs.zy.value) || 0, parseFloat(inertiaInputs.zz.value) || 0]
-        ];
-
-        vesselModel.updateInertiaProperties(mass, inertiaMatrix);
-    }
-
-    [massInput, ...Object.values(cgInputs), ...Object.values(inertiaInputs)]
-        .forEach(input => input.addEventListener('change', updatePhysicalProperties));
-
-    // Control Surface Management
-    function addControlSurface(type, position = { x: 0, y: 0, z: 0 }) {
+    
+    // Main initialization function
+    function initializeApplication() {
         try {
-            const id = vesselModel.addControlSurface(
-                type,
-                [position.x, position.y, position.z],
-                [0, 0, 0],
-                type === 'Rudder' ? 0.5 : 0.3
-            );
-
-            const surface = threeScene.addControlSurface(id, type, [position.x, position.y, position.z], [0, 0, 0]);
-            updateControlSurfacesList();
-            return surface;
-        } catch (error) {
-            console.error('Error adding control surface:', error);
-            return null;
-        }
-    }
-
-    // Thruster Management
-    function addThruster(position = { x: 0, y: 0, z: 0 }) {
-        try {
-            const id = vesselModel.addThruster(
-                'Propeller',
-                [position.x, position.y, position.z],
-                [0, 0, 0],
-                1000
-            );
-
-            const thruster = threeScene.addThruster(id, [position.x, position.y, position.z], [0, 0, 0]);
-            updateThrustersList();
-            return thruster;
-        } catch (error) {
-            console.error('Error adding thruster:', error);
-            return null;
-        }
-    }
-
-    // Sensor Management
-    function showSensorDialog(position) {
-        try {
-            const types = ['IMU', 'GPS', 'DVL'];
-            const type = types[Math.floor(Math.random() * types.length)];
+            console.log("Creating ThreeScene...");
+            const threeScene = new ThreeScene();
+            window.threeScene = threeScene; // Make it globally accessible
             
-            const id = vesselModel.addSensor(
-                type,
-                [position.x, position.y, position.z],
-                [1, 0, 0, 0],
-                100
-            );
-
-            const sensor = threeScene.addSensor(id, type, [position.x, position.y, position.z]);
-            updateSensorsList();
-            return sensor;
+            console.log("Creating VesselModel...");
+            const vesselModel = new VesselModel('New Vessel', 'auv');
+            window.currentVesselModel = vesselModel;
+            
+            // Create initial vessel with default dimensions
+            if (typeof threeScene.createVessel === 'function') {
+                console.log("Creating default vessel...");
+                const length = 1.0;
+                const breadth = 0.5;
+                const depth = 0.5;
+                const vessel = threeScene.createVessel(length, breadth, depth);
+                if (vessel) {
+                    console.log("Default vessel created successfully");
+                } else {
+                    console.warn("Failed to create default vessel");
+                }
+            } else {
+                console.error("createVessel method not found on threeScene");
+            }
+            
+            // Populate form fields with initial values
+            const nameInput = document.getElementById('vesselName');
+            const typeSelect = document.getElementById('vesselType');
+            
+            if (nameInput) nameInput.value = vesselModel.config.name || 'New Vessel';
+            if (typeSelect) typeSelect.value = vesselModel.config.type || 'auv';
+            
+            console.log("Starting animation loop...");
+            threeScene.animate();
+            
+            // Initialize UI components
+            initializeSidebars();
+            initializeToolbar();
+            initializeViewportControls(threeScene);
+            initializeModals(threeScene);
+            initializeFileHandlers(threeScene);
+            initializeYAMLGeneration();
+            
+            console.log("Application initialized successfully");
         } catch (error) {
-            console.error('Error adding sensor:', error);
-            return null;
-        }
-    }
-
-    // Update Transform Info
-    function updateTransformInputs(object) {
-        if (!object) return;
-
-        positionInputs.x.value = object.position.x.toFixed(3);
-        positionInputs.y.value = object.position.y.toFixed(3);
-        positionInputs.z.value = object.position.z.toFixed(3);
-
-        rotationInputs.x.value = object.rotation.x.toFixed(3);
-        rotationInputs.y.value = object.rotation.y.toFixed(3);
-        rotationInputs.z.value = object.rotation.z.toFixed(3);
-
-        scaleInputs.x.value = object.scale.x.toFixed(3);
-        scaleInputs.y.value = object.scale.y.toFixed(3);
-        scaleInputs.z.value = object.scale.z.toFixed(3);
-    }
-
-    function updateComponentTransform(object) {
-        if (!object || !object.userData.card) return;
-        
-        const card = object.userData.card;
-        const posInputs = {
-            x: card.querySelector('.pos-x'),
-            y: card.querySelector('.pos-y'),
-            z: card.querySelector('.pos-z')
-        };
-
-        const rotInputs = {
-            x: card.querySelector('.rot-x'),
-            y: card.querySelector('.rot-y'),
-            z: card.querySelector('.rot-z')
-        };
-
-        // Update position inputs
-        Object.entries(posInputs).forEach(([axis, input]) => {
-            if (input) {
-                input.value = object.position[axis].toFixed(3);
-            }
-        });
-
-        // Update rotation inputs
-        Object.entries(rotInputs).forEach(([axis, input]) => {
-            if (input) {
-                input.value = object.rotation[axis].toFixed(3);
-            }
-        });
-    }
-
-    // Update the onObjectTransformed callback
-    function onObjectTransformed(object) {
-        if (!object || !object.userData.type) return;
-
-        updateComponentTransform(object);
-        updateTransformInputs(object);
-
-        switch (object.userData.type) {
-            case 'controlSurface':
-                vesselModel.updateControlSurfaceTransform(
-                    object.userData.id,
-                    [object.position.x, object.position.y, object.position.z],
-                    [object.rotation.x, object.rotation.y, object.rotation.z]
-                );
-                updateControlSurfacesList();
-                break;
-
-            case 'thruster':
-                vesselModel.updateThrusterTransform(
-                    object.userData.id,
-                    [object.position.x, object.position.y, object.position.z],
-                    [object.rotation.x, object.rotation.y, object.rotation.z]
-                );
-                updateThrustersList();
-                break;
-
-            case 'sensor':
-                vesselModel.updateSensorTransform(
-                    object.userData.id,
-                    [object.position.x, object.position.y, object.position.z],
-                    [1, 0, 0, 0] // TODO: Convert Euler to Quaternion
-                );
-                updateSensorsList();
-                break;
-        }
-    }
-
-    // Assign the callback to the Three.js scene
-    threeScene.onObjectTransformed = onObjectTransformed;
-
-    // Component List Updates
-    function updateControlSurfacesList() {
-        const list = document.getElementById('controlSurfacesList');
-        list.innerHTML = '';
-        vesselModel.config.control_surfaces.control_surfaces.forEach(surface => {
-            const object = threeScene.getObjectById(surface.control_surface_id);
-            if (!object) return;
-
-            const card = createComponentCard(
-                `${surface.control_surface_type} #${surface.control_surface_id}`,
-                `<div class="component-info">
-                    <div class="info-row">
-                        <label>Area:</label>
-                        <input type="number" class="form-control form-control-sm area-input" 
-                               value="${surface.control_surface_area.toFixed(2)}" step="0.1" min="0">
-                        <span class="unit">m²</span>
-                    </div>
-                </div>`,
-                () => {
-                    vesselModel.removeControlSurface(surface.control_surface_id);
-                    threeScene.removeControlSurface(surface.control_surface_id);
-                    updateControlSurfacesList();
-                },
-                object
-            );
-
-            // Add area change handler
-            const areaInput = card.querySelector('.area-input');
-            areaInput.addEventListener('input', () => {
-                const area = parseFloat(areaInput.value) || 0;
-                vesselModel.updateControlSurfaceArea(surface.control_surface_id, area);
-                threeScene.updateControlSurfaceSize(surface.control_surface_id, area);
-            });
-
-            list.appendChild(card);
-        });
-    }
-
-    function updateThrustersList() {
-        const list = document.getElementById('thrustersList');
-        list.innerHTML = '';
-        if (vesselModel.config.thrusters) {
-            vesselModel.config.thrusters.thrusters.forEach(thruster => {
-                const object = threeScene.getObjectById(thruster.thruster_id);
-                if (!object) return;
-
-                const card = createComponentCard(
-                    `${thruster.thruster_type} #${thruster.thruster_id}`,
-                    `<div class="component-info">
-                        <div class="info-row">
-                            <label>Max Thrust:</label>
-                            <input type="number" class="form-control form-control-sm thrust-input" 
-                                   value="${thruster.max_thrust.toFixed(0)}" step="100" min="0">
-                            <span class="unit">N</span>
-                        </div>
-                    </div>`,
-                    () => {
-                        vesselModel.removeThruster(thruster.thruster_id);
-                        threeScene.removeThruster(thruster.thruster_id);
-                        updateThrustersList();
-                    },
-                    object
-                );
-
-                // Add thrust change handler
-                const thrustInput = card.querySelector('.thrust-input');
-                thrustInput.addEventListener('input', () => {
-                    const thrust = parseFloat(thrustInput.value) || 0;
-                    vesselModel.updateThrusterThrust(thruster.thruster_id, thrust);
-                    threeScene.updateThrusterSize(thruster.thruster_id, thrust);
+            console.error("Error in initializeApplication:", error);
+            // Display a user-friendly error message
+            const errorDiv = document.createElement('div');
+            errorDiv.style.position = 'fixed';
+            errorDiv.style.top = '50%';
+            errorDiv.style.left = '50%';
+            errorDiv.style.transform = 'translate(-50%, -50%)';
+            errorDiv.style.padding = '20px';
+            errorDiv.style.backgroundColor = '#f8d7da';
+            errorDiv.style.color = '#721c24';
+            errorDiv.style.borderRadius = '5px';
+            errorDiv.style.zIndex = '9999';
+            errorDiv.style.maxWidth = '80%';
+            errorDiv.innerHTML = `
+                <h4>Application Error</h4>
+                <p>There was an error initializing the application: ${error.message}</p>
+                <p>Please check the console for more details.</p>
+                <button style="padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                    Retry
+                </button>
+            `;
+            document.body.appendChild(errorDiv);
+            
+            // Add retry functionality
+            const retryButton = errorDiv.querySelector('button');
+            if (retryButton) {
+                retryButton.addEventListener('click', () => {
+                    errorDiv.remove();
+                    setTimeout(initializeApplication, 100);
                 });
-
-                list.appendChild(card);
-            });
+            }
         }
     }
-
-    function updateSensorsList() {
-        const list = document.getElementById('sensorsList');
-        list.innerHTML = '';
-        vesselModel.config.sensors.sensors.forEach(sensor => {
-            const object = threeScene.getObjectById(sensor.sensor_id);
-            if (!object) return;
-
-            const card = createComponentCard(
-                `${sensor.sensor_type} #${sensor.sensor_id}`,
-                `<div class="component-info">
-                    <div class="info-row">
-                        <label>Rate:</label>
-                        <input type="number" class="form-control form-control-sm rate-input" 
-                               value="${sensor.publish_rate.toFixed(1)}" step="1" min="0">
-                        <span class="unit">Hz</span>
-                    </div>
-                </div>`,
-                () => {
-                    vesselModel.removeSensor(sensor.sensor_id);
-                    threeScene.removeSensor(sensor.sensor_id);
-                    updateSensorsList();
-                },
-                object
-            );
-
-            // Add rate change handler
-            const rateInput = card.querySelector('.rate-input');
-            rateInput.addEventListener('input', () => {
-                const rate = parseFloat(rateInput.value) || 0;
-                vesselModel.updateSensorRate(sensor.sensor_id, rate);
+    
+    // --------- UI Initialization Functions ---------
+    
+    // Initialize sidebars
+    function initializeSidebars() {
+        // Tab switching in sidebars
+        document.querySelectorAll('.sidebar-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const tabId = this.getAttribute('data-tab');
+                const sidebar = this.closest('.left-sidebar, .right-sidebar');
+                
+                // Remove active class from all tabs and contents in this sidebar
+                sidebar.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+                sidebar.querySelectorAll('.sidebar-content').forEach(c => c.classList.remove('active'));
+                
+                // Add active class to selected tab and content
+                this.classList.add('active');
+                sidebar.querySelector(`#${tabId}`).classList.add('active');
             });
-
-            list.appendChild(card);
+        });
+        
+        // Hierarchy expand/collapse
+        document.getElementById('expandAll')?.addEventListener('click', function() {
+            document.querySelectorAll('.hierarchy-children').forEach(el => {
+                el.style.display = 'block';
+                el.previousElementSibling.querySelector('.hierarchy-toggle').innerHTML = '<i class="bi bi-caret-down-fill"></i>';
+            });
+        });
+        
+        document.getElementById('collapseAll')?.addEventListener('click', function() {
+            document.querySelectorAll('.hierarchy-children').forEach(el => {
+                el.style.display = 'none';
+                el.previousElementSibling.querySelector('.hierarchy-toggle').innerHTML = '<i class="bi bi-caret-right-fill"></i>';
+            });
         });
     }
-
-    function createComponentCard(title, content, onDelete, object) {
-        const card = document.createElement('div');
-        card.className = 'component-card fade-in';
-        
-        // Create editable fields for the component
-        const transformInputs = `
-            <div class="transform-inputs mt-3">
-                <div class="transform-group">
-                    <label>Position (m)</label>
-                    <div class="d-flex gap-2">
-                        <input type="number" class="form-control form-control-sm pos-x" value="${object.position.x.toFixed(3)}" step="0.1">
-                        <input type="number" class="form-control form-control-sm pos-y" value="${object.position.y.toFixed(3)}" step="0.1">
-                        <input type="number" class="form-control form-control-sm pos-z" value="${object.position.z.toFixed(3)}" step="0.1">
-                    </div>
-                </div>
-                <div class="transform-group">
-                    <label>Rotation (rad)</label>
-                    <div class="d-flex gap-2">
-                        <input type="number" class="form-control form-control-sm rot-x" value="${object.rotation.x.toFixed(3)}" step="0.1">
-                        <input type="number" class="form-control form-control-sm rot-y" value="${object.rotation.y.toFixed(3)}" step="0.1">
-                        <input type="number" class="form-control form-control-sm rot-z" value="${object.rotation.z.toFixed(3)}" step="0.1">
-                    </div>
-                </div>
-            </div>
-        `;
-
-        card.innerHTML = `
-            <div class="header">
-                <h5>${title}</h5>
-                <div class="component-controls">
-                    <button class="btn btn-outline-primary btn-sm edit-btn me-2" title="Edit Component">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-outline-danger btn-sm delete-btn" title="Delete Component">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="content">
-                ${content}
-                ${transformInputs}
-            </div>
-        `;
-
-        // Add event listeners for transform inputs
-        const posInputs = {
-            x: card.querySelector('.pos-x'),
-            y: card.querySelector('.pos-y'),
-            z: card.querySelector('.pos-z')
-        };
-
-        const rotInputs = {
-            x: card.querySelector('.rot-x'),
-            y: card.querySelector('.rot-y'),
-            z: card.querySelector('.rot-z')
-        };
-
-        // Update 3D object when sidebar inputs change
-        Object.entries(posInputs).forEach(([axis, input]) => {
-            input.addEventListener('input', () => {
-                object.position[axis] = parseFloat(input.value) || 0;
-                onObjectTransformed(object);
+    
+    // Initialize toolbar
+    function initializeToolbar() {
+        // New vessel
+        document.getElementById('btn-new-vessel')?.addEventListener('click', function() {
+            if (confirm('Create a new vessel? Any unsaved changes will be lost.')) {
+                window.currentVesselModel = new VesselModel();
+                
+                // Clear any loaded model
+                if (threeScene.vessel) {
+                    threeScene.scene.remove(threeScene.vessel);
+                    threeScene.vessel = null;
+                }
+                
+                // Update scene hierarchy
+                threeScene.updateSceneHierarchy();
                 threeScene.render();
-            });
+                
+                // Clear form fields
+                document.getElementById('vesselName').value = '';
+                document.getElementById('vesselType').value = 'auv';
+                
+                // Show notification
+                showNotification('New vessel created', 'success');
+            }
         });
-
-        Object.entries(rotInputs).forEach(([axis, input]) => {
-            input.addEventListener('input', () => {
-                object.rotation[axis] = parseFloat(input.value) || 0;
-                onObjectTransformed(object);
-                threeScene.render();
-            });
-        });
-
-        // Edit button handler
-        card.querySelector('.edit-btn').addEventListener('click', () => {
-            threeScene.selectObject(object);
-            updateTransformInputs(object);
-        });
-
-        card.querySelector('.delete-btn').addEventListener('click', onDelete);
-
-        // Store reference to the card for updates
-        object.userData.card = card;
         
-        return card;
-    }
-
-    // YAML Generation and File Management
-    generateYAMLBtn.addEventListener('click', () => {
-        const files = vesselModel.generateYAMLFiles();
-        const zip = new JSZip();
-        
-        Object.entries(files).forEach(([filename, content]) => {
-            zip.file(filename, jsyaml.dump(content));
-        });
-
-        zip.generateAsync({ type: 'blob' }).then(blob => {
+        // Save vessel configuration
+        document.getElementById('btn-save-vessel')?.addEventListener('click', function() {
+            const vesselName = window.currentVesselModel.config.name;
+            if (!vesselName) {
+                showNotification('Please enter a vessel name before saving', 'error');
+                return;
+            }
+            
+            const configJson = window.currentVesselModel.exportAsJson();
+            const blob = new Blob([configJson], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
+            
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${vesselModel.config.name}_config.zip`;
-            document.body.appendChild(a);
+            a.download = `${vesselName}_config.json`;
             a.click();
-            document.body.removeChild(a);
+            
             URL.revokeObjectURL(url);
+            showNotification('Vessel configuration saved', 'success');
         });
-    });
-
-    saveConfigBtn.addEventListener('click', () => {
-        const config = JSON.stringify(vesselModel.config, null, 2);
-        const blob = new Blob([config], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${vesselModel.config.name}_config.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    });
-
-    loadConfigBtn.addEventListener('click', () => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        input.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const config = JSON.parse(e.target.result);
-                vesselModel.config = config;
-                
-                // Update UI
-                vesselNameInput.value = config.name;
-                vesselTypeSelect.value = config.type;
-                lengthInput.value = config.geometry.length;
-                breadthInput.value = config.geometry.breadth;
-                depthInput.value = config.geometry.depth;
-
-                // Update physical properties
-                massInput.value = config.inertia.mass;
-                cgInputs.x.value = config.geometry.CG[0];
-                cgInputs.y.value = config.geometry.CG[1];
-                cgInputs.z.value = config.geometry.CG[2];
-
-                // Update inertia matrix
-                const im = config.inertia.inertia_matrix;
-                inertiaInputs.xx.value = im[0][0];
-                inertiaInputs.xy.value = im[0][1];
-                inertiaInputs.xz.value = im[0][2];
-                inertiaInputs.yx.value = im[1][0];
-                inertiaInputs.yy.value = im[1][1];
-                inertiaInputs.yz.value = im[1][2];
-                inertiaInputs.zx.value = im[2][0];
-                inertiaInputs.zy.value = im[2][1];
-                inertiaInputs.zz.value = im[2][2];
-
-                // Update 3D scene
-                threeScene.createVessel(
-                    config.geometry.length,
-                    config.geometry.breadth,
-                    config.geometry.depth
-                );
-
-                // Recreate all components
-                config.control_surfaces.control_surfaces.forEach(surface => {
-                    threeScene.addControlSurface(
-                        surface.control_surface_id,
-                        surface.control_surface_type,
-                        surface.control_surface_location,
-                        surface.control_surface_orientation
-                    );
-                });
-
-                if (config.thrusters) {
-                    config.thrusters.thrusters.forEach(thruster => {
-                        threeScene.addThruster(
-                            thruster.thruster_id,
-                            thruster.thruster_location,
-                            thruster.thruster_orientation
-                        );
-                    });
-                }
-
-                config.sensors.sensors.forEach(sensor => {
-                    threeScene.addSensor(
-                        sensor.sensor_id,
-                        sensor.sensor_type,
-                        sensor.sensor_location
-                    );
-                });
-
-                // Update component lists
-                updateControlSurfacesList();
-                updateThrustersList();
-                updateSensorsList();
-            };
-            reader.readAsText(file);
-        });
-        input.click();
-    });
-
-    // Button Event Listeners
-    addControlSurfaceBtn.addEventListener('click', () => addControlSurface('Rudder'));
-    addThrusterBtn.addEventListener('click', () => addThruster());
-    addSensorBtn.addEventListener('click', () => showSensorDialog({ x: 0, y: 0, z: 0 }));
-    resetCameraBtn.addEventListener('click', () => threeScene.resetCamera());
-    toggleGridBtn.addEventListener('click', () => threeScene.toggleGrid());
-    toggleWireframeBtn.addEventListener('click', () => threeScene.toggleWireframe());
-    
-    // Get toggle elements
-    const toggleBoxBtn = document.getElementById('toggleBoxBtn');
-    const toggleSTLBtn = document.getElementById('toggleSTLBtn');
-    const toggleBoxVisibility = document.getElementById('toggleBoxVisibility');
-    const toggleSTLVisibility = document.getElementById('toggleSTLVisibility');
-
-    // Function to sync visibility states
-    function syncVisibilityStates(type) {
-        if (type === 'box') {
-            const isVisible = toggleBoxVisibility.checked;
-            toggleBoxBtn.classList.toggle('active', isVisible);
-            threeScene.toggleBox(isVisible);
-        } else if (type === 'stl') {
-            const isVisible = toggleSTLVisibility.checked;
-            toggleSTLBtn.classList.toggle('active', isVisible);
-            threeScene.toggleSTL(isVisible);
-        }
-    }
-
-    // Add event listeners for toggle buttons
-    toggleBoxBtn.addEventListener('click', () => {
-        toggleBoxVisibility.checked = !toggleBoxVisibility.checked;
-        syncVisibilityStates('box');
-    });
-
-    toggleSTLBtn.addEventListener('click', () => {
-        toggleSTLVisibility.checked = !toggleSTLVisibility.checked;
-        syncVisibilityStates('stl');
-    });
-
-    // Add event listeners for visibility checkboxes
-    toggleBoxVisibility.addEventListener('change', () => syncVisibilityStates('box'));
-    toggleSTLVisibility.addEventListener('change', () => syncVisibilityStates('stl'));
-
-    // Add STL file input handler
-    const modelFileInput = document.getElementById('modelFile');
-    modelFileInput.addEventListener('change', async (event) => {
-        const file = event.target.files[0];
-        if (file) {
-            try {
-                // Show loading indicator
-                const loadingDiv = document.createElement('div');
-                loadingDiv.className = 'loading';
-                loadingDiv.textContent = 'Loading 3D model...';
-                document.body.appendChild(loadingDiv);
-
-                // Load the model file
-                const result = await threeScene.loadModelGeometry(file);
-                
-                if (result.success) {
-                    // Update input fields without triggering vessel recreation
-                    lengthInput.removeEventListener('input', updateBasicProperties);
-                    breadthInput.removeEventListener('input', updateBasicProperties);
-                    depthInput.removeEventListener('input', updateBasicProperties);
-
-                    // Update the dimensions
-                    lengthInput.value = result.dimensions.length.toFixed(3);
-                    breadthInput.value = result.dimensions.breadth.toFixed(3);
-                    depthInput.value = result.dimensions.depth.toFixed(3);
-
-                    // Update vessel model without recreating geometry
-                    vesselModel.updateBasicProperties(
-                        vesselNameInput.value || 'New Vessel',
-                        vesselTypeSelect.value || 'auv',
-                        result.dimensions.length,
-                        result.dimensions.breadth,
-                        result.dimensions.depth
-                    );
-
-                    // Reattach event listeners
-                    lengthInput.addEventListener('input', updateBasicProperties);
-                    breadthInput.addEventListener('input', updateBasicProperties);
-                    depthInput.addEventListener('input', updateBasicProperties);
-
-                    // Reset toggle buttons to active state
-                    toggleBoxBtn.classList.add('active');
-                    toggleSTLBtn.classList.add('active');
-
-                    // Enable transform controls for the vessel
-                    threeScene.selectObject(threeScene.vessel);
-                } else {
-                    alert('Failed to load 3D model: ' + result.error);
-                }
-            } catch (error) {
-                console.error('Error loading 3D model:', error);
-                alert('Error loading 3D model: ' + error.message);
-            } finally {
-                // Remove loading indicator
-                const loadingDiv = document.querySelector('.loading');
-                if (loadingDiv) {
-                    document.body.removeChild(loadingDiv);
-                }
-            }
-        }
-    });
-
-    // Add GDF file input handler for hydrodynamics
-    const gdfFileInput = document.getElementById('gdfFile');
-    if (gdfFileInput) {
-        gdfFileInput.addEventListener('change', async (event) => {
-            const file = event.target.files[0];
-            if (file) {
-                try {
-                    // Show loading indicator
-                    showLoading('Processing GDF file...');
-                    
+        
+        // Load vessel configuration
+        document.getElementById('btn-load-vessel')?.addEventListener('click', function() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            
+            input.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const file = this.files[0];
                     const reader = new FileReader();
-                    reader.onload = (e) => {
+                    
+                    reader.onload = function(e) {
                         try {
-                            // Process GDF file content
-                            const content = e.target.result;
-                            // Add your GDF processing logic here
+                            const result = window.currentVesselModel.importFromJson(e.target.result);
                             
-                            hideLoading();
-                            showNotification('GDF file processed successfully', 'success');
+                            if (result) {
+                                // Update UI with loaded values
+                                document.getElementById('vesselName').value = window.currentVesselModel.config.name;
+                                document.getElementById('vesselType').value = window.currentVesselModel.config.type;
+                                
+                                // Clear any loaded model
+                                if (threeScene.vessel) {
+                                    threeScene.scene.remove(threeScene.vessel);
+                                    threeScene.vessel = null;
+                                }
+                                
+                                // Update scene hierarchy
+                                threeScene.updateSceneHierarchy();
+                                threeScene.render();
+                                
+                                showNotification('Vessel configuration loaded', 'success');
+                            } else {
+                                showNotification('Failed to load configuration', 'error');
+                            }
                         } catch (error) {
-                            console.error('Error processing GDF file:', error);
-                            showNotification('Error processing GDF file: ' + error.message, 'error');
-                            hideLoading();
+                            console.error('Error loading vessel configuration:', error);
+                            showNotification('Invalid configuration file', 'error');
                         }
                     };
                     
-                    reader.onerror = (error) => {
-                        console.error('Error reading GDF file:', error);
-                        showNotification('Error reading GDF file', 'error');
-                        hideLoading();
-                    };
-                    
                     reader.readAsText(file);
-                } catch (error) {
-                    console.error('Error handling GDF file:', error);
-                    showNotification('Error handling GDF file: ' + error.message, 'error');
-                    hideLoading();
                 }
-            }
-        });
-    }
-
-    // Transform Controls
-    const transformControls = new THREE.TransformControls(threeScene.camera, threeScene.renderer.domElement);
-    transformControls.addEventListener('change', () => {
-        if (transformControls.object) {
-            // Update transform info inputs
-            updateTransformInputs(transformControls.object);
+            });
             
-            // If moving the body center, update the CG inputs
-            if (transformControls.object.userData.isBodyCenter) {
-                const pos = transformControls.object.position;
-                cgInputs.x.value = pos.x.toFixed(3);
-                cgInputs.y.value = pos.y.toFixed(3);
-                cgInputs.z.value = pos.z.toFixed(3);
-                
-                // Update vessel model
-                vesselModel.config.geometry.CO = [pos.x, pos.y, pos.z];
-            }
-            
-            threeScene.render();
-        }
-    });
-
-    transformControls.addEventListener('mouseDown', () => {
-        threeScene.controls.enabled = false;
-    });
-
-    transformControls.addEventListener('mouseUp', () => {
-        threeScene.controls.enabled = true;
-    });
-
-    // Add event listeners for transform mode buttons
-    document.getElementById('translateMode').addEventListener('click', () => {
-        transformControls.setMode('translate');
-        document.getElementById('translateMode').classList.add('active');
-        document.getElementById('rotateMode').classList.remove('active');
-        document.getElementById('scaleMode').classList.remove('active');
-    });
-
-    document.getElementById('rotateMode').addEventListener('click', () => {
-        transformControls.setMode('rotate');
-        document.getElementById('translateMode').classList.remove('active');
-        document.getElementById('rotateMode').classList.add('active');
-        document.getElementById('scaleMode').classList.remove('active');
-    });
-
-    document.getElementById('scaleMode').addEventListener('click', () => {
-        transformControls.setMode('scale');
-        document.getElementById('translateMode').classList.remove('active');
-        document.getElementById('rotateMode').classList.remove('active');
-        document.getElementById('scaleMode').classList.add('active');
-    });
-
-    // Add event listener for CG inputs to update body center position
-    Object.entries(cgInputs).forEach(([axis, input]) => {
-        input.addEventListener('change', () => {
-            const bodyCenterGroup = threeScene.vessel.userData.bodyCenterGroup;
-            if (bodyCenterGroup) {
-                const value = parseFloat(input.value) || 0;
-                bodyCenterGroup.position[axis] = value;
-                vesselModel.config.geometry.CO[axis === 'x' ? 0 : axis === 'y' ? 1 : 2] = value;
-                threeScene.render();
-            }
+            input.click();
         });
-    });
-
-    // Add keyboard shortcuts for transform modes
-    document.addEventListener('keydown', (event) => {
-        if (event.target.tagName === 'INPUT') return; // Don't handle if typing in input field
         
-        switch (event.key.toLowerCase()) {
-            case 'g':
-                document.getElementById('translateMode').click();
-                break;
-            case 'r':
-                document.getElementById('rotateMode').click();
-                break;
-            case 's':
-                document.getElementById('scaleMode').click();
-                break;
-            case 'b':
-                // Toggle body center selection
-                const bodyCenterGroup = threeScene.vessel.userData.bodyCenterGroup;
-                if (bodyCenterGroup) {
-                    if (transformControls.object === bodyCenterGroup) {
-                        transformControls.detach();
-                    } else {
-                        transformControls.attach(bodyCenterGroup);
-                    }
-                }
-                break;
-            case 'v':
-                // Toggle vessel selection
-                if (transformControls.object === threeScene.vessel) {
-                    transformControls.detach();
-                } else {
-                    transformControls.attach(threeScene.vessel);
-                }
-                break;
+        // Undo
+        document.getElementById('btn-undo')?.addEventListener('click', function() {
+            if (window.currentVesselModel.undo()) {
+                showNotification('Undo successful', 'success');
+                
+                // Update UI if needed
+                document.getElementById('vesselName').value = window.currentVesselModel.config.name;
+                document.getElementById('vesselType').value = window.currentVesselModel.config.type;
+            } else {
+                showNotification('Nothing to undo', 'info');
+            }
+        });
+        
+        // Redo
+        document.getElementById('btn-redo')?.addEventListener('click', function() {
+            if (window.currentVesselModel.redo()) {
+                showNotification('Redo successful', 'success');
+                
+                // Update UI if needed
+                document.getElementById('vesselName').value = window.currentVesselModel.config.name;
+                document.getElementById('vesselType').value = window.currentVesselModel.config.type;
+            } else {
+                showNotification('Nothing to redo', 'info');
+            }
+        });
+        
+        // Generate YAML
+        document.getElementById('btn-generate-yaml')?.addEventListener('click', function() {
+            const vesselName = window.currentVesselModel.config.name;
+            if (!vesselName) {
+                showNotification('Please enter a vessel name before generating YAML', 'error');
+                return;
+            }
+            
+            // Show the YAML generation modal
+            const yamlModal = new bootstrap.Modal(document.getElementById('yamlModal'));
+            yamlModal.show();
+            
+            // Generate YAML previews
+            generateYAMLPreviews();
+        });
+    }
+    
+    // Initialize viewport controls
+    function initializeViewportControls(threeScene) {
+        // Transform mode buttons
+        document.getElementById('btn-translate')?.addEventListener('click', function() {
+            threeScene.setTransformMode('translate');
+            setActiveViewportButton(this);
+        });
+        
+        document.getElementById('btn-rotate')?.addEventListener('click', function() {
+            threeScene.setTransformMode('rotate');
+            setActiveViewportButton(this);
+        });
+        
+        document.getElementById('btn-scale')?.addEventListener('click', function() {
+            threeScene.setTransformMode('scale');
+            setActiveViewportButton(this);
+        });
+        
+        // Toggle grid
+        document.getElementById('btn-toggle-grid')?.addEventListener('click', function() {
+            threeScene.toggleGrid();
+            this.classList.toggle('active');
+        });
+        
+        // Toggle wireframe
+        document.getElementById('btn-toggle-wireframe')?.addEventListener('click', function() {
+            threeScene.toggleWireframe();
+            this.classList.toggle('active');
+        });
+        
+        // Center view
+        document.getElementById('btn-center-view')?.addEventListener('click', function() {
+            threeScene.resetCamera();
+        });
+        
+        // Set active button
+        function setActiveViewportButton(button) {
+            document.querySelectorAll('.viewport-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            button.classList.add('active');
         }
-    });
-
-    // Loading indicator functions
-    function showLoading(message = 'Loading...') {
-        const overlay = document.getElementById('loadingOverlay');
-        const text = overlay.querySelector('.loading-text');
-        text.textContent = message;
-        overlay.style.display = 'flex';
+        
+        // Set translate as default
+        document.getElementById('btn-translate')?.classList.add('active');
+        
+        // Add keyboard shortcuts
+        window.addEventListener('keydown', function(event) {
+            if (document.activeElement.tagName === 'INPUT' || 
+                document.activeElement.tagName === 'TEXTAREA' || 
+                document.activeElement.tagName === 'SELECT') {
+                return; // Don't trigger shortcuts when editing form fields
+            }
+            
+            switch(event.key.toLowerCase()) {
+                case 'g':
+                    threeScene.setTransformMode('translate');
+                    setActiveViewportButton(document.getElementById('btn-translate'));
+                    break;
+                case 'r':
+                    threeScene.setTransformMode('rotate');
+                    setActiveViewportButton(document.getElementById('btn-rotate'));
+                    break;
+                case 's':
+                    threeScene.setTransformMode('scale');
+                    setActiveViewportButton(document.getElementById('btn-scale'));
+                    break;
+                case 'escape':
+                    if (threeScene.selectedObject) {
+                        threeScene.selectObject(null);
+                    }
+                    break;
+            }
+        });
     }
-
-    function hideLoading() {
-        const overlay = document.getElementById('loadingOverlay');
-        overlay.style.display = 'none';
+    
+    // Initialize modals
+    function initializeModals(threeScene) {
+        // Control Surface Modal
+        const controlSurfaceModal = document.getElementById('controlSurfaceModal');
+        document.getElementById('btn-add-control-surface')?.addEventListener('click', function() {
+            const modal = new bootstrap.Modal(controlSurfaceModal);
+            modal.show();
+        });
+        
+        document.getElementById('btnAddControlSurface')?.addEventListener('click', function() {
+            // Get values from form
+            const type = document.getElementById('controlSurfaceType').value;
+            const position = [
+                parseFloat(document.getElementById('csPositionX').value),
+                parseFloat(document.getElementById('csPositionY').value),
+                parseFloat(document.getElementById('csPositionZ').value)
+            ];
+            const orientation = [
+                THREE.MathUtils.degToRad(parseFloat(document.getElementById('csOrientationX').value)),
+                THREE.MathUtils.degToRad(parseFloat(document.getElementById('csOrientationY').value)),
+                THREE.MathUtils.degToRad(parseFloat(document.getElementById('csOrientationZ').value))
+            ];
+            const area = parseFloat(document.getElementById('csArea').value);
+            
+            // Add control surface
+            const id = window.currentVesselModel.addControlSurface(type, position, orientation, area);
+            
+            // Add visual representation if threeScene has a method for it
+            if (typeof threeScene.addControlSurface === 'function') {
+                threeScene.addControlSurface(id, type, position, orientation, area);
+            }
+            
+            // Close modal
+            bootstrap.Modal.getInstance(controlSurfaceModal).hide();
+            
+            // Show notification
+            showNotification(`Added ${type} control surface`, 'success');
+        });
+        
+        // Thruster Modal
+        const thrusterModal = document.getElementById('thrusterModal');
+        document.getElementById('btn-add-thruster')?.addEventListener('click', function() {
+            const modal = new bootstrap.Modal(thrusterModal);
+            modal.show();
+        });
+        
+        document.getElementById('btnAddThruster')?.addEventListener('click', function() {
+            // Get values from form
+            const type = document.getElementById('thrusterType').value;
+            const position = [
+                parseFloat(document.getElementById('thrusterPositionX').value),
+                parseFloat(document.getElementById('thrusterPositionY').value),
+                parseFloat(document.getElementById('thrusterPositionZ').value)
+            ];
+            const orientation = [
+                THREE.MathUtils.degToRad(parseFloat(document.getElementById('thrusterOrientationX').value)),
+                THREE.MathUtils.degToRad(parseFloat(document.getElementById('thrusterOrientationY').value)),
+                THREE.MathUtils.degToRad(parseFloat(document.getElementById('thrusterOrientationZ').value))
+            ];
+            const diameter = parseFloat(document.getElementById('thrusterDiameter').value);
+            
+            // Add thruster
+            const id = window.currentVesselModel.addThruster(type, position, orientation, diameter);
+            
+            // Add visual representation if threeScene has a method for it
+            if (typeof threeScene.addThruster === 'function') {
+                threeScene.addThruster(id, position, orientation, diameter);
+            }
+            
+            // Close modal
+            bootstrap.Modal.getInstance(thrusterModal).hide();
+            
+            // Show notification
+            showNotification(`Added ${type} thruster`, 'success');
+        });
+        
+        // Sensor Modal
+        const sensorModal = document.getElementById('sensorModal');
+        document.getElementById('btn-add-sensor')?.addEventListener('click', function() {
+            const modal = new bootstrap.Modal(sensorModal);
+            modal.show();
+        });
+        
+        document.getElementById('btnAddSensor')?.addEventListener('click', function() {
+            // Get values from form
+            const type = document.getElementById('sensorType').value;
+            const position = [
+                parseFloat(document.getElementById('sensorPositionX').value),
+                parseFloat(document.getElementById('sensorPositionY').value),
+                parseFloat(document.getElementById('sensorPositionZ').value)
+            ];
+            const orientation = [
+                THREE.MathUtils.degToRad(parseFloat(document.getElementById('sensorOrientationX').value)),
+                THREE.MathUtils.degToRad(parseFloat(document.getElementById('sensorOrientationY').value)),
+                THREE.MathUtils.degToRad(parseFloat(document.getElementById('sensorOrientationZ').value))
+            ];
+            const publishRate = parseFloat(document.getElementById('sensorPublishRate').value);
+            
+            // Add sensor
+            const id = window.currentVesselModel.addSensor(type, position, orientation, publishRate);
+            
+            // Add visual representation if threeScene has a method for it
+            if (typeof threeScene.addSensor === 'function') {
+                threeScene.addSensor(id, type, position, orientation);
+            }
+            
+            // Close modal
+            bootstrap.Modal.getInstance(sensorModal).hide();
+            
+            // Show notification
+            showNotification(`Added ${type} sensor`, 'success');
+        });
+        
+        // FBX Component Modal
+        const fbxComponentModal = document.getElementById('fbxComponentModal');
+        document.getElementById('btnSaveFbxComponent')?.addEventListener('click', function() {
+            // Implementation to be added when handling FBX component selection
+            bootstrap.Modal.getInstance(fbxComponentModal).hide();
+        });
+        
+        // FBX Component modal event handler
+        document.getElementById('btnApplyFbxComponent')?.addEventListener('click', () => {
+            const modal = document.getElementById('fbxComponentModal');
+            const objectUuid = modal?.dataset.objectUuid;
+            
+            if (!objectUuid) {
+                console.error('No object UUID found in modal');
+                return;
+            }
+            
+            const object = threeScene.getObjectByProperty('uuid', objectUuid);
+            if (!object) {
+                console.error('Object not found with UUID:', objectUuid);
+                return;
+            }
+            
+            const componentType = document.getElementById('fbxComponentType').value;
+            let componentData = {
+                type: componentType,
+                name: object.name
+            };
+            
+            // Get specific data based on component type
+            if (componentType === 'controlSurface') {
+                componentData.surfaceType = document.getElementById('fbxSurfaceType').value;
+                componentData.name = document.getElementById('fbxSurfaceName').value || `${componentData.surfaceType} Surface`;
+                componentData.maxAngle = parseFloat(document.getElementById('fbxSurfaceMaxAngle').value);
+                object.name = componentData.name;
+            } else if (componentType === 'thruster') {
+                componentData.thrusterType = document.getElementById('fbxThrusterType').value;
+                componentData.name = document.getElementById('fbxThrusterName').value || `${componentData.thrusterType} Thruster`;
+                componentData.maxThrust = parseFloat(document.getElementById('fbxThrusterMaxThrust').value);
+                object.name = componentData.name;
+            } else if (componentType === 'sensor') {
+                componentData.sensorType = document.getElementById('fbxSensorType').value;
+                componentData.name = document.getElementById('fbxSensorName').value || `${componentData.sensorType} Sensor`;
+                componentData.updateRate = parseFloat(document.getElementById('fbxSensorRate').value);
+                object.name = componentData.name;
+            }
+            
+            // Map the component in the vessel model
+            if (window.currentVesselModel) {
+                window.currentVesselModel.mapModelComponent(objectUuid, componentData);
+                console.log(`Component ${componentData.name} configured as ${componentType}`);
+                
+                // Update the scene hierarchy
+                threeScene.updateSceneHierarchy();
+                
+                // Re-select the object to update UI
+                threeScene.selectObject(object);
+                
+                // Hide the modal
+                const bsModal = bootstrap.Modal.getInstance(modal);
+                bsModal.hide();
+                
+                // Show success notification
+                showNotification(`Component ${componentData.name} configured successfully`, 'success');
+            } else {
+                console.error('No vessel model available');
+                showNotification('Failed to configure component: No vessel model available', 'error');
+            }
+        });
+        
+        // Handle showing the modal and prepopulating fields
+        document.getElementById('fbxComponentModal')?.addEventListener('show.bs.modal', (event) => {
+            const modal = event.target;
+            const objectUuid = modal.dataset.objectUuid;
+            
+            if (!objectUuid) return;
+            
+            const object = threeScene.getObjectByProperty('uuid', objectUuid);
+            if (!object) return;
+            
+            const componentData = window.currentVesselModel?.getModelComponentData(objectUuid);
+            const componentType = document.getElementById('fbxComponentType').value;
+            
+            // Set component name in the appropriate field based on type
+            if (componentType === 'controlSurface') {
+                document.getElementById('fbxSurfaceName').value = object.name;
+                if (componentData) {
+                    document.getElementById('fbxSurfaceType').value = componentData.surfaceType || 'Rudder';
+                    document.getElementById('fbxSurfaceMaxAngle').value = componentData.maxAngle || 30;
+                }
+            } else if (componentType === 'thruster') {
+                document.getElementById('fbxThrusterName').value = object.name;
+                if (componentData) {
+                    document.getElementById('fbxThrusterType').value = componentData.thrusterType || 'Propeller';
+                    document.getElementById('fbxThrusterMaxThrust').value = componentData.maxThrust || 1000;
+                }
+            } else if (componentType === 'sensor') {
+                document.getElementById('fbxSensorName').value = object.name;
+                if (componentData) {
+                    document.getElementById('fbxSensorType').value = componentData.sensorType || 'IMU';
+                    document.getElementById('fbxSensorRate').value = componentData.updateRate || 50;
+                }
+            }
+        });
     }
-
+    
+    // Initialize file handlers
+    function initializeFileHandlers(threeScene) {
+        // Basic vessel properties form
+        const vesselNameInput = document.getElementById('vesselName');
+        const vesselTypeSelect = document.getElementById('vesselType');
+        
+        if (vesselNameInput) {
+            vesselNameInput.addEventListener('change', function() {
+                window.currentVesselModel.setBasicInfo(this.value, vesselTypeSelect.value);
+            });
+        }
+        
+        if (vesselTypeSelect) {
+            vesselTypeSelect.addEventListener('change', function() {
+                window.currentVesselModel.setBasicInfo(vesselNameInput.value, this.value);
+            });
+        }
+        
+        // FBX file upload - with performance optimization (debounce loading events)
+        const fbxFileInput = document.getElementById('fbxFile');
+        if (fbxFileInput) {
+            fbxFileInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const file = this.files[0];
+                    
+                    // Show loading indicator
+                    showNotification('Loading 3D model...', 'info');
+                    
+                    // Use setTimeout to allow UI to update before starting heavy operation
+                    setTimeout(async () => {
+                        try {
+                            // Load the model if threeScene has the method
+                            if (typeof threeScene.loadFBXModel === 'function') {
+                                const model = await threeScene.loadFBXModel(file);
+                                
+                                // Store file reference
+                                window.currentVesselModel.setModelFile('fbx', file);
+                                
+                                // Update scene hierarchy
+                                threeScene.updateSceneHierarchy();
+                                
+                                // Show success message
+                                showNotification('3D model loaded successfully', 'success');
+                            } else {
+                                console.error('threeScene.loadFBXModel is not a function');
+                                showNotification('FBX loading not supported in this version', 'error');
+                            }
+                        } catch (error) {
+                            console.error('Error loading 3D model:', error);
+                            showNotification('Failed to load 3D model: ' + error.message, 'error');
+                        }
+                    }, 100);
+                }
+            });
+        }
+        
+        // GDF file upload
+        const gdfFileInput = document.getElementById('gdfFile');
+        if (gdfFileInput) {
+            gdfFileInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const file = this.files[0];
+                    
+                    // Store file reference
+                    window.currentVesselModel.setModelFile('gdf', file);
+                    
+                    // Update geometry file path in config
+                    window.currentVesselModel.config.geometry.geometry_file = file.name;
+                    
+                    showNotification('GDF file loaded', 'success');
+                }
+            });
+        }
+        
+        // Hydra output zip upload
+        const hydraZipInput = document.getElementById('hydraZip');
+        if (hydraZipInput) {
+            hydraZipInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const file = this.files[0];
+                    
+                    // Store file reference
+                    window.currentVesselModel.setModelFile('hydra', file);
+                    
+                    // Update Hydra file path in config
+                    const vesselName = window.currentVesselModel.config.name || 'vessel';
+                    window.currentVesselModel.config.hydrodynamics.hydra_file = `/workspaces/mavlab/inputs/${vesselName}/HydRA/${vesselName.toUpperCase()}_hydra.json`;
+                    
+                    showNotification('Hydra output loaded', 'success');
+                }
+            });
+        }
+        
+        // Simulation parameters - with debounced updates to reduce lag
+        let simParamsDebounce;
+        function updateSimParams() {
+            clearTimeout(simParamsDebounce);
+            simParamsDebounce = setTimeout(() => {
+                const simParams = {
+                    sim_time: parseFloat(document.getElementById('simTime')?.value || 100),
+                    time_step: parseFloat(document.getElementById('timeStep')?.value || 0.01),
+                    density: parseFloat(document.getElementById('density')?.value || 1025),
+                    gravity: parseFloat(document.getElementById('gravity')?.value || 9.80665),
+                    world_size: [
+                        parseFloat(document.getElementById('worldSizeX')?.value || 1000),
+                        parseFloat(document.getElementById('worldSizeY')?.value || 1000),
+                        parseFloat(document.getElementById('worldSizeZ')?.value || 100)
+                    ],
+                    gps_datum: [
+                        parseFloat(document.getElementById('gpsDatumLat')?.value || 12.99300),
+                        parseFloat(document.getElementById('gpsDatumLon')?.value || 80.23913),
+                        parseFloat(document.getElementById('gpsDatumAlt')?.value || -87.0)
+                    ]
+                };
+                
+                window.currentVesselModel.updateSimulationParams(simParams);
+            }, 300); // 300ms debounce
+        }
+        
+        document.querySelectorAll('#simTime, #timeStep, #density, #gravity, #worldSizeX, #worldSizeY, #worldSizeZ, #gpsDatumLat, #gpsDatumLon, #gpsDatumAlt').forEach(input => {
+            input?.addEventListener('change', updateSimParams);
+            input?.addEventListener('input', updateSimParams);
+        });
+    }
+    
+    // Initialize YAML generation
+    function initializeYAMLGeneration() {
+        document.getElementById('btnGenerateYaml')?.addEventListener('click', async function() {
+            const vesselName = window.currentVesselModel.config.name;
+            const outputPath = document.getElementById('outputPath').value;
+            
+            if (!vesselName) {
+                showNotification('Please enter a vessel name before generating YAML files', 'error');
+                return;
+            }
+            
+            try {
+                // Generate YAML files
+                const yamlFiles = window.currentVesselModel.generateYAMLFiles();
+                
+                // Create a notification with the result
+                let message = `YAML files generated for vessel: ${vesselName}\n`;
+                message += `Output path: ${outputPath}${vesselName}/`;
+                
+                // Show files that were generated
+                message += `\nGenerated files: ${Object.keys(yamlFiles).join(', ')}`;
+                
+                showNotification(message, 'success');
+                
+                // Hide the modal
+                bootstrap.Modal.getInstance(document.getElementById('yamlModal')).hide();
+            } catch (error) {
+                console.error('Error generating YAML files:', error);
+                showNotification('Failed to generate YAML files: ' + error.message, 'error');
+            }
+        });
+        
+        document.getElementById('btnDownloadZip')?.addEventListener('click', async function() {
+            const vesselName = window.currentVesselModel.config.name;
+            
+            if (!vesselName) {
+                showNotification('Please enter a vessel name before downloading YAML files', 'error');
+                return;
+            }
+            
+            showNotification('Preparing ZIP file...', 'info');
+            
+            try {
+                // Create a zip file with all YAML files - use setTimeout to allow UI to update
+                setTimeout(async () => {
+                    try {
+                        const zipBlob = await window.currentVesselModel.createYAMLZip();
+                        
+                        // Create download link
+                        const url = URL.createObjectURL(zipBlob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${vesselName}_config.zip`;
+                        a.click();
+                        
+                        URL.revokeObjectURL(url);
+                        
+                        // Show notification
+                        showNotification(`YAML files downloaded as ${vesselName}_config.zip`, 'success');
+                        
+                        // Hide the modal
+                        bootstrap.Modal.getInstance(document.getElementById('yamlModal')).hide();
+                    } catch (error) {
+                        console.error('Error creating ZIP file:', error);
+                        showNotification('Failed to create ZIP file: ' + error.message, 'error');
+                    }
+                }, 100);
+            } catch (error) {
+                console.error('Error preparing ZIP file:', error);
+                showNotification('Failed to prepare ZIP file: ' + error.message, 'error');
+            }
+        });
+    }
+    
+    // Generate YAML previews in the modal
+    function generateYAMLPreviews() {
+        try {
+            const yamlFiles = window.currentVesselModel.generateYAMLFiles();
+            
+            // Display previews for each YAML file
+            document.getElementById('simulation-yaml-content').textContent = yamlFiles['simulation_input.yml'] || '';
+            document.getElementById('geometry-yaml-content').textContent = yamlFiles['geometry.yml'] || '';
+            document.getElementById('inertia-yaml-content').textContent = yamlFiles['inertia.yml'] || '';
+            
+            // Add more tabs and content for other YAML files if needed
+        } catch (error) {
+            console.error('Error generating YAML previews:', error);
+            showNotification('Failed to generate YAML previews', 'error');
+        }
+    }
+    
+    // --------- Utility Functions ---------
+    
+    // Show notification to the user
     function showNotification(message, type = 'info') {
+        const colors = {
+            success: '#28a745',
+            error: '#dc3545',
+            warning: '#ffc107',
+            info: '#17a2b8'
+        };
+        
         // Create notification element
         const notification = document.createElement('div');
-        notification.className = `notification notification-${type}`;
-        notification.textContent = message;
+        notification.className = 'notification';
+        notification.style.position = 'fixed';
+        notification.style.top = '20px';
+        notification.style.right = '20px';
+        notification.style.padding = '12px 20px';
+        notification.style.background = colors[type] || colors.info;
+        notification.style.color = '#fff';
+        notification.style.borderRadius = '4px';
+        notification.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+        notification.style.zIndex = '9999';
+        notification.style.maxWidth = '400px';
+        notification.style.wordWrap = 'break-word';
         
-        // Add to document
+        // Format message for multiline if needed
+        notification.innerHTML = message.replace(/\n/g, '<br>');
+        
+        // Add to DOM
         document.body.appendChild(notification);
         
         // Remove after 5 seconds
         setTimeout(() => {
-            notification.remove();
+            notification.style.opacity = '0';
+            notification.style.transition = 'opacity 0.5s';
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 500);
         }, 5000);
     }
-
-    // Handle HydRA results zip file
-    document.getElementById('hydraResults').addEventListener('change', async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        try {
-            showLoading('Processing HydRA results...');
-            
-            const zip = new JSZip();
-            const zipContents = await zip.loadAsync(file);
-            
-            // Process each file in the zip
-            for (const [filename, zipEntry] of Object.entries(zipContents.files)) {
-                if (!zipEntry.dir) {
-                    const content = await zipEntry.async('string');
-                    try {
-                        // Parse YAML content
-                        const data = jsyaml.load(content);
-                        
-                        // Update vessel model with hydrodynamic data
-                        if (filename.includes('hydro')) {
-                            vesselModel.updateHydrodynamics(data);
-                            showNotification('Hydrodynamic coefficients updated successfully', 'success');
-                        }
-                    } catch (error) {
-                        console.error(`Error parsing ${filename}:`, error);
-                    }
-                }
-            }
-            
-            hideLoading();
-        } catch (error) {
-            console.error('Error processing HydRA results:', error);
-            showNotification('Error processing HydRA results: ' + error.message, 'error');
-            hideLoading();
-        }
-    });
 }); 
