@@ -110,6 +110,18 @@ class YAMLGenerator {
     }
 
     generateControlSurfacesYAML(controlSurfaces, vesselName) {
+        // First, log what we received to help debug
+        console.log('Generating control surfaces YAML with:', controlSurfaces);
+        
+        // Default values if controlSurfaces is not properly initialized
+        if (!controlSurfaces || typeof controlSurfaces !== 'object') {
+            console.warn('controlSurfaces is not properly initialized, using defaults');
+            controlSurfaces = { 
+                naca_number: '0015',
+                control_surfaces: []
+            };
+        }
+        
         const nacaNumber = controlSurfaces.naca_number || '0015';
         const nacaFile = this.formatFilePath(vesselName, `NACA${nacaNumber}.csv`);
         
@@ -123,19 +135,31 @@ class YAMLGenerator {
         };
         
         // Add control surfaces if available
-        if (controlSurfaces.control_surfaces && controlSurfaces.control_surfaces.length > 0) {
-            yaml.control_surfaces = controlSurfaces.control_surfaces.map(surface => ({
-                control_surface_type: surface.control_surface_type || 'Rudder',
-                control_surface_id: surface.control_surface_id,
-                control_surface_location: this.formatInlineArray(surface.control_surface_location, 4) + '    # With respect to BODY frame',
-                control_surface_orientation: this.formatInlineArray(surface.control_surface_orientation, 4) + '  # With respect to BODY frame',
-                control_surface_area: '*area',
-                control_surface_NACA: '*naca',
-                control_surface_T: surface.control_surface_T || 0.1,
-                control_surface_delta_max: '*dmax',
-                control_surface_deltad_max: '*ddmax'
-            }));
+        if (controlSurfaces.control_surfaces && Array.isArray(controlSurfaces.control_surfaces)) {
+            // Log the count for debugging
+            console.log(`Processing ${controlSurfaces.control_surfaces.length} control surfaces`);
+            
+            // Map each control surface to the YAML format
+            yaml.control_surfaces = controlSurfaces.control_surfaces.map(surface => {
+                console.log('Processing control surface:', surface);
+                return {
+                    control_surface_type: surface.control_surface_type || 'Rudder',
+                    control_surface_id: surface.control_surface_id,
+                    control_surface_location: this.formatInlineArray(surface.control_surface_location, 4) + '    # With respect to BODY frame',
+                    control_surface_orientation: this.formatInlineArray(surface.control_surface_orientation, 4) + '  # With respect to BODY frame',
+                    control_surface_area: '*area',
+                    control_surface_NACA: '*naca',
+                    control_surface_T: surface.control_surface_T || 0.1,
+                    control_surface_delta_max: '*dmax',
+                    control_surface_deltad_max: '*ddmax'
+                };
+            });
+        } else {
+            console.warn('control_surfaces array is not properly initialized');
         }
+        
+        // Log the final YAML structure
+        console.log('Generated control surfaces YAML:', yaml);
         
         return yaml;
     }
@@ -164,7 +188,7 @@ class YAMLGenerator {
     generateInitialConditionsYAML(initialConditions) {
         return {
             start_location: this.formatInlineArray(initialConditions.start_location || [0, 0, 0], 4),
-            start_orientation: this.formatInlineArray(initialConditions.start_attitude || [0, 0, 0], 4),
+            start_orientation: this.formatInlineArray(initialConditions.start_orientation || [0, 0, 0], 4),
             start_velocity: this.formatInlineArray(initialConditions.start_velocity || [0, 0, 0, 0, 0, 0], 4),
             use_quaternion: initialConditions.use_quaternion || false
         };
@@ -250,52 +274,37 @@ class YAMLGenerator {
                 continue;
             }
             
-            if (value === null || value === undefined) {
-                yaml += `${spaces}${key}: null\n`;
-            } else if (typeof value === 'object' && !Array.isArray(value) && !(typeof value === 'string' && value.includes('#'))) {
-                // Handle nested objects
-                if (key === 'control_surfaces' || key === 'thrusters' || key === 'sensors' || key === 'waypoints' || key === 'agents' || key === 'geofence') {
-                    // These are arrays of objects
+            if (typeof value === 'object' && value !== null) {
+                if (Array.isArray(value)) {
+                    // Handle arrays
                     yaml += `${spaces}${key}:\n`;
-                    if (Array.isArray(value)) {
-                        // Handle array of objects
+                    
+                    // Check if array contains primitive values or objects
+                    if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+                        // Array of objects
                         for (const item of value) {
-                            yaml += `${spaces}  - \n`;
-                            for (const [itemKey, itemValue] of Object.entries(item)) {
-                                if (typeof itemValue === 'string' && (itemValue.startsWith('*') || itemValue.includes('#'))) {
-                                    yaml += `${spaces}    ${itemKey}: ${itemValue}\n`;
-                                } else if (typeof itemValue === 'object' && !Array.isArray(itemValue)) {
-                                    yaml += `${spaces}    ${itemKey}:\n${this.toYAML(itemValue, indent + 6)}`;
-                                } else {
-                                    yaml += `${spaces}    ${itemKey}: ${itemValue}\n`;
-                                }
-                            }
+                            yaml += `${spaces}  -\n`;
+                            yaml += this.toYAML(item, indent + 4).split('\n').map(line => line.trim() ? line : '').join('\n');
                         }
                     } else {
-                        // It's an object with a reserved name but not an array
-                        yaml += this.toYAML(value, indent + 2);
+                        // Array of primitives
+                        for (const item of value) {
+                            if (typeof item === 'string' && (item.startsWith('[') || item.includes('#'))) {
+                                // Pre-formatted string
+                                yaml += `${spaces}  - ${item}\n`;
+                            } else if (typeof item === 'object' && item !== null) {
+                                // Object within array
+                                yaml += `${spaces}  -\n`;
+                                yaml += this.toYAML(item, indent + 4);
+                            } else {
+                                // Simple value
+                                yaml += `${spaces}  - ${item}\n`;
+                            }
+                        }
                     }
                 } else {
-                    // Regular nested object
+                    // Handle objects
                     yaml += `${spaces}${key}:\n${this.toYAML(value, indent + 2)}`;
-                }
-            } else if (Array.isArray(value)) {
-                if (value.length === 0) {
-                    yaml += `${spaces}${key}: []\n`;
-                } else if (typeof value[0] === 'object') {
-                    // Array of objects
-                    yaml += `${spaces}${key}:\n`;
-                    for (const item of value) {
-                        yaml += `${spaces}  -\n${this.toYAML(item, indent + 4)}`;
-                    }
-                } else {
-                    // Check if the value is already formatted as a string with formatting
-                    if (typeof value === 'string' && (value.startsWith('[') || value.includes('#'))) {
-                        yaml += `${spaces}${key}: ${value}\n`;
-                    } else {
-                        // Format array
-                        yaml += `${spaces}${key}: ${this.formatInlineArray(value)}\n`;
-                    }
                 }
             } else if (typeof value === 'string' && (value.startsWith('*') || value.includes('#'))) {
                 // Handle anchor references and comments

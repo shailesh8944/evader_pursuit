@@ -250,18 +250,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Generate YAML
         document.getElementById('btn-generate-yaml')?.addEventListener('click', function() {
-            const vesselName = window.currentVesselModel.config.name;
-            if (!vesselName) {
-                showNotification('Please enter a vessel name before generating YAML', 'error');
-                return;
-            }
-            
-            // Show the YAML generation modal
+            // Create bootstrap modal and show it
             const yamlModal = new bootstrap.Modal(document.getElementById('yamlModal'));
-            yamlModal.show();
             
-            // Generate YAML previews
+            // Generate YAML previews before showing the modal
             generateYAMLPreviews();
+            
+            yamlModal.show();
         });
     }
     
@@ -353,6 +348,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('btnAddControlSurface')?.addEventListener('click', function() {
             // Get values from form
             const type = document.getElementById('controlSurfaceType').value;
+            const surfaceId = parseInt(document.getElementById('controlSurfaceId').value);
             const position = [
                 parseFloat(document.getElementById('csPositionX').value),
                 parseFloat(document.getElementById('csPositionY').value),
@@ -364,20 +360,45 @@ document.addEventListener('DOMContentLoaded', function() {
                 THREE.MathUtils.degToRad(parseFloat(document.getElementById('csOrientationZ').value))
             ];
             const area = parseFloat(document.getElementById('csArea').value);
+            const naca = document.getElementById('csNACA').value;
+            const timeConstant = parseFloat(document.getElementById('csTimeConstant').value);
+            const deltaMax = parseFloat(document.getElementById('csDeltaMax').value);
+            const deltadMax = parseFloat(document.getElementById('csDeltadMax').value);
+            
+            console.log('Adding control surface with params:', { type, surfaceId, position, orientation, area });
+            
+            // Debug before adding
+            console.log('Before adding control surface:');
+            logComponentCounts();
             
             // Add control surface
-            const id = window.currentVesselModel.addControlSurface(type, position, orientation, area);
+            const id = window.currentVesselModel.addControlSurface(
+                type, position, orientation, area, surfaceId, naca, timeConstant, deltaMax, deltadMax
+            );
+            
+            // Debug after adding
+            console.log('After adding control surface:');
+            logComponentCounts();
             
             // Add visual representation if threeScene has a method for it
+            let controlSurfaceObj = null;
             if (typeof threeScene.addControlSurface === 'function') {
-                threeScene.addControlSurface(id, type, position, orientation, area);
+                controlSurfaceObj = threeScene.addControlSurface(id, type, position, orientation, area);
+                
+                // Add component axes visualization
+                if (controlSurfaceObj) {
+                    threeScene.addComponentAxes(controlSurfaceObj);
+                }
             }
             
             // Close modal
             bootstrap.Modal.getInstance(controlSurfaceModal).hide();
             
+            // Generate YAML previews to verify control surfaces are included
+            generateYAMLPreviews();
+            
             // Show notification
-            showNotification(`Added ${type} control surface`, 'success');
+            showNotification(`Added ${type} control surface (ID: ${id})`, 'success');
         });
         
         // Thruster Modal
@@ -389,7 +410,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         document.getElementById('btnAddThruster')?.addEventListener('click', function() {
             // Get values from form
-            const type = document.getElementById('thrusterType').value;
+            const name = document.getElementById('thrusterName').value;
+            const thrusterId = parseInt(document.getElementById('thrusterId').value);
             const position = [
                 parseFloat(document.getElementById('thrusterPositionX').value),
                 parseFloat(document.getElementById('thrusterPositionY').value),
@@ -400,21 +422,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 THREE.MathUtils.degToRad(parseFloat(document.getElementById('thrusterOrientationY').value)),
                 THREE.MathUtils.degToRad(parseFloat(document.getElementById('thrusterOrientationZ').value))
             ];
+            const tProp = parseFloat(document.getElementById('thrusterTProp').value);
             const diameter = parseFloat(document.getElementById('thrusterDiameter').value);
+            const tp = parseFloat(document.getElementById('thrusterTp').value);
+            const jvsKTFile = document.getElementById('thrusterJvsKTFile').value;
             
             // Add thruster
-            const id = window.currentVesselModel.addThruster(type, position, orientation, diameter);
+            const id = window.currentVesselModel.addThruster(
+                name, position, orientation, thrusterId, diameter, tProp, tp, jvsKTFile
+            );
             
             // Add visual representation if threeScene has a method for it
+            let thrusterObj = null;
             if (typeof threeScene.addThruster === 'function') {
-                threeScene.addThruster(id, position, orientation, diameter);
+                thrusterObj = threeScene.addThruster(id, name, position, orientation, diameter);
+                
+                // Add component axes visualization
+                if (thrusterObj) {
+                    threeScene.addComponentAxes(thrusterObj);
+                }
             }
             
             // Close modal
             bootstrap.Modal.getInstance(thrusterModal).hide();
             
             // Show notification
-            showNotification(`Added ${type} thruster`, 'success');
+            showNotification(`Added ${name} thruster (ID: ${id})`, 'success');
         });
         
         // Sensor Modal
@@ -427,31 +460,51 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('btnAddSensor')?.addEventListener('click', function() {
             // Get values from form
             const type = document.getElementById('sensorType').value;
-            const position = [
-                parseFloat(document.getElementById('sensorPositionX').value),
-                parseFloat(document.getElementById('sensorPositionY').value),
-                parseFloat(document.getElementById('sensorPositionZ').value)
-            ];
-            const orientation = [
-                THREE.MathUtils.degToRad(parseFloat(document.getElementById('sensorOrientationX').value)),
-                THREE.MathUtils.degToRad(parseFloat(document.getElementById('sensorOrientationY').value)),
-                THREE.MathUtils.degToRad(parseFloat(document.getElementById('sensorOrientationZ').value))
-            ];
+            const useNoneLocation = document.getElementById('sensorNoneLocation').checked;
+            const useNoneOrientation = document.getElementById('sensorNoneOrientation').checked;
+            
+            let position = [0, 0, 0];
+            if (!useNoneLocation) {
+                position = [
+                    parseFloat(document.getElementById('sensorPositionX').value),
+                    parseFloat(document.getElementById('sensorPositionY').value),
+                    parseFloat(document.getElementById('sensorPositionZ').value)
+                ];
+            }
+            
+            let orientation = [1.0, 0.0, 0.0, 0.0]; // Quaternion [w, x, y, z]
+            if (!useNoneOrientation) {
+                orientation = [
+                    parseFloat(document.getElementById('sensorOrientationW').value),
+                    parseFloat(document.getElementById('sensorOrientationX').value),
+                    parseFloat(document.getElementById('sensorOrientationY').value),
+                    parseFloat(document.getElementById('sensorOrientationZ').value)
+                ];
+            }
+            
             const publishRate = parseFloat(document.getElementById('sensorPublishRate').value);
             
             // Add sensor
-            const id = window.currentVesselModel.addSensor(type, position, orientation, publishRate);
+            const id = window.currentVesselModel.addSensor(
+                type, position, orientation, publishRate, useNoneLocation, useNoneOrientation
+            );
             
             // Add visual representation if threeScene has a method for it
+            let sensorObj = null;
             if (typeof threeScene.addSensor === 'function') {
-                threeScene.addSensor(id, type, position, orientation);
+                sensorObj = threeScene.addSensor(id, type, useNoneLocation ? null : position, useNoneOrientation ? null : orientation);
+                
+                // Add component axes visualization if location is not None
+                if (sensorObj && !useNoneLocation) {
+                    threeScene.addComponentAxes(sensorObj);
+                }
             }
             
             // Close modal
             bootstrap.Modal.getInstance(sensorModal).hide();
             
             // Show notification
-            showNotification(`Added ${type} sensor`, 'success');
+            showNotification(`Added ${type} sensor (ID: ${id})`, 'success');
         });
         
         // FBX Component Modal
@@ -480,31 +533,180 @@ document.addEventListener('DOMContentLoaded', function() {
             const componentType = document.getElementById('fbxComponentType').value;
             let componentData = {
                 type: componentType,
-                name: object.name
+                uuid: objectUuid
             };
             
+            // Get component center position in world coordinates
+            const center = new THREE.Vector3();
+            // Calculate the center of the object's bounding box
+            if (object.geometry) {
+                // For objects with geometry, calculate from geometry bounds
+                object.geometry.computeBoundingBox();
+                object.geometry.boundingBox.getCenter(center);
+                object.localToWorld(center);
+            } else {
+                // For groups or objects without geometry, use position
+                center.copy(object.position);
+            }
+            
+            // Use center as component's position
+            const position = [
+                center.x,
+                center.y,
+                center.z
+            ];
+
             // Get specific data based on component type
             if (componentType === 'controlSurface') {
-                componentData.surfaceType = document.getElementById('fbxSurfaceType').value;
-                componentData.name = document.getElementById('fbxSurfaceName').value || `${componentData.surfaceType} Surface`;
-                componentData.maxAngle = parseFloat(document.getElementById('fbxSurfaceMaxAngle').value);
-                object.name = componentData.name;
+                const surfaceType = document.getElementById('fbxSurfaceType').value;
+                const surfaceId = parseInt(document.getElementById('fbxSurfaceId').value);
+                const surfaceName = document.getElementById('fbxSurfaceName').value || `${surfaceType} Surface`;
+                const area = parseFloat(document.getElementById('fbxSurfaceArea').value);
+                const naca = document.getElementById('fbxSurfaceNACA').value;
+                const timeConstant = parseFloat(document.getElementById('fbxSurfaceTimeConstant').value);
+                const deltaMax = parseFloat(document.getElementById('fbxSurfaceDeltaMax').value);
+                const deltadMax = parseFloat(document.getElementById('fbxSurfaceDeltadMax').value);
+                
+                // Get orientation in radians
+                const orientation = [0, 0, 0]; // Default orientation, should be updated based on object
+                if (object.rotation) {
+                    orientation[0] = object.rotation.x;
+                    orientation[1] = object.rotation.y;
+                    orientation[2] = object.rotation.z;
+                }
+                
+                // Add to vessel model
+                const id = window.currentVesselModel.addControlSurface(
+                    surfaceType, 
+                    position, 
+                    orientation, 
+                    area, 
+                    surfaceId, 
+                    naca, 
+                    timeConstant, 
+                    deltaMax, 
+                    deltadMax
+                );
+                
+                componentData = {
+                    ...componentData,
+                    surfaceType,
+                    id,
+                    name: surfaceName,
+                    area,
+                    naca,
+                    timeConstant,
+                    deltaMax,
+                    deltadMax,
+                    position
+                };
+                
+                object.name = surfaceName;
+                
+                // Add axes to the component
+                threeScene.addComponentAxes(object);
+                
             } else if (componentType === 'thruster') {
-                componentData.thrusterType = document.getElementById('fbxThrusterType').value;
-                componentData.name = document.getElementById('fbxThrusterName').value || `${componentData.thrusterType} Thruster`;
-                componentData.maxThrust = parseFloat(document.getElementById('fbxThrusterMaxThrust').value);
-                object.name = componentData.name;
+                const thrusterName = document.getElementById('fbxThrusterName').value || 'Thruster';
+                const thrusterId = parseInt(document.getElementById('fbxThrusterId').value);
+                const tProp = parseFloat(document.getElementById('fbxThrusterTProp').value);
+                const diameter = parseFloat(document.getElementById('fbxThrusterDiameter').value);
+                const tp = parseFloat(document.getElementById('fbxThrusterTp').value);
+                const jvsKTFile = document.getElementById('fbxThrusterJvsKTFile').value;
+                
+                // Get orientation in radians
+                const orientation = [0, 0, 0]; // Default orientation, should be updated based on object
+                if (object.rotation) {
+                    orientation[0] = object.rotation.x;
+                    orientation[1] = object.rotation.y;
+                    orientation[2] = object.rotation.z;
+                }
+                
+                // Add to vessel model
+                const id = window.currentVesselModel.addThruster(
+                    thrusterName, 
+                    position, 
+                    orientation, 
+                    thrusterId, 
+                    diameter, 
+                    tProp, 
+                    tp, 
+                    jvsKTFile
+                );
+                
+                componentData = {
+                    ...componentData,
+                    id,
+                    name: thrusterName,
+                    tProp,
+                    diameter,
+                    tp,
+                    jvsKTFile,
+                    position
+                };
+                
+                object.name = thrusterName;
+                
+                // Add axes to the component
+                threeScene.addComponentAxes(object);
+                
             } else if (componentType === 'sensor') {
-                componentData.sensorType = document.getElementById('fbxSensorType').value;
-                componentData.name = document.getElementById('fbxSensorName').value || `${componentData.sensorType} Sensor`;
-                componentData.updateRate = parseFloat(document.getElementById('fbxSensorRate').value);
-                object.name = componentData.name;
+                const sensorType = document.getElementById('fbxSensorType').value;
+                const sensorName = document.getElementById('fbxSensorName').value || `${sensorType} Sensor`;
+                const publishRate = parseFloat(document.getElementById('fbxSensorRate').value);
+                const useNoneLocation = document.getElementById('fbxSensorNoneLocation').checked;
+                const useNoneOrientation = document.getElementById('fbxSensorNoneOrientation').checked;
+                
+                let orientation = [1.0, 0.0, 0.0, 0.0]; // Quaternion [w, x, y, z]
+                if (!useNoneOrientation && object.quaternion) {
+                    orientation = [
+                        object.quaternion.w,
+                        object.quaternion.x,
+                        object.quaternion.y,
+                        object.quaternion.z
+                    ];
+                } else if (!useNoneOrientation) {
+                    orientation = [
+                        parseFloat(document.getElementById('fbxSensorOrientationW').value),
+                        parseFloat(document.getElementById('fbxSensorOrientationX').value),
+                        parseFloat(document.getElementById('fbxSensorOrientationY').value),
+                        parseFloat(document.getElementById('fbxSensorOrientationZ').value)
+                    ];
+                }
+                
+                // Add to vessel model
+                const id = window.currentVesselModel.addSensor(
+                    sensorType,
+                    useNoneLocation ? null : position,
+                    orientation,
+                    publishRate,
+                    useNoneLocation,
+                    useNoneOrientation
+                );
+                
+                componentData = {
+                    ...componentData,
+                    sensorType,
+                    id,
+                    name: sensorName,
+                    publishRate,
+                    useNoneLocation,
+                    useNoneOrientation,
+                    position: useNoneLocation ? null : position
+                };
+                
+                object.name = sensorName;
+                
+                // Add axes to the component if location is not None
+                if (!useNoneLocation) {
+                    threeScene.addComponentAxes(object);
+                }
             }
             
             // Map the component in the vessel model
             if (window.currentVesselModel) {
                 window.currentVesselModel.mapModelComponent(objectUuid, componentData);
-                console.log(`Component ${componentData.name} configured as ${componentType}`);
+                console.log(`Component ${componentData.name || object.name} configured as ${componentType}`);
                 
                 // Update the scene hierarchy
                 threeScene.updateSceneHierarchy();
@@ -517,7 +719,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 bsModal.hide();
                 
                 // Show success notification
-                showNotification(`Component ${componentData.name} configured successfully`, 'success');
+                showNotification(`Component ${componentData.name || object.name} configured successfully`, 'success');
             } else {
                 console.error('No vessel model available');
                 showNotification('Failed to configure component: No vessel model available', 'error');
@@ -537,25 +739,68 @@ document.addEventListener('DOMContentLoaded', function() {
             const componentData = window.currentVesselModel?.getModelComponentData(objectUuid);
             const componentType = document.getElementById('fbxComponentType').value;
             
-            // Set component name in the appropriate field based on type
+            // Hide all settings panels first
+            document.getElementById('fbxControlSurfaceSettings').style.display = 'none';
+            document.getElementById('fbxThrusterSettings').style.display = 'none';
+            document.getElementById('fbxSensorSettings').style.display = 'none';
+            
+            // Show the appropriate panel and set component name in the appropriate field based on type
             if (componentType === 'controlSurface') {
+                document.getElementById('fbxControlSurfaceSettings').style.display = 'block';
                 document.getElementById('fbxSurfaceName').value = object.name;
+                
+                // Set default values or restore saved values
                 if (componentData) {
                     document.getElementById('fbxSurfaceType').value = componentData.surfaceType || 'Rudder';
-                    document.getElementById('fbxSurfaceMaxAngle').value = componentData.maxAngle || 30;
+                    document.getElementById('fbxSurfaceId').value = componentData.id || 1;
+                    document.getElementById('fbxSurfaceArea').value = componentData.area || 0.1;
+                    document.getElementById('fbxSurfaceNACA').value = componentData.naca || '0015';
+                    document.getElementById('fbxSurfaceTimeConstant').value = componentData.timeConstant || 0.1;
+                    document.getElementById('fbxSurfaceDeltaMax').value = componentData.deltaMax || 35.0;
+                    document.getElementById('fbxSurfaceDeltadMax').value = componentData.deltadMax || 1.0;
                 }
             } else if (componentType === 'thruster') {
+                document.getElementById('fbxThrusterSettings').style.display = 'block';
                 document.getElementById('fbxThrusterName').value = object.name;
+                
                 if (componentData) {
-                    document.getElementById('fbxThrusterType').value = componentData.thrusterType || 'Propeller';
-                    document.getElementById('fbxThrusterMaxThrust').value = componentData.maxThrust || 1000;
+                    document.getElementById('fbxThrusterId').value = componentData.id || 1;
+                    document.getElementById('fbxThrusterTProp').value = componentData.tProp || 1.0;
+                    document.getElementById('fbxThrusterDiameter').value = componentData.diameter || 0.1;
+                    document.getElementById('fbxThrusterTp').value = componentData.tp || 0.1;
+                    document.getElementById('fbxThrusterJvsKTFile').value = componentData.jvsKTFile || 'J_vs_KT.csv';
                 }
             } else if (componentType === 'sensor') {
+                document.getElementById('fbxSensorSettings').style.display = 'block';
                 document.getElementById('fbxSensorName').value = object.name;
+                
                 if (componentData) {
                     document.getElementById('fbxSensorType').value = componentData.sensorType || 'IMU';
-                    document.getElementById('fbxSensorRate').value = componentData.updateRate || 50;
+                    document.getElementById('fbxSensorRate').value = componentData.publishRate || 10;
+                    
+                    // Handle None values for location and orientation
+                    const useNoneLocation = componentData.useNoneLocation || false;
+                    const useNoneOrientation = componentData.useNoneOrientation || false;
+                    
+                    document.getElementById('fbxSensorNoneLocation').checked = useNoneLocation;
+                    document.getElementById('fbxSensorNoneOrientation').checked = useNoneOrientation;
+                    
+                    // Update UI visibility based on None settings
+                    document.getElementById('fbxSensorOrientationGroup').style.display = 
+                        useNoneOrientation ? 'none' : 'block';
+                    
+                    // Set orientation values if available
+                    if (componentData.orientation && !useNoneOrientation) {
+                        document.getElementById('fbxSensorOrientationW').value = componentData.orientation[0] || 1.0;
+                        document.getElementById('fbxSensorOrientationX').value = componentData.orientation[1] || 0.0;
+                        document.getElementById('fbxSensorOrientationY').value = componentData.orientation[2] || 0.0;
+                        document.getElementById('fbxSensorOrientationZ').value = componentData.orientation[3] || 0.0;
+                    }
                 }
+                
+                // Trigger change event to handle visibility of location/orientation fields
+                const event = new Event('change');
+                document.getElementById('fbxSensorType').dispatchEvent(event);
             }
         });
     }
@@ -692,13 +937,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const outputPath = document.getElementById('outputPath').value;
             
             if (!vesselName) {
-                showNotification('Please enter a vessel name before generating YAML files', 'error');
-                return;
+                window.currentVesselModel.config.name = 'vessel';
+                document.getElementById('vesselName').value = 'vessel';
+                showNotification('Using default vessel name "vessel"', 'warning');
             }
             
             try {
                 // Generate YAML files
                 const yamlFiles = window.currentVesselModel.generateYAMLFiles();
+                
+                if (!yamlFiles || Object.keys(yamlFiles).length === 0) {
+                    throw new Error('No YAML files were generated');
+                }
                 
                 // Create a notification with the result
                 let message = `YAML files generated for vessel: ${vesselName}\n`;
@@ -762,17 +1012,59 @@ document.addEventListener('DOMContentLoaded', function() {
     // Generate YAML previews in the modal
     function generateYAMLPreviews() {
         try {
+            // Ensure vessel has a name
+            if (!window.currentVesselModel.config.name) {
+                window.currentVesselModel.config.name = 'vessel';
+                document.getElementById('vesselName').value = 'vessel';
+                showNotification('Using default vessel name "vessel"', 'warning');
+            }
+            
+            // First, let's log the component counts to verify data
+            logComponentCounts();
+            
+            // Generate YAML files
             const yamlFiles = window.currentVesselModel.generateYAMLFiles();
+            
+            // Check if YAML files were generated
+            console.log('Generated YAML files:', Object.keys(yamlFiles));
             
             // Display previews for each YAML file
             document.getElementById('simulation-yaml-content').textContent = yamlFiles['simulation_input.yml'] || '';
             document.getElementById('geometry-yaml-content').textContent = yamlFiles['geometry.yml'] || '';
             document.getElementById('inertia-yaml-content').textContent = yamlFiles['inertia.yml'] || '';
+            document.getElementById('hydrodynamics-yaml-content').textContent = yamlFiles['hydrodynamics.yml'] || '';
             
-            // Add more tabs and content for other YAML files if needed
+            // For control surfaces, add some extra debug information
+            const controlSurfacesYaml = yamlFiles['control_surfaces.yml'] || '';
+            document.getElementById('control-surfaces-yaml-content').textContent = 
+                `# Number of control surfaces: ${window.currentVesselModel.config.control_surfaces?.control_surfaces?.length || 0}\n` +
+                controlSurfacesYaml;
+                
+            document.getElementById('thrusters-yaml-content').textContent = yamlFiles['thrusters.yml'] || '';
+            document.getElementById('sensors-yaml-content').textContent = yamlFiles['sensors.yml'] || '';
+            document.getElementById('initial-conditions-yaml-content').textContent = yamlFiles['initial_conditions.yml'] || '';
+            document.getElementById('guidance-yaml-content').textContent = yamlFiles['guidance.yml'] || '';
+            document.getElementById('control-yaml-content').textContent = yamlFiles['control.yml'] || '';
+            
+            // Check if specific files are missing
+            if (!yamlFiles['control_surfaces.yml'] && window.currentVesselModel.config.control_surfaces.control_surfaces.length > 0) {
+                console.warn('Control surfaces YAML file is missing despite having control surfaces data');
+                showNotification('Error generating control surfaces YAML', 'warning');
+            }
+            
+            if (!yamlFiles['thrusters.yml'] && window.currentVesselModel.config.thrusters.thrusters.length > 0) {
+                console.warn('Thrusters YAML file is missing despite having thrusters data');
+                showNotification('Error generating thrusters YAML', 'warning');
+            }
+            
+            if (!yamlFiles['sensors.yml'] && window.currentVesselModel.config.sensors.sensors.length > 0) {
+                console.warn('Sensors YAML file is missing despite having sensors data');
+                showNotification('Error generating sensors YAML', 'warning');
+            }
+            
         } catch (error) {
             console.error('Error generating YAML previews:', error);
-            showNotification('Failed to generate YAML previews', 'error');
+            showNotification('Failed to generate YAML previews: ' + error.message, 'error');
         }
     }
     
@@ -816,5 +1108,39 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.body.removeChild(notification);
             }, 500);
         }, 5000);
+    }
+
+    // Function to debug the vessel model structure
+    function logComponentCounts() {
+        if (window.currentVesselModel && window.currentVesselModel.config) {
+            const config = window.currentVesselModel.config;
+            
+            console.log('------- Current Component Counts -------');
+            // Control surfaces
+            if (config.control_surfaces && Array.isArray(config.control_surfaces.control_surfaces)) {
+                console.log(`Control Surfaces: ${config.control_surfaces.control_surfaces.length}`);
+                console.log(config.control_surfaces.control_surfaces);
+            } else {
+                console.log('Control Surfaces: Not properly initialized');
+                console.log(config.control_surfaces);
+            }
+            
+            // Thrusters
+            if (config.thrusters && Array.isArray(config.thrusters.thrusters)) {
+                console.log(`Thrusters: ${config.thrusters.thrusters.length}`);
+            } else {
+                console.log('Thrusters: Not properly initialized');
+            }
+            
+            // Sensors
+            if (config.sensors && Array.isArray(config.sensors.sensors)) {
+                console.log(`Sensors: ${config.sensors.sensors.length}`);
+            } else {
+                console.log('Sensors: Not properly initialized');
+            }
+            console.log('---------------------------------------');
+        } else {
+            console.log('Vessel model not initialized');
+        }
     }
 }); 

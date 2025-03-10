@@ -37,6 +37,10 @@ class VesselModel {
             },
             control_surfaces: {
                 naca_number: '0015',
+                naca_file: '',
+                delta_max: 35.0,
+                deltad_max: 1.0,
+                area: 0.1,
                 control_surfaces: []
             },
             thrusters: {
@@ -45,7 +49,7 @@ class VesselModel {
             initial_conditions: {
                 start_velocity: [0, 0, 0, 0, 0, 0], // [u, v, w, p, q, r]
                 start_location: [0, 0, 0],          // [x, y, z]
-                start_attitude: [0, 0, 0],          // [roll, pitch, yaw]
+                start_orientation: [0, 0, 0],          // [roll, pitch, yaw]
                 use_quaternion: false
             },
             sensors: {
@@ -287,19 +291,36 @@ class VesselModel {
     }
 
     // Add a new control surface
-    addControlSurface(type, location, orientation, area = 0.1) {
+    addControlSurface(type, location, orientation, area = 0.1, id = null, naca = '0015', timeConstant = 0.1, deltaMax = 35.0, deltadMax = 1.0) {
         if (!type || !location || !orientation) {
             throw new Error('Missing required parameters for control surface');
         }
         
+        const surfaceId = id || this.nextControlSurfaceId++;
+        
         const surface = {
             control_surface_type: type,
-            control_surface_id: this.nextControlSurfaceId++,
+            control_surface_id: surfaceId,
             control_surface_location: location.map(val => parseFloat(val)),
             control_surface_orientation: orientation.map(val => parseFloat(val)),
             control_surface_area: parseFloat(area),
-            control_surface_T: 0.1  // Default time constant
+            control_surface_NACA: naca,
+            control_surface_T: parseFloat(timeConstant),
+            control_surface_delta_max: parseFloat(deltaMax),
+            control_surface_deltad_max: parseFloat(deltadMax)
         };
+
+        // Ensure control_surfaces structure exists
+        if (!this.config.control_surfaces) {
+            this.config.control_surfaces = {
+                naca_number: naca,
+                naca_file: '',
+                delta_max: 35.0,
+                deltad_max: 1.0,
+                area: 0.1,
+                control_surfaces: []
+            };
+        }
 
         this.config.control_surfaces.control_surfaces.push(surface);
         this.saveToHistory();
@@ -307,22 +328,26 @@ class VesselModel {
     }
 
     // Add a new thruster
-    addThruster(type, location, orientation, diameter = 0.2) {
+    addThruster(name, location, orientation, id = null, diameter = 0.1, tProp = 1.0, tp = 0.1, jVsKtFile = 'J_vs_KT.csv') {
         if (!location || !orientation) {
             throw new Error('Missing required parameters for thruster');
         }
         
+        const thrusterId = id || this.nextThrusterId++;
+        const thrusterName = name || `thruster_${thrusterId}`;
+        
         const thruster = {
-            thruster_name: `thruster_${this.nextThrusterId}`,
-            thruster_id: this.nextThrusterId++,
-            thruster_type: type || 'Propeller',
+            thruster_name: thrusterName,
+            thruster_id: thrusterId,
             thruster_location: location.map(val => parseFloat(val)),
             thruster_orientation: orientation.map(val => parseFloat(val)),
-            D_prop: parseFloat(diameter),  // Propeller diameter in meters
-            T_prop: 1.0,  // Thrust coefficient
-            tp: 0.1       // Time constant
+            T_prop: parseFloat(tProp),
+            D_prop: parseFloat(diameter),
+            tp: parseFloat(tp),
+            J_vs_KT: `${this.config.name}/J_vs_KT.csv` // This will be updated with proper path in YAML generation
         };
 
+        // Ensure thrusters structure exists
         if (!this.config.thrusters) {
             this.config.thrusters = { thrusters: [] };
         }
@@ -333,18 +358,23 @@ class VesselModel {
     }
 
     // Add a new sensor
-    addSensor(type, location, orientation, publishRate = 10) {
-        if (!type || !location || !orientation) {
-            throw new Error('Missing required parameters for sensor');
+    addSensor(type, location, orientation, publishRate = 10, useNoneLocation = false, useNoneOrientation = false) {
+        if (!type) {
+            throw new Error('Missing sensor type');
         }
         
         const sensor = {
             sensor_type: type,
             sensor_id: this.nextSensorId++,
-            sensor_location: location.map(val => parseFloat(val)),
-            sensor_orientation: orientation.map(val => parseFloat(val)),
+            sensor_location: useNoneLocation ? 'None' : location.map(val => parseFloat(val)),
+            sensor_orientation: useNoneOrientation ? 'None' : orientation.map(val => parseFloat(val)),
             publish_rate: parseFloat(publishRate)
         };
+
+        // Ensure sensors structure exists
+        if (!this.config.sensors) {
+            this.config.sensors = { sensors: [] };
+        }
 
         this.config.sensors.sensors.push(sensor);
         this.saveToHistory();
@@ -371,7 +401,8 @@ class VesselModel {
     }
 
     // Update initial conditions
-    updateInitialConditions(startVelocity, startLocation, startAttitude, useQuaternion = false) {
+    updateInitialConditions(startVelocity, startLocation, startOrientation, useQuaternion = false) {
+        // Validate inputs
         if (startVelocity && Array.isArray(startVelocity) && startVelocity.length === 6) {
             this.config.initial_conditions.start_velocity = startVelocity.map(val => parseFloat(val));
         }
@@ -380,11 +411,11 @@ class VesselModel {
             this.config.initial_conditions.start_location = startLocation.map(val => parseFloat(val));
         }
         
-        if (startAttitude && Array.isArray(startAttitude) && startAttitude.length === 3) {
-            this.config.initial_conditions.start_attitude = startAttitude.map(val => parseFloat(val));
+        if (startOrientation && Array.isArray(startOrientation) && startOrientation.length === 3) {
+            this.config.initial_conditions.start_orientation = startOrientation.map(val => parseFloat(val));
         }
         
-        this.config.initial_conditions.use_quaternion = Boolean(useQuaternion);
+        this.config.initial_conditions.use_quaternion = !!useQuaternion;
         
         this.saveToHistory();
     }

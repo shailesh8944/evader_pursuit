@@ -79,11 +79,7 @@ class ThreeScene {
         this.orbitControls.update();
         
         // Initialize transform controls
-        this.transformControls = new THREE.TransformControls(this.camera, this.renderer.domElement);
-        this.transformControls.addEventListener('dragging-changed', (event) => {
-            this.orbitControls.enabled = !event.value;
-        });
-        this.scene.add(this.transformControls);
+        this.initTransformControls();
         
         // Setup raycaster for object selection
         this.raycaster = new THREE.Raycaster();
@@ -106,6 +102,51 @@ class ThreeScene {
         
         // Start animation loop
         this.animate();
+    }
+
+    initTransformControls() {
+        // Create transform controls
+        this.transformControls = new THREE.TransformControls(this.camera, this.renderer.domElement);
+        this.scene.add(this.transformControls);
+        
+        // Set space to 'local' to rotate around object's center
+        this.transformControls.setSpace('local');
+        
+        // Event listeners for transform controls
+        this.transformControls.addEventListener('dragging-changed', (event) => {
+            // Disable orbit controls while transforming
+            this.orbitControls.enabled = !event.value;
+        });
+        
+        this.transformControls.addEventListener('mouseDown', () => {
+            // When starting transformation, store the object's initial position
+            // This is important for rotation around local center
+            if (this.transformControls.object) {
+                const object = this.transformControls.object;
+                // Store the object's world position for reference
+                object.userData.initialWorldPosition = new THREE.Vector3();
+                object.getWorldPosition(object.userData.initialWorldPosition);
+            }
+        });
+        
+        this.transformControls.addEventListener('objectChange', () => {
+            // Object is being transformed
+            if (this.transformControls.object) {
+                this.onObjectTransformed(this.transformControls.object);
+            }
+        });
+        
+        this.transformControls.addEventListener('mouseUp', () => {
+            // Transform complete, update UI
+            if (this.transformControls.object) {
+                // Clean up temporary data
+                delete this.transformControls.object.userData.initialWorldPosition;
+                this.onObjectTransformed(this.transformControls.object);
+            }
+        });
+        
+        // Set initial mode
+        this.transformControls.setMode('translate');
     }
 
     addGrid() {
@@ -547,180 +588,188 @@ class ThreeScene {
     }
 
     addControlSurface(id, type, position, orientation, area = 0.1) {
-        // Create a simple mesh to represent the control surface
+        // Create a simple representation of a control surface
         const width = Math.sqrt(area);
         const height = width;
-        const depth = width * 0.1;
+        const depth = width * 0.1;  // Thin control surface
         
         const geometry = new THREE.BoxGeometry(width, height, depth);
+        // Center the geometry around origin
+        geometry.translate(0, 0, 0);
+        
         const material = new THREE.MeshStandardMaterial({ 
-            color: 0x6699cc, 
+            color: 0x00aaff,
             transparent: true,
             opacity: 0.7,
-            side: THREE.DoubleSide
+            metalness: 0.2,
+            roughness: 0.8
         });
         
         const controlSurface = new THREE.Mesh(geometry, material);
-        controlSurface.name = `${type}_${id}`;
-        controlSurface.userData.type = 'controlSurface';
+        controlSurface.name = `Control Surface ${id} (${type})`;
+        controlSurface.userData.componentType = 'controlSurface';
         controlSurface.userData.componentId = id;
         
-        // Position and orient the control surface
+        // Position and rotate
         controlSurface.position.set(position[0], position[1], position[2]);
         controlSurface.rotation.set(orientation[0], orientation[1], orientation[2]);
         
         // Add to scene
         this.scene.add(controlSurface);
         
-        // Store reference
-        if (!this.controlSurfaces) {
-            this.controlSurfaces = new Map();
-        }
-        this.controlSurfaces.set(id, controlSurface);
+        // Add axes at component center
+        this.addComponentAxes(controlSurface);
+        
+        // Update scene hierarchy
+        this.updateSceneHierarchy();
         
         this.render();
+        
         return controlSurface;
     }
 
     updateControlSurfaceDimensions(id, width, height) {
-        const surface = this.getObjectById(id);
-        if (surface && surface.userData.type === 'control_surface') {
-            const mesh = surface.children.find(child => child.userData.isControlSurface);
-            if (mesh) {
-                const geometry = new THREE.PlaneGeometry(width, height);
-                mesh.geometry.dispose();
-                mesh.geometry = geometry;
-                surface.userData.dimensions = { width, height };
-                surface.userData.parameters.area = width * height;
-                this.render();
-            }
-        }
+        const controlSurface = this.getObjectById(id);
+        if (!controlSurface) return;
+        
+        // Update dimensions
+        const geometry = new THREE.BoxGeometry(width, height, width * 0.1);
+        controlSurface.geometry.dispose();
+        controlSurface.geometry = geometry;
+        
+        this.render();
     }
 
     updateControlSurfaceParameters(id, parameters) {
-        const surface = this.getObjectById(id);
-        if (surface && surface.userData.type === 'control_surface') {
-            surface.userData.parameters = {
-                ...surface.userData.parameters,
-                ...parameters
-            };
-            // Update visual representation if needed
-            if (parameters.width || parameters.height) {
-                this.updateControlSurfaceDimensions(id, 
-                    parameters.width || surface.userData.dimensions.width,
-                    parameters.height || surface.userData.dimensions.height
-                );
-            }
-            this.render();
+        const controlSurface = this.getObjectById(id);
+        if (!controlSurface) return;
+        
+        // Update properties based on parameters
+        if (parameters.position) {
+            controlSurface.position.set(
+                parameters.position[0],
+                parameters.position[1],
+                parameters.position[2]
+            );
         }
+        
+        if (parameters.orientation) {
+            controlSurface.rotation.set(
+                parameters.orientation[0],
+                parameters.orientation[1],
+                parameters.orientation[2]
+            );
+        }
+        
+        if (parameters.area) {
+            this.updateControlSurfaceSize(id, parameters.area);
+        }
+        
+        this.render();
     }
 
-    addThruster(id, position, orientation, diameter = 0.2) {
-        // Create a cylinder to represent the thruster
-        const geometry = new THREE.CylinderGeometry(diameter / 2, diameter / 2, diameter, 16);
+    addThruster(id, name, position, orientation, diameter = 0.2) {
+        // Create a simple representation of a thruster
+        const length = diameter * 2;
+        const radiusTop = diameter / 2;
+        const radiusBottom = diameter / 2 * 1.2;
+        
+        const geometry = new THREE.CylinderGeometry(radiusTop, radiusBottom, length, 16);
+        // Rotate the cylinder to align with X-axis (forward)
+        geometry.rotateZ(Math.PI / 2);
+        // Center the geometry
+        geometry.translate(0, 0, 0);
+        
         const material = new THREE.MeshStandardMaterial({ 
-            color: 0xcc6633, 
+            color: 0xff5500,
             transparent: true,
-            opacity: 0.7 
+            opacity: 0.7,
+            metalness: 0.3,
+            roughness: 0.7
         });
         
         const thruster = new THREE.Mesh(geometry, material);
-        thruster.name = `Thruster_${id}`;
-        thruster.userData.type = 'thruster';
+        thruster.name = name || `Thruster ${id}`;
+        thruster.userData.componentType = 'thruster';
         thruster.userData.componentId = id;
         
-        // Position and orient the thruster
+        // Position and rotate
         thruster.position.set(position[0], position[1], position[2]);
-        
-        // Adjust rotation for proper orientation
-        // Cylinders in Three.js have their axis along y, but thrusters typically have their axis along z
-        thruster.rotation.x = Math.PI / 2;
-        thruster.rotation.x += orientation[0];
-        thruster.rotation.y += orientation[1];
-        thruster.rotation.z += orientation[2];
+        thruster.rotation.set(orientation[0], orientation[1], orientation[2]);
         
         // Add to scene
         this.scene.add(thruster);
         
-        // Store reference
-        if (!this.thrusters) {
-            this.thrusters = new Map();
-        }
-        this.thrusters.set(id, thruster);
+        // Add axes at component center
+        this.addComponentAxes(thruster);
+        
+        // Update scene hierarchy
+        this.updateSceneHierarchy();
         
         this.render();
+        
         return thruster;
     }
 
-    getWorldPositionFromMouse(event) {
-        // Get mouse position in normalized device coordinates (-1 to +1)
-        const rect = this.renderer.domElement.getBoundingClientRect();
-        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-        // Create a ray from the camera through the mouse position
-        this.raycaster.setFromCamera(this.mouse, this.camera);
-
-        // Find intersection with the grid plane
-        const gridPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-        const point = new THREE.Vector3();
-        this.raycaster.ray.intersectPlane(gridPlane, point);
-
-        return point;
-    }
-
     addSensor(id, type, position, orientation) {
-        // Create a small box to represent the sensor
-        const size = 0.1;
-        const geometry = new THREE.BoxGeometry(size, size, size);
+        if (!position) {
+            console.warn(`Cannot add sensor with ID ${id} visually as position is None`);
+            return null;
+        }
+
+        let geometry, material;
+        let size = 0.1;  // Default size for sensors
         
-        // Color based on sensor type
-        let color;
-        switch (type.toLowerCase()) {
-            case 'imu':
-                color = 0x33cc33; // Green
+        // Choose geometry based on sensor type
+        switch (type) {
+            case 'IMU':
+                geometry = new THREE.BoxGeometry(size, size, size);
+                material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
                 break;
-            case 'gps':
-                color = 0x3366cc; // Blue
+            case 'GPS':
+                geometry = new THREE.SphereGeometry(size / 2, 8, 8);
+                material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
                 break;
-            case 'dvl':
-                color = 0xcc3333; // Red
-                break;
-            case 'camera':
-                color = 0xffcc00; // Yellow
-                break;
-            case 'sonar':
-                color = 0x9933cc; // Purple
+            case 'DVL':
+                geometry = new THREE.ConeGeometry(size / 2, size, 8);
+                material = new THREE.MeshStandardMaterial({ color: 0x0000ff });
                 break;
             default:
-                color = 0xaaaaaa; // Grey
+                geometry = new THREE.BoxGeometry(size, size / 2, size / 2);
+                material = new THREE.MeshStandardMaterial({ color: 0xffff00 });
         }
         
-        const material = new THREE.MeshStandardMaterial({ 
-            color, 
-            transparent: true, 
-            opacity: 0.7 
-        });
-
+        // Center the geometry
+        geometry.translate(0, 0, 0);
+        
         const sensor = new THREE.Mesh(geometry, material);
-        sensor.name = `${type}_${id}`;
-        sensor.userData.type = 'sensor';
+        sensor.name = `${type} Sensor ${id}`;
+        sensor.userData.componentType = 'sensor';
         sensor.userData.componentId = id;
         
-        // Position and orient the sensor
+        // Position
         sensor.position.set(position[0], position[1], position[2]);
-        sensor.rotation.set(orientation[0], orientation[1], orientation[2]);
+        
+        // Orientation - if quaternion, apply it, otherwise use Euler angles
+        if (orientation && orientation.length === 4) {
+            // Quaternion [w, x, y, z]
+            sensor.quaternion.set(orientation[1], orientation[2], orientation[3], orientation[0]);
+        } else if (orientation && orientation.length === 3) {
+            // Euler angles [x, y, z]
+            sensor.rotation.set(orientation[0], orientation[1], orientation[2]);
+        }
         
         // Add to scene
         this.scene.add(sensor);
         
-        // Store reference
-        if (!this.sensors) {
-            this.sensors = new Map();
-        }
-        this.sensors.set(id, sensor);
+        // Add axes at component center
+        this.addComponentAxes(sensor);
+        
+        // Update scene hierarchy
+        this.updateSceneHierarchy();
         
         this.render();
+        
         return sensor;
     }
 
@@ -773,73 +822,206 @@ class ThreeScene {
     }
 
     updateTransformInfo() {
-        if (!this.selectedObject) return;
-
-        const position = this.selectedObject.position || { x: 0, y: 0, z: 0 };
-        const rotation = this.selectedObject.rotation || { x: 0, y: 0, z: 0 };
-        const scale = this.selectedObject.scale || { x: 1, y: 1, z: 1 };
-
-        // Update transform info panel
-        const posX = document.getElementById('pos_x');
-        const posY = document.getElementById('pos_y');
-        const posZ = document.getElementById('pos_z');
-        if (posX) posX.value = (position.x || 0).toFixed(3);
-        if (posY) posY.value = (position.y || 0).toFixed(3);
-        if (posZ) posZ.value = (position.z || 0).toFixed(3);
-
-        const rotX = document.getElementById('rot_x');
-        const rotY = document.getElementById('rot_y');
-        const rotZ = document.getElementById('rot_z');
-        if (rotX) rotX.value = (rotation.x || 0).toFixed(3);
-        if (rotY) rotY.value = (rotation.y || 0).toFixed(3);
-        if (rotZ) rotZ.value = (rotation.z || 0).toFixed(3);
-
-        const scaleX = document.getElementById('scale_x');
-        const scaleY = document.getElementById('scale_y');
-        const scaleZ = document.getElementById('scale_z');
-        if (scaleX) scaleX.value = (scale.x || 1).toFixed(3);
-        if (scaleY) scaleY.value = (scale.y || 1).toFixed(3);
-        if (scaleZ) scaleZ.value = (scale.z || 1).toFixed(3);
-
-        // Update component card if it exists
-        if (this.selectedObject.userData.card) {
-            const card = this.selectedObject.userData.card;
-            const posInputs = {
-                x: card.querySelector('.pos-x'),
-                y: card.querySelector('.pos-y'),
-                z: card.querySelector('.pos-z')
-            };
-
-            const rotInputs = {
-                x: card.querySelector('.rot-x'),
-                y: card.querySelector('.rot-y'),
-                z: card.querySelector('.rot-z')
-            };
-
-            // Update position inputs
-            Object.entries(posInputs).forEach(([axis, input]) => {
-                if (input) {
-                    input.value = position[axis].toFixed(3);
-                }
-            });
-
-            // Update rotation inputs
-            Object.entries(rotInputs).forEach(([axis, input]) => {
-                if (input) {
-                    input.value = rotation[axis].toFixed(3);
-                }
-            });
+        const transformInfo = document.getElementById('transform-info');
+        if (!transformInfo) return;
+        
+        const object = this.transformControls.object;
+        if (!object) {
+            transformInfo.innerHTML = '';
+            return;
         }
-
-        // Trigger the onObjectTransformed callback
-        if (this.onObjectTransformed) {
-            this.onObjectTransformed(this.selectedObject);
+        
+        // Check if we're transforming component axes or a component
+        let isAxes = object.userData.isComponentAxes;
+        let componentObject = isAxes ? object.parent : object;
+        
+        // Get object position in world space
+        const position = new THREE.Vector3();
+        object.getWorldPosition(position);
+        
+        // Get object rotation in world space
+        const quaternion = new THREE.Quaternion();
+        object.getWorldQuaternion(quaternion);
+        const euler = new THREE.Euler().setFromQuaternion(quaternion);
+        
+        // Convert to degrees for display
+        const rotDeg = {
+            x: THREE.MathUtils.radToDeg(euler.x).toFixed(1),
+            y: THREE.MathUtils.radToDeg(euler.y).toFixed(1),
+            z: THREE.MathUtils.radToDeg(euler.z).toFixed(1)
+        };
+        
+        // If this is component axes, also update any input fields for the component
+        if (isAxes && componentObject) {
+            const componentId = object.userData.componentId;
+            const componentType = object.userData.componentType;
+            
+            // Update input fields based on component type
+            if (componentType === 'controlSurface') {
+                const inputPrefix = 'cs';
+                this.updatePositionInputFields(inputPrefix, position);
+                this.updateRotationInputFields(inputPrefix, rotDeg);
+            } else if (componentType === 'thruster') {
+                const inputPrefix = 'thruster';
+                this.updatePositionInputFields(inputPrefix, position);
+                this.updateRotationInputFields(inputPrefix, rotDeg);
+            } else if (componentType === 'sensor') {
+                const inputPrefix = 'sensor';
+                this.updatePositionInputFields(inputPrefix, position);
+                
+                // Sensors use quaternion for orientation
+                const orW = document.getElementById(`${inputPrefix}OrientationW`);
+                const orX = document.getElementById(`${inputPrefix}OrientationX`);
+                const orY = document.getElementById(`${inputPrefix}OrientationY`);
+                const orZ = document.getElementById(`${inputPrefix}OrientationZ`);
+                
+                if (orW) orW.value = quaternion.w.toFixed(3);
+                if (orX) orX.value = quaternion.x.toFixed(3);
+                if (orY) orY.value = quaternion.y.toFixed(3);
+                if (orZ) orZ.value = quaternion.z.toFixed(3);
+            }
         }
+        
+        // Create display text
+        transformInfo.innerHTML = `
+            <div class="transform-info-item">
+                <span class="label">Position:</span>
+                <span class="value">X: ${position.x.toFixed(3)}, Y: ${position.y.toFixed(3)}, Z: ${position.z.toFixed(3)}</span>
+            </div>
+            <div class="transform-info-item">
+                <span class="label">Rotation:</span>
+                <span class="value">X: ${rotDeg.x}°, Y: ${rotDeg.y}°, Z: ${rotDeg.z}°</span>
+            </div>
+        `;
+    }
+    
+    // Helper to update position input fields
+    updatePositionInputFields(prefix, position) {
+        const posX = document.getElementById(`${prefix}PositionX`);
+        const posY = document.getElementById(`${prefix}PositionY`);
+        const posZ = document.getElementById(`${prefix}PositionZ`);
+        
+        if (posX) posX.value = position.x.toFixed(3);
+        if (posY) posY.value = position.y.toFixed(3);
+        if (posZ) posZ.value = position.z.toFixed(3);
+    }
+    
+    // Helper to update rotation input fields
+    updateRotationInputFields(prefix, rotation) {
+        const rotX = document.getElementById(`${prefix}OrientationX`);
+        const rotY = document.getElementById(`${prefix}OrientationY`);
+        const rotZ = document.getElementById(`${prefix}OrientationZ`);
+        
+        if (rotX) rotX.value = rotation.x;
+        if (rotY) rotY.value = rotation.y;
+        if (rotZ) rotZ.value = rotation.z;
     }
 
     onObjectTransformed(object) {
-        // This method will be overridden by the main application
-        // to update the vessel model when objects are transformed
+        if (!object) return;
+        
+        // If axes were transformed, update the parent component's data
+        if (object.userData.isComponentAxes && object.parent) {
+            const component = object.parent;
+            const componentId = object.userData.componentId;
+            const componentType = object.userData.componentType;
+            
+            if (!componentId || !componentType) {
+                console.warn('Component axes missing ID or type');
+                return;
+            }
+            
+            // Convert axes world position to an array
+            const worldPosition = new THREE.Vector3();
+            object.getWorldPosition(worldPosition);
+            const position = [worldPosition.x, worldPosition.y, worldPosition.z];
+            
+            // Get orientation in proper format
+            let orientation;
+            
+            if (componentType === 'sensor') {
+                // For sensors, use quaternion
+                const worldQuaternion = new THREE.Quaternion();
+                object.getWorldQuaternion(worldQuaternion);
+                orientation = [
+                    worldQuaternion.w,
+                    worldQuaternion.x,
+                    worldQuaternion.y,
+                    worldQuaternion.z
+                ];
+            } else {
+                // For other components, use Euler angles
+                const worldEuler = new THREE.Euler();
+                worldEuler.setFromQuaternion(object.getWorldQuaternion(new THREE.Quaternion()));
+                orientation = [worldEuler.x, worldEuler.y, worldEuler.z];
+            }
+            
+            // Update the component in the vessel model
+            if (window.currentVesselModel) {
+                switch (componentType) {
+                    case 'controlSurface':
+                        window.currentVesselModel.updateControlSurface(
+                            componentId, 
+                            { position, orientation }
+                        );
+                        break;
+                    case 'thruster':
+                        window.currentVesselModel.updateThruster(
+                            componentId, 
+                            { position, orientation }
+                        );
+                        break;
+                    case 'sensor':
+                        window.currentVesselModel.updateSensor(
+                            componentId, 
+                            { position, orientation }
+                        );
+                        break;
+                }
+            }
+            
+            // Update the parent component's position and orientation to match axes
+            // This keeps them visually in sync
+            this.updateComponentToMatchAxes(component, object);
+            
+            // Update properties panel
+            this.showComponentInfo(component);
+        } else {
+            // Normal object transformation
+            if (this.transformControls && this.transformControls.object) {
+                this.updateTransformInfo();
+            }
+        }
+        
+        this.render();
+    }
+    
+    // Update component position and orientation to match its axes
+    updateComponentToMatchAxes(component, axes) {
+        if (!component || !axes) return;
+        
+        // Get the axes world matrix
+        const axesWorldMatrix = new THREE.Matrix4();
+        axes.updateMatrixWorld();
+        axesWorldMatrix.copy(axes.matrixWorld);
+        
+        // Get component parent's world matrix
+        const parentWorldMatrix = new THREE.Matrix4();
+        if (component.parent) {
+            component.parent.updateMatrixWorld();
+            parentWorldMatrix.copy(component.parent.matrixWorld);
+        }
+        
+        // Calculate the new local matrix for the component
+        const parentInverseMatrix = new THREE.Matrix4().copy(parentWorldMatrix).invert();
+        const newLocalMatrix = new THREE.Matrix4().multiplyMatrices(parentInverseMatrix, axesWorldMatrix);
+        
+        // Apply the new matrix to the component
+        component.matrix.copy(newLocalMatrix);
+        component.matrix.decompose(component.position, component.quaternion, component.scale);
+        
+        // Mark that the component has been updated
+        component.matrixWorldNeedsUpdate = true;
     }
 
     onWindowResize() {
@@ -882,42 +1064,100 @@ class ThreeScene {
     }
 
     selectObject(object) {
-        // Reset previous selection
-        if (this.selectedObject && this.selectedObject !== object) {
-            // Restore original material
+        if (!object) {
+            // If no object is provided, deselect the current selection
+            if (this.selectedObject) {
+                this.restoreOriginalMaterial(this.selectedObject);
+                this.selectedObject = null;
+                
+                // Hide transform controls
+                if (this.transformControls) {
+                    this.transformControls.detach();
+                }
+                
+                // Clear properties panel
+                const propertiesPanel = document.getElementById('object-properties');
+                if (propertiesPanel) {
+                    propertiesPanel.innerHTML = '<div class="no-selection-message">Select an object to view its properties</div>';
+                }
+            }
+            return;
+        }
+        
+        // Determine if we're selecting an axes group or a component
+        let targetObject = object;
+        let isAxes = false;
+        
+        // If we clicked on an axis component, navigate up to find the axes group
+        if (object.parent && object.parent.userData.isComponentAxes) {
+            targetObject = object.parent;
+            isAxes = true;
+        }
+        
+        // Check if the object itself is an axes group
+        if (object.userData.isComponentAxes) {
+            targetObject = object;
+            isAxes = true;
+        }
+        
+        // If this is axes, find the parent component
+        let parentComponent = null;
+        if (isAxes && targetObject.parent) {
+            parentComponent = targetObject.parent;
+        }
+        
+        // If we found axes but no parent component, something went wrong
+        if (isAxes && !parentComponent) {
+            console.warn('Found component axes without parent component');
+            return;
+        }
+        
+        // Deselect previous object if different
+        if (this.selectedObject && this.selectedObject !== targetObject) {
             this.restoreOriginalMaterial(this.selectedObject);
         }
         
-        // Update selection
-        this.selectedObject = object;
+        // Set new selected object
+        this.selectedObject = targetObject;
         
-        // Clear transform controls
+        // Highlight the object
+        if (isAxes) {
+            // If we selected axes, highlight the parent component as well
+            this.highlightObject(parentComponent);
+        } else {
+            this.highlightObject(targetObject);
+        }
+        
+        // Set up transform controls for the selected object
         if (this.transformControls) {
             this.transformControls.detach();
-        }
-        
-        // Setup new selection
-        if (object && object.isMesh) {
-            // Highlight the object
-            this.highlightObject(object);
             
-            // Attach transform controls
-            if (this.transformControls) {
-                this.transformControls.attach(object);
+            // If selecting axes, attach controls to the axes
+            // If selecting a component, check if it has axes and attach to those
+            if (isAxes) {
+                this.transformControls.attach(targetObject);
+            } else {
+                // Check if component has axes
+                const componentAxes = targetObject.children.find(child => child.userData.isComponentAxes);
+                if (componentAxes) {
+                    // If component has axes, attach transform controls to the axes
+                    this.transformControls.attach(componentAxes);
+                    this.selectedObject = componentAxes; // Update selected object to the axes
+                } else {
+                    // If no axes, attach directly to the component
+                    this.transformControls.attach(targetObject);
+                }
             }
-            
-            // Show component info in the UI
-            this.showComponentInfo(object);
-        } else {
-            // If nothing is selected, clear the property panel
-            document.getElementById('object-properties').innerHTML = `
-                <div class="no-selection-message">
-                    Select an object to view its properties
-                </div>
-            `;
         }
         
-        // Mark scene for rendering
+        // Show object properties
+        if (isAxes) {
+            // If axes selected, show properties of the parent component
+            this.showComponentInfo(parentComponent);
+        } else {
+            this.showComponentInfo(targetObject);
+        }
+        
         this.render();
     }
 
@@ -2178,6 +2418,168 @@ class ThreeScene {
             this.orbitControls.update();
             this.render();
         }
+    }
+
+    // Method to get an object by property (e.g., uuid)
+    getObjectByProperty(name, value) {
+        if (!this.scene) {
+            console.error('Scene not initialized');
+            return null;
+        }
+        
+        // Check if the scene itself has the property
+        if (this.scene[name] === value) {
+            return this.scene;
+        }
+        
+        // Traverse all objects in the scene
+        let result = null;
+        this.scene.traverse(function(object) {
+            if (object[name] === value && !result) {
+                result = object;
+            }
+        });
+        
+        return result;
+    }
+
+    // Add coordinate axes to a component
+    addComponentAxes(component, size = 0.15) {
+        if (!component) {
+            console.error('Cannot add axes to undefined component');
+            return;
+        }
+        
+        // Remove existing axes if any
+        const existingAxes = component.children.find(child => child.name === 'componentAxes');
+        if (existingAxes) {
+            component.remove(existingAxes);
+        }
+        
+        // Create axes group
+        const axesGroup = new THREE.Group();
+        axesGroup.name = 'componentAxes';
+        
+        // Set property to indicate this is a component axes object
+        axesGroup.userData.isComponentAxes = true;
+        axesGroup.userData.componentId = component.userData.componentId;
+        axesGroup.userData.componentType = component.userData.componentType;
+        
+        // Create axes
+        const axisLength = size;
+        const axisRadius = size * 0.05;
+        
+        // Add a center sphere to visually indicate the pivot point
+        const centerSphereGeometry = new THREE.SphereGeometry(axisRadius * 1.5, 8, 8);
+        const centerSphereMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const centerSphere = new THREE.Mesh(centerSphereGeometry, centerSphereMaterial);
+        
+        // X axis (red) - forward
+        const xAxisGeometry = new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength, 8);
+        xAxisGeometry.rotateZ(-Math.PI / 2); // Rotate to align with X axis
+        const xAxisMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const xAxis = new THREE.Mesh(xAxisGeometry, xAxisMaterial);
+        xAxis.position.set(axisLength / 2, 0, 0);
+        
+        // X axis cone
+        const xConeGeometry = new THREE.ConeGeometry(axisRadius * 2, axisLength * 0.2, 8);
+        xConeGeometry.rotateZ(-Math.PI / 2); // Rotate to align with X axis
+        const xCone = new THREE.Mesh(xConeGeometry, xAxisMaterial);
+        xCone.position.set(axisLength, 0, 0);
+        
+        // Y axis (green) - up
+        const yAxisGeometry = new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength, 8);
+        const yAxisMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const yAxis = new THREE.Mesh(yAxisGeometry, yAxisMaterial);
+        yAxis.position.set(0, axisLength / 2, 0);
+        
+        // Y axis cone
+        const yConeGeometry = new THREE.ConeGeometry(axisRadius * 2, axisLength * 0.2, 8);
+        const yCone = new THREE.Mesh(yConeGeometry, yAxisMaterial);
+        yCone.position.set(0, axisLength, 0);
+        
+        // Z axis (blue) - right
+        const zAxisGeometry = new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength, 8);
+        zAxisGeometry.rotateX(Math.PI / 2); // Rotate to align with Z axis
+        const zAxisMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+        const zAxis = new THREE.Mesh(zAxisGeometry, zAxisMaterial);
+        zAxis.position.set(0, 0, axisLength / 2);
+        
+        // Z axis cone
+        const zConeGeometry = new THREE.ConeGeometry(axisRadius * 2, axisLength * 0.2, 8);
+        zConeGeometry.rotateX(Math.PI / 2); // Rotate to align with Z axis
+        const zCone = new THREE.Mesh(zConeGeometry, zAxisMaterial);
+        zCone.position.set(0, 0, axisLength);
+        
+        // Add axis labels
+        const labelSize = size * 0.3;
+        const labelOffset = axisLength * 1.2;
+        
+        // X label
+        const xSprite = this.createTextSprite('X', labelSize, 0xff0000);
+        xSprite.position.set(labelOffset, 0, 0);
+        
+        // Y label
+        const ySprite = this.createTextSprite('Y', labelSize, 0x00ff00);
+        ySprite.position.set(0, labelOffset, 0);
+        
+        // Z label
+        const zSprite = this.createTextSprite('Z', labelSize, 0x0000ff);
+        zSprite.position.set(0, 0, labelOffset);
+        
+        // Add all elements to group
+        axesGroup.add(centerSphere, xAxis, xCone, yAxis, yCone, zAxis, zCone, xSprite, ySprite, zSprite);
+        
+        // Calculate the center of the component
+        let center = new THREE.Vector3();
+        
+        if (component.geometry) {
+            // If component has geometry, use its bounding box center
+            component.geometry.computeBoundingBox();
+            component.geometry.boundingBox.getCenter(center);
+            // This gives us the center in local coordinates, which is what we want
+        }
+        
+        // Position the axes at the component's local center
+        axesGroup.position.copy(center);
+        
+        // Make axes selectable and transformable
+        axesGroup.userData.selectable = true;
+        axesGroup.userData.transformable = true;
+        
+        // Add axes group to component
+        component.add(axesGroup);
+        
+        this.render();
+        
+        return axesGroup;
+    }
+    
+    // Create a text sprite for labels
+    createTextSprite(text, size = 0.1, color = 0xffffff) {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 128;
+        canvas.height = 128;
+        
+        // Background - transparent
+        context.fillStyle = 'rgba(0, 0, 0, 0)';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Text
+        context.font = 'Bold 80px Arial';
+        context.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillText(text, canvas.width / 2, canvas.height / 2);
+        
+        // Create sprite
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(size, size, 1);
+        
+        return sprite;
     }
 }
 
