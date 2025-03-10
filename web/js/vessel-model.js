@@ -286,16 +286,21 @@ class VesselModel {
 
     // Update simulation parameters
     updateSimulationParams(params) {
-        const validKeys = [
-            'sim_time', 'time_step', 'density', 'gravity', 'world_size', 'gps_datum'
-        ];
+        console.log("Updating simulation parameters with:", params);
         
-        for (const [key, value] of Object.entries(params)) {
-            if (validKeys.includes(key)) {
+        // For complete parameter objects, replace the entire simulation config
+        if (params.fullReplace) {
+            // Remove the fullReplace flag and assign the rest
+            const { fullReplace, ...newParams } = params;
+            this.config.simulation = newParams;
+        } else {
+            // For individual updates, only update the specified keys
+            for (const [key, value] of Object.entries(params)) {
                 this.config.simulation[key] = value;
             }
         }
         
+        console.log("Updated simulation config:", this.config.simulation);
         this.saveToHistory();
     }
 

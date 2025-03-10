@@ -270,59 +270,86 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
     }
 
     generateSimulationInputYAML(vesselConfig) {
-        const vesselName = vesselConfig.name || 'mavymini';
+        console.log("Generating simulation input YAML with:", vesselConfig);
         
-        // Customize the world_size array to use Inf for z dimension
-        const worldSize = [...this.defaultSimParams.world_size];
-        worldSize[2] = 'Inf'; // Use 'Inf' instead of a number for z dimension
+        const vesselName = vesselConfig.name || 'mavymini';
+        const simConfig = vesselConfig.simulation || this.defaultSimParams;
+        
+        // Customize the world_size array to use Inf for z dimension if needed
+        const worldSize = [...(simConfig.world_size || this.defaultSimParams.world_size)];
+        if (worldSize[2] === 100 || worldSize[2] === '100') {
+            worldSize[2] = 'Inf'; // Use 'Inf' for z dimension by default
+        }
+        
+        // Use geofence from config or default
+        const geofence = simConfig.geofence || [
+            [12.993496, 80.239007],
+            [12.993500, 80.238903],
+            [12.993485, 80.238829],
+            [12.993359, 80.238699],
+            [12.993547, 80.238437],
+            [12.993716, 80.238475],
+            [12.994077, 80.239559],
+            [12.993809, 80.239807],
+            [12.993271, 80.240646],
+            [12.993050, 80.240423],
+            [12.993193, 80.239274],
+            [12.993044, 80.239217],
+            [12.993054, 80.239120],
+            [12.993335, 80.239098],
+            [12.993496, 80.239007]
+        ];
+        
+        // Format the geofence
+        let geofenceYaml = '';
+        geofence.forEach(coord => {
+            geofenceYaml += `  - [${coord[0]}, ${coord[1]}]\n`;
+        });
+        
+        // Get agents configuration or use default
+        const nagents = simConfig.nagents || 1;
+        const agents = simConfig.agents || [{ name: vesselName, type: vesselConfig.type || 'auv' }];
+        
+        // Format agents
+        let agentsYaml = '';
+        agents.forEach(agent => {
+            agentsYaml += `  -\n    name: ${agent.name || vesselName}\n    type: ${agent.type || 'auv'}\n`;
+            agentsYaml += `    geometry: /workspaces/mavlab/inputs/{name}/geometry.yml\n`;
+            agentsYaml += `    inertia: /workspaces/mavlab/inputs/{name}/inertia.yml\n`;
+            agentsYaml += `    hydrodynamics: /workspaces/mavlab/inputs/{name}/hydrodynamics.yml\n`;
+            agentsYaml += `    control_surfaces: /workspaces/mavlab/inputs/{name}/control_surfaces.yml\n`;
+            agentsYaml += `    initial_conditions: /workspaces/mavlab/inputs/{name}/initial_conditions.yml\n`;
+            agentsYaml += `    sensors: /workspaces/mavlab/inputs/{name}/sensors.yml\n`;
+            agentsYaml += `    guidance: /workspaces/mavlab/inputs/{name}/guidance.yml\n`;
+            agentsYaml += `    control: /workspaces/mavlab/inputs/{name}/control.yml\n`;
+            agentsYaml += `    thrusters: /workspaces/mavlab/inputs/{name}/thrusters.yml\n`;
+        });
         
         // Build the YAML content directly as a string to match the exact format
         let yamlContent = `#Simulation Specific Inputs
-sim_time: ${vesselConfig.sim_time || 5}
-time_step: ${vesselConfig.time_step || 0.01}
-density: ${vesselConfig.density || 1000}
-gravity: ${vesselConfig.gravity || 9.80665}
+sim_time: ${simConfig.sim_time || this.defaultSimParams.sim_time}
+time_step: ${simConfig.time_step || this.defaultSimParams.time_step}
+density: ${simConfig.density || this.defaultSimParams.density}
+gravity: ${simConfig.gravity || this.defaultSimParams.gravity}
 world_size: [${worldSize[0]}, ${worldSize[1]}, ${worldSize[2]}]
-gps_datum: [${this.defaultSimParams.gps_datum.join(', ')}]
+gps_datum: [${simConfig.gps_datum ? simConfig.gps_datum.join(', ') : this.defaultSimParams.gps_datum.join(', ')}]
 
 geofence:
-  - [12.993496, 80.239007]
-  - [12.993500, 80.238903]
-  - [12.993485, 80.238829]
-  - [12.993359, 80.238699]
-  - [12.993547, 80.238437]
-  - [12.993716, 80.238475]
-  - [12.994077, 80.239559]
-  - [12.993809, 80.239807]
-  - [12.993271, 80.240646]
-  - [12.993050, 80.240423]
-  - [12.993193, 80.239274]
-  - [12.993044, 80.239217]
-  - [12.993054, 80.239120]
-  - [12.993335, 80.239098]
-  - [12.993496, 80.239007] 
+${geofenceYaml}
 
-nagents: 1
+nagents: ${nagents}
 
 agents:
-  -
-    name: ${vesselName}
-    type: ${vesselConfig.type || 'auv'}
-    geometry: /workspaces/mavlab/inputs/{name}/geometry.yml
-    inertia: /workspaces/mavlab/inputs/{name}/inertia.yml
-    hydrodynamics: /workspaces/mavlab/inputs/{name}/hydrodynamics.yml
-    control_surfaces: /workspaces/mavlab/inputs/{name}/control_surfaces.yml
-    initial_conditions: /workspaces/mavlab/inputs/{name}/initial_conditions.yml
-    sensors: /workspaces/mavlab/inputs/{name}/sensors.yml
-    guidance: /workspaces/mavlab/inputs/{name}/guidance.yml
-    control: /workspaces/mavlab/inputs/{name}/control.yml
-    thrusters: /workspaces/mavlab/inputs/{name}/thrusters.yml
+${agentsYaml}
+
+
+
+
 
 
 
 `;
-        
-        // Return the custom YAML string directly
+
         return yamlContent;
     }
     

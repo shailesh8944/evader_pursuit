@@ -29,16 +29,16 @@
 
 .property-group {
     margin-bottom: 15px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-color);
     border-radius: 4px;
     padding: 10px;
-    background-color: #f8f9fa;
+    background-color: var(--card-bg);
 }
 
 .property-group-title {
     font-weight: bold;
     margin-bottom: 8px;
-    color: #343a40;
+    color: var(--text-color);
 }
 
 .property-row {
@@ -50,6 +50,7 @@
 .property-label {
     width: 30%;
     font-weight: 500;
+    color: var(--text-color);
 }
 
 .property-value {
@@ -59,6 +60,9 @@
 .property-value .form-control {
     height: 30px;
     padding: 2px 6px;
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    border-color: var(--input-border);
 }
 
 .property-value .input-group {
@@ -69,6 +73,6 @@
 .no-selection-message {
     padding: 20px;
     text-align: center;
-    color: #6c757d;
+    color: var(--text-muted-color);
     font-style: italic;
 } 

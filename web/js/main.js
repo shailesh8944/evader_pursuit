@@ -932,6 +932,401 @@ document.addEventListener('DOMContentLoaded', function() {
             const coeffCount = Object.keys(updatedHydrodynamics).length - 3; // Subtract dim_flag, cross_flow_drag, hydra_file
             showNotification(`Hydrodynamics updated with ${coeffCount} coefficients`, 'success');
         });
+        
+        // Add handler for Edit Initial Conditions button
+        document.getElementById('btnEditInitialConditions')?.addEventListener('click', function() {
+            try {
+                // Get current initial conditions from the vessel model
+                const initialConditions = window.currentVesselModel.config.initial_conditions || {
+                    start_location: [0, 0, 0],
+                    start_orientation: [0, 0, 0],
+                    start_velocity: [0, 0, 0, 0, 0, 0],
+                    use_quaternion: false
+                };
+                
+                // Populate the form fields with current values
+                const startLocation = initialConditions.start_location || [0, 0, 0];
+                document.getElementById('startLocationX').value = startLocation[0];
+                document.getElementById('startLocationY').value = startLocation[1];
+                document.getElementById('startLocationZ').value = startLocation[2];
+                
+                const startOrientation = initialConditions.start_orientation || [0, 0, 0];
+                document.getElementById('startOrientationRoll').value = startOrientation[0];
+                document.getElementById('startOrientationPitch').value = startOrientation[1];
+                document.getElementById('startOrientationYaw').value = startOrientation[2];
+                
+                const startVelocity = initialConditions.start_velocity || [0, 0, 0, 0, 0, 0];
+                document.getElementById('startVelocityU').value = startVelocity[0];
+                document.getElementById('startVelocityV').value = startVelocity[1];
+                document.getElementById('startVelocityW').value = startVelocity[2];
+                document.getElementById('startVelocityP').value = startVelocity[3];
+                document.getElementById('startVelocityQ').value = startVelocity[4];
+                document.getElementById('startVelocityR').value = startVelocity[5];
+                
+                document.getElementById('useQuaternion').checked = initialConditions.use_quaternion || false;
+                
+                console.log("Opening initial conditions modal with:", initialConditions);
+                
+                // Show the modal
+                const initialConditionsModal = new bootstrap.Modal(document.getElementById('initialConditionsModal'));
+                initialConditionsModal.show();
+            } catch (error) {
+                console.error("Error opening initial conditions modal:", error);
+                showNotification("Error loading initial conditions", "error");
+            }
+        });
+        
+        // Add handler for initial conditions file upload
+        document.getElementById('initialConditionsFileUpload')?.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        // Parse the YAML and populate form fields
+                        const initialConditions = jsyaml.load(e.target.result);
+                        
+                        if (initialConditions && initialConditions.start_location) {
+                            document.getElementById('startLocationX').value = initialConditions.start_location[0];
+                            document.getElementById('startLocationY').value = initialConditions.start_location[1];
+                            document.getElementById('startLocationZ').value = initialConditions.start_location[2];
+                        }
+                        
+                        if (initialConditions && initialConditions.start_orientation) {
+                            document.getElementById('startOrientationRoll').value = initialConditions.start_orientation[0];
+                            document.getElementById('startOrientationPitch').value = initialConditions.start_orientation[1];
+                            document.getElementById('startOrientationYaw').value = initialConditions.start_orientation[2];
+                        }
+                        
+                        if (initialConditions && initialConditions.start_velocity) {
+                            document.getElementById('startVelocityU').value = initialConditions.start_velocity[0];
+                            document.getElementById('startVelocityV').value = initialConditions.start_velocity[1];
+                            document.getElementById('startVelocityW').value = initialConditions.start_velocity[2];
+                            document.getElementById('startVelocityP').value = initialConditions.start_velocity[3];
+                            document.getElementById('startVelocityQ').value = initialConditions.start_velocity[4];
+                            document.getElementById('startVelocityR').value = initialConditions.start_velocity[5];
+                        }
+                        
+                        if (initialConditions && initialConditions.hasOwnProperty('use_quaternion')) {
+                            document.getElementById('useQuaternion').checked = initialConditions.use_quaternion;
+                        }
+                        
+                        showNotification("Initial conditions file loaded successfully", "success");
+                    } catch (error) {
+                        console.error("Error parsing initial conditions file:", error);
+                        showNotification("Error parsing file: " + error.message, "error");
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+        
+        // Add handler for Save Initial Conditions button
+        document.getElementById('btnSaveInitialConditions')?.addEventListener('click', function() {
+            try {
+                // Get values from the form fields
+                const startLocation = [
+                    parseFloat(document.getElementById('startLocationX').value),
+                    parseFloat(document.getElementById('startLocationY').value),
+                    parseFloat(document.getElementById('startLocationZ').value)
+                ];
+                
+                const startOrientation = [
+                    parseFloat(document.getElementById('startOrientationRoll').value),
+                    parseFloat(document.getElementById('startOrientationPitch').value),
+                    parseFloat(document.getElementById('startOrientationYaw').value)
+                ];
+                
+                const startVelocity = [
+                    parseFloat(document.getElementById('startVelocityU').value),
+                    parseFloat(document.getElementById('startVelocityV').value),
+                    parseFloat(document.getElementById('startVelocityW').value),
+                    parseFloat(document.getElementById('startVelocityP').value),
+                    parseFloat(document.getElementById('startVelocityQ').value),
+                    parseFloat(document.getElementById('startVelocityR').value)
+                ];
+                
+                const useQuaternion = document.getElementById('useQuaternion').checked;
+                
+                // Check for invalid values
+                const hasInvalidValues = [...startLocation, ...startOrientation, ...startVelocity].some(val => isNaN(val));
+                if (hasInvalidValues) {
+                    throw new Error("Some values are not valid numbers");
+                }
+                
+                // Update the vessel model with the new initial conditions
+                window.currentVesselModel.updateInitialConditions(
+                    startVelocity,
+                    startLocation,
+                    startOrientation,
+                    useQuaternion
+                );
+                
+                // Generate the initial_conditions.yml directly and update the preview
+                const yamlGenerator = new YAMLGenerator();
+                const initialConditionsYaml = yamlGenerator.toYAML(
+                    yamlGenerator.generateInitialConditionsYAML(window.currentVesselModel.config.initial_conditions)
+                );
+                document.getElementById('initial-conditions-yaml-content').textContent = initialConditionsYaml;
+                
+                // Also update all other YAML previews
+                generateYAMLPreviews();
+                
+                // Close the modal
+                const initialConditionsModal = bootstrap.Modal.getInstance(document.getElementById('initialConditionsModal'));
+                initialConditionsModal.hide();
+                
+                // Show success notification
+                showNotification("Initial conditions updated successfully", "success");
+            } catch (error) {
+                console.error("Error saving initial conditions:", error);
+                showNotification("Error: " + error.message, "error");
+            }
+        });
+        
+        // Add handler for Edit Inertia Parameters button
+        document.getElementById('btnEditInertia')?.addEventListener('click', function() {
+            try {
+                // Get current inertia parameters from the vessel model
+                const inertia = window.currentVesselModel.config.inertia || {
+                    mass: 1,
+                    buoyancy_mass: 1,
+                    inertia_matrix: null,
+                    added_mass_matrix: null
+                };
+                
+                // Populate form fields with current values
+                document.getElementById('vesselMass').value = inertia.mass || 1;
+                document.getElementById('vesselBuoyancyMass').value = inertia.buoyancy_mass || 1;
+                
+                // Handle inertia matrix
+                const useDefaultInertia = !inertia.inertia_matrix;
+                document.getElementById('useDefaultInertia').checked = useDefaultInertia;
+                document.getElementById('inertiaMatrixSection').style.display = useDefaultInertia ? 'none' : 'block';
+                
+                // Set inertia matrix values if available
+                if (!useDefaultInertia && inertia.inertia_matrix) {
+                    document.getElementById('inertia11').value = inertia.inertia_matrix[0][0] || 5;
+                    document.getElementById('inertia12').value = inertia.inertia_matrix[0][1] || 0;
+                    document.getElementById('inertia13').value = inertia.inertia_matrix[0][2] || 0;
+                    document.getElementById('inertia21').value = inertia.inertia_matrix[1][0] || 0;
+                    document.getElementById('inertia22').value = inertia.inertia_matrix[1][1] || 10;
+                    document.getElementById('inertia23').value = inertia.inertia_matrix[1][2] || 0;
+                    document.getElementById('inertia31').value = inertia.inertia_matrix[2][0] || 0;
+                    document.getElementById('inertia32').value = inertia.inertia_matrix[2][1] || 0;
+                    document.getElementById('inertia33').value = inertia.inertia_matrix[2][2] || 10;
+                }
+                
+                // Handle added mass matrix
+                const useDefaultAddedMass = !inertia.added_mass_matrix;
+                document.getElementById('useDefaultAddedMass').checked = useDefaultAddedMass;
+                document.getElementById('addedMassSection').style.display = useDefaultAddedMass ? 'none' : 'block';
+                
+                if (!useDefaultAddedMass && inertia.added_mass_matrix) {
+                    document.getElementById('addedMass11').value = inertia.added_mass_matrix[0][0] || 0;
+                    document.getElementById('addedMass12').value = inertia.added_mass_matrix[0][1] || 0;
+                    document.getElementById('addedMass13').value = inertia.added_mass_matrix[0][2] || 0;
+                    document.getElementById('addedMass21').value = inertia.added_mass_matrix[1][0] || 0;
+                    document.getElementById('addedMass22').value = inertia.added_mass_matrix[1][1] || 0;
+                    document.getElementById('addedMass23').value = inertia.added_mass_matrix[1][2] || 0;
+                    document.getElementById('addedMass31').value = inertia.added_mass_matrix[2][0] || 0;
+                    document.getElementById('addedMass32').value = inertia.added_mass_matrix[2][1] || 0;
+                    document.getElementById('addedMass33').value = inertia.added_mass_matrix[2][2] || 0;
+                }
+                
+                console.log("Opening inertia modal with:", inertia);
+                
+                // Show the modal
+                const inertiaModal = new bootstrap.Modal(document.getElementById('inertiaModal'));
+                inertiaModal.show();
+            } catch (error) {
+                console.error("Error opening inertia modal:", error);
+                showNotification("Error loading inertia parameters", "error");
+            }
+        });
+        
+        // Add handler to toggle inertia matrix section visibility
+        document.getElementById('useDefaultInertia')?.addEventListener('change', function() {
+            document.getElementById('inertiaMatrixSection').style.display = this.checked ? 'none' : 'block';
+        });
+        
+        // Add handler to toggle added mass section visibility
+        document.getElementById('useDefaultAddedMass')?.addEventListener('change', function() {
+            document.getElementById('addedMassSection').style.display = this.checked ? 'none' : 'block';
+        });
+        
+        // Add handler for inertia file upload
+        document.getElementById('inertiaFileUpload')?.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        // Parse the YAML and populate form fields
+                        const inertiaParams = jsyaml.load(e.target.result);
+                        
+                        if (inertiaParams) {
+                            if (inertiaParams.mass) {
+                                document.getElementById('vesselMass').value = inertiaParams.mass;
+                            }
+                            
+                            if (inertiaParams.buoyancy_mass) {
+                                document.getElementById('vesselBuoyancyMass').value = inertiaParams.buoyancy_mass;
+                            }
+                            
+                            // Handle inertia matrix
+                            const hasInertiaMatrix = inertiaParams.inertia_matrix && inertiaParams.inertia_matrix !== 'None';
+                            document.getElementById('useDefaultInertia').checked = !hasInertiaMatrix;
+                            document.getElementById('inertiaMatrixSection').style.display = hasInertiaMatrix ? 'block' : 'none';
+                            
+                            // Set inertia matrix values if available
+                            if (hasInertiaMatrix) {
+                                document.getElementById('inertia11').value = inertiaParams.inertia_matrix[0][0] || 5;
+                                document.getElementById('inertia12').value = inertiaParams.inertia_matrix[0][1] || 0;
+                                document.getElementById('inertia13').value = inertiaParams.inertia_matrix[0][2] || 0;
+                                document.getElementById('inertia21').value = inertiaParams.inertia_matrix[1][0] || 0;
+                                document.getElementById('inertia22').value = inertiaParams.inertia_matrix[1][1] || 10;
+                                document.getElementById('inertia23').value = inertiaParams.inertia_matrix[1][2] || 0;
+                                document.getElementById('inertia31').value = inertiaParams.inertia_matrix[2][0] || 0;
+                                document.getElementById('inertia32').value = inertiaParams.inertia_matrix[2][1] || 0;
+                                document.getElementById('inertia33').value = inertiaParams.inertia_matrix[2][2] || 10;
+                            }
+                            
+                            // Handle added mass matrix
+                            const hasAddedMassMatrix = inertiaParams.added_mass_matrix && inertiaParams.added_mass_matrix !== 'None';
+                            document.getElementById('useDefaultAddedMass').checked = !hasAddedMassMatrix;
+                            document.getElementById('addedMassSection').style.display = hasAddedMassMatrix ? 'block' : 'none';
+                            
+                            if (hasAddedMassMatrix) {
+                                document.getElementById('addedMass11').value = inertiaParams.added_mass_matrix[0][0] || 0;
+                                document.getElementById('addedMass12').value = inertiaParams.added_mass_matrix[0][1] || 0;
+                                document.getElementById('addedMass13').value = inertiaParams.added_mass_matrix[0][2] || 0;
+                                document.getElementById('addedMass21').value = inertiaParams.added_mass_matrix[1][0] || 0;
+                                document.getElementById('addedMass22').value = inertiaParams.added_mass_matrix[1][1] || 0;
+                                document.getElementById('addedMass23').value = inertiaParams.added_mass_matrix[1][2] || 0;
+                                document.getElementById('addedMass31').value = inertiaParams.added_mass_matrix[2][0] || 0;
+                                document.getElementById('addedMass32').value = inertiaParams.added_mass_matrix[2][1] || 0;
+                                document.getElementById('addedMass33').value = inertiaParams.added_mass_matrix[2][2] || 0;
+                            }
+                        }
+                        
+                        showNotification("Inertia parameters file loaded successfully", "success");
+                    } catch (error) {
+                        console.error("Error parsing inertia file:", error);
+                        showNotification("Error parsing file: " + error.message, "error");
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+        
+        // Add handler for Save Inertia Parameters button
+        document.getElementById('btnSaveInertia')?.addEventListener('click', function() {
+            try {
+                // Get values from the form fields
+                const mass = parseFloat(document.getElementById('vesselMass').value);
+                const buoyancyMass = parseFloat(document.getElementById('vesselBuoyancyMass').value);
+                
+                // Check for invalid values
+                if (isNaN(mass) || isNaN(buoyancyMass) || mass <= 0 || buoyancyMass <= 0) {
+                    throw new Error("Mass and buoyancy mass must be positive numbers");
+                }
+                
+                // Handle inertia matrix
+                const useDefaultInertia = document.getElementById('useDefaultInertia').checked;
+                let inertiaMatrix = null;
+                
+                if (!useDefaultInertia) {
+                    // Build inertia matrix from form inputs
+                    inertiaMatrix = [
+                        [
+                            parseFloat(document.getElementById('inertia11').value),
+                            parseFloat(document.getElementById('inertia12').value),
+                            parseFloat(document.getElementById('inertia13').value)
+                        ],
+                        [
+                            parseFloat(document.getElementById('inertia21').value),
+                            parseFloat(document.getElementById('inertia22').value),
+                            parseFloat(document.getElementById('inertia23').value)
+                        ],
+                        [
+                            parseFloat(document.getElementById('inertia31').value),
+                            parseFloat(document.getElementById('inertia32').value),
+                            parseFloat(document.getElementById('inertia33').value)
+                        ]
+                    ];
+                    
+                    // Check for invalid inertia matrix values
+                    const hasInvalidInertia = inertiaMatrix.flat().some(val => isNaN(val));
+                    if (hasInvalidInertia) {
+                        throw new Error("Inertia matrix contains invalid values");
+                    }
+                }
+                
+                // Handle added mass matrix
+                const useDefaultAddedMass = document.getElementById('useDefaultAddedMass').checked;
+                let addedMassMatrix = null;
+                
+                if (!useDefaultAddedMass) {
+                    // Build added mass matrix from form inputs
+                    addedMassMatrix = [
+                        [
+                            parseFloat(document.getElementById('addedMass11').value),
+                            parseFloat(document.getElementById('addedMass12').value),
+                            parseFloat(document.getElementById('addedMass13').value)
+                        ],
+                        [
+                            parseFloat(document.getElementById('addedMass21').value),
+                            parseFloat(document.getElementById('addedMass22').value),
+                            parseFloat(document.getElementById('addedMass23').value)
+                        ],
+                        [
+                            parseFloat(document.getElementById('addedMass31').value),
+                            parseFloat(document.getElementById('addedMass32').value),
+                            parseFloat(document.getElementById('addedMass33').value)
+                        ]
+                    ];
+                    
+                    // Check for invalid added mass matrix values
+                    const hasInvalidAddedMass = addedMassMatrix.flat().some(val => isNaN(val));
+                    if (hasInvalidAddedMass) {
+                        throw new Error("Added mass matrix contains invalid values");
+                    }
+                }
+                
+                // Update the vessel model with the new inertia parameters
+                window.currentVesselModel.updatePhysicalProperties(
+                    mass,
+                    buoyancyMass,
+                    window.currentVesselModel.config.inertia.CG || [0, 0, 0],
+                    window.currentVesselModel.config.inertia.CB || [0, 0, 0]
+                );
+                
+                // Also directly update the inertia matrices
+                window.currentVesselModel.config.inertia.inertia_matrix = inertiaMatrix;
+                window.currentVesselModel.config.inertia.added_mass_matrix = addedMassMatrix;
+                
+                // Generate the inertia.yml directly and update the preview
+                const yamlGenerator = new YAMLGenerator();
+                const inertiaYaml = yamlGenerator.toYAML(
+                    yamlGenerator.generateInertiaYAML(window.currentVesselModel.config.inertia)
+                );
+                document.getElementById('inertia-yaml-content').textContent = inertiaYaml;
+                
+                // Also update all other YAML previews
+                generateYAMLPreviews();
+                
+                // Close the modal
+                const inertiaModal = bootstrap.Modal.getInstance(document.getElementById('inertiaModal'));
+                inertiaModal.hide();
+                
+                // Show success notification
+                showNotification("Inertia parameters updated successfully", "success");
+            } catch (error) {
+                console.error("Error saving inertia parameters:", error);
+                showNotification("Error: " + error.message, "error");
+            }
+        });
     }
     
     // Initialize file handlers
@@ -1272,4 +1667,252 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Vessel model not initialized');
         }
     }
+
+    // Add handler for Advanced Simulation Parameters button
+    document.getElementById('btnAdvancedSimParams')?.addEventListener('click', function() {
+        try {
+            const yamlGenerator = new YAMLGenerator();
+            
+            // Get current simulation parameters from the vessel model
+            // Either use from config or get them from the UI if not yet saved
+            let simParams = window.currentVesselModel.config.simulation || {};
+            if (Object.keys(simParams).length === 0) {
+                simParams = {
+                    sim_time: parseFloat(document.getElementById('simTime')?.value || 100),
+                    time_step: parseFloat(document.getElementById('timeStep')?.value || 0.01),
+                    density: parseFloat(document.getElementById('density')?.value || 1025),
+                    gravity: parseFloat(document.getElementById('gravity')?.value || 9.80665),
+                    world_size: [
+                        parseFloat(document.getElementById('worldSizeX')?.value || 1000),
+                        parseFloat(document.getElementById('worldSizeY')?.value || 1000),
+                        parseFloat(document.getElementById('worldSizeZ')?.value || 100)
+                    ],
+                    gps_datum: [
+                        parseFloat(document.getElementById('gpsDatumLat')?.value || 12.99300),
+                        parseFloat(document.getElementById('gpsDatumLon')?.value || 80.23913),
+                        parseFloat(document.getElementById('gpsDatumAlt')?.value || -87.0)
+                    ],
+                    geofence: yamlGenerator.defaultSimParams.geofence || [],
+                    nagents: 1,
+                    agents: [{
+                        name: window.currentVesselModel.config.name || 'vessel',
+                        type: window.currentVesselModel.config.type || 'auv'
+                    }]
+                };
+            }
+            
+            // Generate YAML string from current simulation parameters
+            const yamlString = jsyaml.dump(simParams, { lineWidth: -1 });
+            document.getElementById('simParamsYaml').value = yamlString;
+            
+            console.log("Opening simulation params modal with:", simParams);
+            
+            // Show the modal
+            const simParamsModal = new bootstrap.Modal(document.getElementById('simParamsModal'));
+            simParamsModal.show();
+        } catch (error) {
+            console.error("Error opening simulation parameters modal:", error);
+            showNotification("Error loading simulation parameters", "error");
+        }
+    });
+    
+    // Add handler for simulation parameters file upload
+    document.getElementById('simParamsFileUpload')?.addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('simParamsYaml').value = e.target.result;
+            };
+            reader.readAsText(file);
+        }
+    });
+    
+    // Add handler for Save Simulation Parameters button
+    document.getElementById('btnSaveSimParams')?.addEventListener('click', function() {
+        try {
+            // Get the YAML text from the textarea
+            const yamlText = document.getElementById('simParamsYaml').value;
+            
+            // Parse the YAML into an object
+            const simParams = jsyaml.load(yamlText);
+            console.log("Parsed simulation parameters:", simParams);
+            
+            if (!simParams || typeof simParams !== 'object') {
+                throw new Error("Invalid YAML format");
+            }
+            
+            // Add the fullReplace flag to replace all parameters
+            simParams.fullReplace = true;
+            
+            // Update the vessel model with the new parameters
+            window.currentVesselModel.updateSimulationParams(simParams);
+            
+            // Update the UI inputs to reflect the new values
+            if (simParams.sim_time) document.getElementById('simTime').value = simParams.sim_time;
+            if (simParams.time_step) document.getElementById('timeStep').value = simParams.time_step;
+            if (simParams.density) document.getElementById('density').value = simParams.density;
+            if (simParams.gravity) document.getElementById('gravity').value = simParams.gravity;
+            
+            if (simParams.world_size && Array.isArray(simParams.world_size)) {
+                document.getElementById('worldSizeX').value = simParams.world_size[0] || 1000;
+                document.getElementById('worldSizeY').value = simParams.world_size[1] || 1000;
+                document.getElementById('worldSizeZ').value = simParams.world_size[2] === 'Inf' ? 100 : simParams.world_size[2] || 100;
+            }
+            
+            if (simParams.gps_datum && Array.isArray(simParams.gps_datum)) {
+                document.getElementById('gpsDatumLat').value = simParams.gps_datum[0] || 12.99300;
+                document.getElementById('gpsDatumLon').value = simParams.gps_datum[1] || 80.23913;
+                document.getElementById('gpsDatumAlt').value = simParams.gps_datum[2] || -87.0;
+            }
+            
+            // Generate the simulation_input.yml directly and update the preview
+            const yamlGenerator = new YAMLGenerator();
+            const simInputYaml = yamlGenerator.generateSimulationInputYAML(window.currentVesselModel.config);
+            document.getElementById('simulation-yaml-content').textContent = simInputYaml;
+            
+            // Also update all other YAML previews
+            generateYAMLPreviews();
+            
+            // Close the modal
+            const simParamsModal = bootstrap.Modal.getInstance(document.getElementById('simParamsModal'));
+            simParamsModal.hide();
+            
+            // Show success notification
+            showNotification("Simulation parameters updated successfully", "success");
+        } catch (error) {
+            console.error("Error saving simulation parameters:", error);
+            showNotification("Error: " + error.message, "error");
+        }
+    });
+
+    // Add handler for theme toggle
+    document.getElementById('btn-toggle-theme')?.addEventListener('click', function() {
+        // Check if dark mode is currently enabled
+        const isDarkMode = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+        
+        // Toggle the theme
+        document.documentElement.setAttribute('data-bs-theme', isDarkMode ? 'light' : 'dark');
+        
+        // Save preference in localStorage
+        localStorage.setItem('theme', isDarkMode ? 'light' : 'dark');
+        
+        // Show notification
+        showNotification(`Switched to ${isDarkMode ? 'light' : 'dark'} mode`, 'info');
+    });
+    
+    // Initialize theme based on saved preference or system preference
+    function initializeTheme() {
+        // Check if theme is saved in localStorage
+        const savedTheme = localStorage.getItem('theme');
+        
+        if (savedTheme) {
+            // Use saved preference
+            document.documentElement.setAttribute('data-bs-theme', savedTheme);
+        } else {
+            // Default to dark mode instead of system preference
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+            
+            // Listen for system preference changes
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                if (!localStorage.getItem('theme')) {
+                    // Only apply system preference if user hasn't manually set a preference
+                    const newMode = e.matches ? 'dark' : 'light';
+                    document.documentElement.setAttribute('data-bs-theme', newMode);
+                    showNotification(`Matched system theme: ${newMode} mode`, 'info');
+                }
+            });
+        }
+        
+        // Apply theme-specific adjustments for components that need special handling
+        applyThemeSpecificAdjustments();
+    }
+    
+    // Apply additional theme-specific adjustments to components that need special handling
+    function applyThemeSpecificAdjustments() {
+        const isDarkMode = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+        
+        // Adjust the Three.js scene background
+        if (window.threeScene && window.threeScene.scene) {
+            // Keep the 3D scene background dark in both themes, but slightly lighter in light mode
+            window.threeScene.scene.background = new THREE.Color(isDarkMode ? '#111111' : '#1e1e1e');
+        }
+        
+        // Fix code preview areas for YAML
+        document.querySelectorAll('.yaml-preview, .code-example').forEach(el => {
+            el.style.border = `1px solid var(--border-color)`;
+            el.style.backgroundColor = `var(--code-bg)`;
+            el.style.color = `var(--text-color)`;
+        });
+        
+        // Apply simple syntax highlighting to code examples
+        document.querySelectorAll('.code-example').forEach(el => {
+            // Skip if already processed
+            if (el.dataset.highlighted === 'true') return;
+            
+            let content = el.innerHTML;
+            
+            // Highlight comments
+            content = content.replace(/(#.+)$/gm, '<span class="comment">$1</span>');
+            
+            // Highlight keys and values in YAML
+            content = content.replace(/^(\s*)([A-Za-z0-9_-]+)(:)/gm, '$1<span class="key">$2</span>$3');
+            
+            // Highlight numbers
+            content = content.replace(/: (-?\d+(\.\d+)?)/g, ': <span class="number">$1</span>');
+            
+            // Highlight arrays/lists
+            content = content.replace(/(\[.+?\])/g, '<span class="string">$1</span>');
+            
+            el.innerHTML = content;
+            el.dataset.highlighted = 'true';
+        });
+        
+        // Fix inline code elements in alerts
+        document.querySelectorAll('.alert code').forEach(el => {
+            el.style.backgroundColor = isDarkMode ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.5)';
+            el.style.color = `var(--text-color)`;
+            el.style.borderColor = isDarkMode ? 'rgba(0, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.1)';
+        });
+        
+        // Ensure alert text is visible in dark mode
+        if (isDarkMode) {
+            document.querySelectorAll('.alert').forEach(el => {
+                el.style.setProperty('--alert-text-opacity', '1');
+            });
+        }
+        
+        // Fix placeholder text color
+        document.querySelectorAll('input, textarea').forEach(el => {
+            el.style.setProperty('--placeholder-opacity', isDarkMode ? '0.7' : '0.5');
+        });
+        
+        // Apply theme to any SVG icons
+        document.querySelectorAll('svg').forEach(svg => {
+            if (!svg.hasAttribute('data-no-theme')) {
+                svg.style.fill = `var(--text-color)`;
+            }
+        });
+    }
+    
+    // Call the initializeTheme function when the page loads
+    document.addEventListener('DOMContentLoaded', initializeTheme);
+    
+    // Also listen for theme changes to apply specific adjustments
+    document.addEventListener('themeChange', applyThemeSpecificAdjustments);
+    
+    // Observe theme attribute changes and dispatch custom event
+    const observer = new MutationObserver(mutations => {
+        mutations.forEach(mutation => {
+            if (mutation.attributeName === 'data-bs-theme') {
+                document.dispatchEvent(new CustomEvent('themeChange', {
+                    detail: { theme: document.documentElement.getAttribute('data-bs-theme') }
+                }));
+                applyThemeSpecificAdjustments();
+            }
+        });
+    });
+    
+    // Start observing data-bs-theme attribute changes
+    observer.observe(document.documentElement, { attributes: true });
 }); 
