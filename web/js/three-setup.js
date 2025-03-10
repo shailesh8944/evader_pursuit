@@ -10,6 +10,9 @@ class ThreeScene {
         this.needsRender = true;
         this.modelMeshes = new Map();
         
+        // Track rendering during drag operations
+        this._dragRenderInterval = null;
+        
         // Initialize component maps
         this.vessel = null;
         this.controlSurfaces = new Map();
@@ -112,10 +115,32 @@ class ThreeScene {
         // Set space to 'local' to rotate around object's center
         this.transformControls.setSpace('local');
         
+        // Ensure rotation is around the center pivot point
+        this.transformControls.setMode('translate'); // Start with translate mode
+        
         // Event listeners for transform controls
         this.transformControls.addEventListener('dragging-changed', (event) => {
             // Disable orbit controls while transforming
             this.orbitControls.enabled = !event.value;
+            
+            // Force continuous rendering during dragging
+            if (event.value) {
+                // When dragging starts, set up an interval to force rendering
+                this._dragRenderInterval = setInterval(() => {
+                    this.forceRender();
+                }, 16); // Approximately 60fps
+            } else {
+                // When dragging stops, clear the interval
+                if (this._dragRenderInterval) {
+                    clearInterval(this._dragRenderInterval);
+                    this._dragRenderInterval = null;
+                }
+            }
+        });
+        
+        // Add a change event listener for continuous updates during transformation
+        this.transformControls.addEventListener('change', () => {
+            this.forceRender();
         });
         
         this.transformControls.addEventListener('mouseDown', () => {
@@ -133,6 +158,8 @@ class ThreeScene {
             // Object is being transformed
             if (this.transformControls.object) {
                 this.onObjectTransformed(this.transformControls.object);
+                // Force render on each object change for smooth updates
+                this.forceRender();
             }
         });
         
@@ -144,9 +171,6 @@ class ThreeScene {
                 this.onObjectTransformed(this.transformControls.object);
             }
         });
-        
-        // Set initial mode
-        this.transformControls.setMode('translate');
     }
 
     addGrid() {
@@ -811,14 +835,36 @@ class ThreeScene {
 
     setTransformMode(mode) {
         this.transformMode = mode;
-        if (this.selectedObject) {
+        if (this.transformControls) {
             this.transformControls.setMode(mode);
+            
+            // When switching to rotate mode, ensure we're using the local space
+            // and the pivot point is at the component's center
+            if (mode === 'rotate' && this.transformControls.object) {
+                const object = this.transformControls.object;
+                
+                // Always use local space for rotation
+                this.transformControls.setSpace('local');
+                
+                // If this is a component axes, use the stored pivot point if available
+                if (object.userData.isComponentAxes && object.userData.pivotPoint) {
+                    console.log('Using pivot point for rotation:', object.userData.pivotPoint);
+                    // Note: Three.js TransformControls will use the object's position as pivot
+                    // The object's origin point is already at the component's center due to 
+                    // our setup in addComponentAxes
+                }
+            }
         }
         
         // Update button states
-        document.getElementById('translateMode').classList.toggle('active', mode === 'translate');
-        document.getElementById('rotateMode').classList.toggle('active', mode === 'rotate');
-        document.getElementById('scaleMode').classList.toggle('active', mode === 'scale');
+        document.getElementById('translateMode')?.classList.toggle('active', mode === 'translate');
+        document.getElementById('rotateMode')?.classList.toggle('active', mode === 'rotate');
+        document.getElementById('scaleMode')?.classList.toggle('active', mode === 'scale');
+        
+        // Update button states using viewport buttons IDs too
+        document.getElementById('btn-translate')?.classList.toggle('active', mode === 'translate');
+        document.getElementById('btn-rotate')?.classList.toggle('active', mode === 'rotate');
+        document.getElementById('btn-scale')?.classList.toggle('active', mode === 'scale');
     }
 
     updateTransformInfo() {
@@ -923,11 +969,48 @@ class ThreeScene {
         // If axes were transformed, update the parent component's data
         if (object.userData.isComponentAxes && object.parent) {
             const component = object.parent;
-            const componentId = object.userData.componentId;
-            const componentType = object.userData.componentType;
             
+            // Try to get componentId and componentType from various sources
+            let componentId = object.userData.componentId;
+            let componentType = object.userData.componentType;
+            
+            // If not found in object, try the parent component
             if (!componentId || !componentType) {
-                console.warn('Component axes missing ID or type');
+                if (component.userData.componentId && component.userData.componentType) {
+                    componentId = component.userData.componentId;
+                    componentType = component.userData.componentType;
+                    
+                    // Update the axes with parent's data
+                    object.userData.componentId = componentId;
+                    object.userData.componentType = componentType;
+                    console.log(`Updated axes with component data from parent: ID=${componentId}, Type=${componentType}`);
+                }
+            }
+            
+            // If still not found, try the model mapping
+            if ((!componentId || !componentType) && window.currentVesselModel) {
+                // Try parent component's mapping
+                const mappedData = window.currentVesselModel.getModelComponentData(component.uuid);
+                if (mappedData && mappedData.id && mappedData.type) {
+                    componentId = mappedData.id;
+                    componentType = mappedData.type;
+                    
+                    // Update both component and axes
+                    component.userData.componentId = componentId;
+                    component.userData.componentType = componentType;
+                    object.userData.componentId = componentId;
+                    object.userData.componentType = componentType;
+                    console.log(`Updated from model mapping: ID=${componentId}, Type=${componentType}`);
+                }
+            }
+            
+            // If still no component ID/type, log warning but continue with visual transformation
+            if (!componentId || !componentType) {
+                console.warn('Component axes missing ID or type - cannot update vessel model');
+                console.warn('Will continue with visual transform only for:', object.parent.name);
+                
+                // Just update the axes visually - don't try to update the vessel model
+                this.forceRender();
                 return;
             }
             
@@ -936,13 +1019,14 @@ class ThreeScene {
             object.getWorldPosition(worldPosition);
             const position = [worldPosition.x, worldPosition.y, worldPosition.z];
             
-            // Get orientation in proper format
-            let orientation;
+            // Get the world quaternion for rotation
+            const worldQuaternion = new THREE.Quaternion();
+            object.getWorldQuaternion(worldQuaternion);
             
+            // Convert to the appropriate orientation format based on component type
+            let orientation;
             if (componentType === 'sensor') {
-                // For sensors, use quaternion
-                const worldQuaternion = new THREE.Quaternion();
-                object.getWorldQuaternion(worldQuaternion);
+                // For sensors, use quaternion representation
                 orientation = [
                     worldQuaternion.w,
                     worldQuaternion.x,
@@ -950,41 +1034,109 @@ class ThreeScene {
                     worldQuaternion.z
                 ];
             } else {
-                // For other components, use Euler angles
-                const worldEuler = new THREE.Euler();
-                worldEuler.setFromQuaternion(object.getWorldQuaternion(new THREE.Quaternion()));
+                // For control surfaces and thrusters, use Euler angles (in radians)
+                const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
                 orientation = [worldEuler.x, worldEuler.y, worldEuler.z];
             }
             
+            console.log(`${componentType} ${componentId} axes transformed`);
+            console.log('New position:', position);
+            console.log('New orientation (rad):', orientation);
+            console.log('New orientation (deg):', 
+                orientation.map(val => THREE.MathUtils.radToDeg(val).toFixed(2)));
+            
             // Update the component in the vessel model
             if (window.currentVesselModel) {
+                // Create property names based on component type
+                let locationKey, orientationKey;
                 switch (componentType) {
                     case 'controlSurface':
-                        window.currentVesselModel.updateControlSurface(
-                            componentId, 
-                            { position, orientation }
-                        );
+                        locationKey = 'control_surface_location';
+                        orientationKey = 'control_surface_orientation';
                         break;
                     case 'thruster':
-                        window.currentVesselModel.updateThruster(
-                            componentId, 
-                            { position, orientation }
-                        );
+                        locationKey = 'thruster_location';
+                        orientationKey = 'thruster_orientation';
                         break;
                     case 'sensor':
-                        window.currentVesselModel.updateSensor(
-                            componentId, 
-                            { position, orientation }
-                        );
+                        locationKey = 'sensor_location';
+                        orientationKey = 'sensor_orientation';
                         break;
+                    default:
+                        console.error('Unknown component type:', componentType);
+                        return;
+                }
+                
+                // Create update data object
+                const updateData = {};
+                updateData[locationKey] = position;
+                updateData[orientationKey] = orientation;
+                
+                console.log(`Updating ${componentType} ${componentId} with:`, updateData);
+                
+                // Call the appropriate update method
+                let success = false;
+                try {
+                    switch (componentType) {
+                        case 'controlSurface':
+                            success = window.currentVesselModel.updateControlSurface(componentId, updateData);
+                            break;
+                        case 'thruster':
+                            success = window.currentVesselModel.updateThruster(componentId, updateData);
+                            break;
+                        case 'sensor':
+                            success = window.currentVesselModel.updateSensor(componentId, updateData);
+                            break;
+                    }
+                    
+                    if (success) {
+                        console.log(`Successfully updated ${componentType} ${componentId} in vessel model`);
+                        
+                        // Verify the update by retrieving the component
+                        let updatedComponent;
+                        switch (componentType) {
+                            case 'controlSurface':
+                                updatedComponent = window.currentVesselModel.getControlSurface(componentId);
+                                break;
+                            case 'thruster':
+                                updatedComponent = window.currentVesselModel.getThruster(componentId);
+                                break;
+                            case 'sensor':
+                                updatedComponent = window.currentVesselModel.getSensor(componentId);
+                                break;
+                        }
+                        
+                        if (updatedComponent) {
+                            console.log(`${componentType} ${componentId} after update:`, updatedComponent);
+                            // Check if the values match what we expected
+                            const updatedPos = updatedComponent[locationKey];
+                            const updatedOri = updatedComponent[orientationKey];
+                            
+                            if (updatedPos && updatedOri) {
+                                console.log('Stored position:', updatedPos);
+                                console.log('Stored orientation:', updatedOri);
+                            } else {
+                                console.warn(`Could not verify ${locationKey} or ${orientationKey} in updated component`);
+                            }
+                        } else {
+                            console.error(`Could not retrieve updated ${componentType} ${componentId}`);
+                        }
+                        
+                        // Save to history to make sure changes are preserved
+                        window.currentVesselModel.saveToHistory();
+                    } else {
+                        console.error(`Failed to update ${componentType} ${componentId}`);
+                    }
+                } catch (error) {
+                    console.error(`Error updating ${componentType} ${componentId}:`, error);
                 }
             }
             
-            // Update the parent component's position and orientation to match axes
-            // This keeps them visually in sync
-            this.updateComponentToMatchAxes(component, object);
+            // IMPORTANT: DON'T update the component's visual appearance
+            // (Removed: this.updateComponentToMatchAxes(component, object);)
+            // This allows transforming just the axes without affecting the component
             
-            // Update properties panel
+            // Update the properties panel
             this.showComponentInfo(component);
         } else {
             // Normal object transformation
@@ -993,35 +1145,8 @@ class ThreeScene {
             }
         }
         
-        this.render();
-    }
-    
-    // Update component position and orientation to match its axes
-    updateComponentToMatchAxes(component, axes) {
-        if (!component || !axes) return;
-        
-        // Get the axes world matrix
-        const axesWorldMatrix = new THREE.Matrix4();
-        axes.updateMatrixWorld();
-        axesWorldMatrix.copy(axes.matrixWorld);
-        
-        // Get component parent's world matrix
-        const parentWorldMatrix = new THREE.Matrix4();
-        if (component.parent) {
-            component.parent.updateMatrixWorld();
-            parentWorldMatrix.copy(component.parent.matrixWorld);
-        }
-        
-        // Calculate the new local matrix for the component
-        const parentInverseMatrix = new THREE.Matrix4().copy(parentWorldMatrix).invert();
-        const newLocalMatrix = new THREE.Matrix4().multiplyMatrices(parentInverseMatrix, axesWorldMatrix);
-        
-        // Apply the new matrix to the component
-        component.matrix.copy(newLocalMatrix);
-        component.matrix.decompose(component.position, component.quaternion, component.scale);
-        
-        // Mark that the component has been updated
-        component.matrixWorldNeedsUpdate = true;
+        // Force immediate render for smoother transforms
+        this.forceRender();
     }
 
     onWindowResize() {
@@ -1135,12 +1260,42 @@ class ThreeScene {
             // If selecting axes, attach controls to the axes
             // If selecting a component, check if it has axes and attach to those
             if (isAxes) {
+                // Make sure axes have correct componentId and componentType
+                if (parentComponent && (!targetObject.userData.componentId || !targetObject.userData.componentType)) {
+                    targetObject.userData.componentId = parentComponent.userData.componentId;
+                    targetObject.userData.componentType = parentComponent.userData.componentType;
+                    console.log('Updated axes with component data:', targetObject.userData);
+                }
+                
+                // Set the transform controls pivot point to the center of the component
+                if (targetObject.userData.pivotPoint) {
+                    this.transformControls.setRotationSnap(null); // No rotation snap
+                    this.transformControls.setTranslationSnap(null); // No translation snap
+                    this.transformControls.setScaleSnap(null); // No scale snap
+                    console.log('Using pivot point for transformations:', targetObject.userData.pivotPoint);
+                }
+                
                 this.transformControls.attach(targetObject);
             } else {
                 // Check if component has axes
                 const componentAxes = targetObject.children.find(child => child.userData.isComponentAxes);
                 if (componentAxes) {
-                    // If component has axes, attach transform controls to the axes
+                    // If component has axes, make sure they have correct data
+                    if (!componentAxes.userData.componentId || !componentAxes.userData.componentType) {
+                        componentAxes.userData.componentId = targetObject.userData.componentId;
+                        componentAxes.userData.componentType = targetObject.userData.componentType;
+                        console.log('Updated axes with component data:', componentAxes.userData);
+                    }
+                    
+                    // Set the transform controls pivot point if available
+                    if (componentAxes.userData.pivotPoint) {
+                        this.transformControls.setRotationSnap(null); // No rotation snap
+                        this.transformControls.setTranslationSnap(null); // No translation snap
+                        this.transformControls.setScaleSnap(null); // No scale snap
+                        console.log('Using pivot point for transformations:', componentAxes.userData.pivotPoint);
+                    }
+                    
+                    // Attach transform controls to the axes
                     this.transformControls.attach(componentAxes);
                     this.selectedObject = componentAxes; // Update selected object to the axes
                 } else {
@@ -1197,9 +1352,57 @@ class ThreeScene {
 
     // Display component info in the UI
     showComponentInfo(object) {
+        if (!object) return;
+        
         // Get component data if it exists
         const vesselModel = window.currentVesselModel;
-        const componentData = vesselModel?.getModelComponentData(object.uuid);
+        if (!vesselModel) {
+            console.warn('No vessel model available');
+            return;
+        }
+        
+        // First get the component mapping
+        const mappedData = vesselModel.getModelComponentData(object.uuid);
+        
+        // Then try to get the actual component data
+        let componentData = null;
+        let componentId = null;
+        let componentType = null;
+        
+        // Get ID and type either from mapping or directly from object
+        if (mappedData) {
+            componentId = mappedData.id;
+            componentType = mappedData.type;
+        } else if (object.userData.componentId && object.userData.componentType) {
+            componentId = object.userData.componentId;
+            componentType = object.userData.componentType;
+        } else if (object.parent && object.parent.userData.componentId && object.parent.userData.componentType) {
+            componentId = object.parent.userData.componentId;
+            componentType = object.parent.userData.componentType;
+        }
+        
+        // Now get the actual component data from the model using ID and type
+        if (componentId && componentType) {
+            console.log(`Getting ${componentType} with ID ${componentId} for display`);
+            
+            switch (componentType) {
+                case 'controlSurface':
+                    componentData = vesselModel.getControlSurface(componentId);
+                    break;
+                case 'thruster':
+                    componentData = vesselModel.getThruster(componentId);
+                    break;
+                case 'sensor':
+                    componentData = vesselModel.getSensor(componentId);
+                    break;
+            }
+            
+            if (componentData) {
+                console.log(`Retrieved ${componentType} data:`, componentData);
+            } else {
+                console.warn(`Could not find ${componentType} with ID ${componentId} in model`);
+            }
+        }
         
         // Create HTML for component info
         let html = `
@@ -1208,15 +1411,18 @@ class ThreeScene {
                 <div class="property-row">
                     <div class="property-label">Name</div>
                     <div class="property-value">${object.name || 'Unnamed'}</div>
-                </div>
+                </div>`;
+                
+        // Add component type dropdown
+        html += `
                 <div class="property-row">
                     <div class="property-label">Type</div>
                     <div class="property-value">
                         <select id="componentTypeSelect" class="form-control">
-                            <option value="none" ${!componentData ? 'selected' : ''}>Regular Component</option>
-                            <option value="controlSurface" ${componentData?.type === 'controlSurface' ? 'selected' : ''}>Control Surface</option>
-                            <option value="thruster" ${componentData?.type === 'thruster' ? 'selected' : ''}>Thruster</option>
-                            <option value="sensor" ${componentData?.type === 'sensor' ? 'selected' : ''}>Sensor</option>
+                            <option value="none" ${!componentType ? 'selected' : ''}>Regular Component</option>
+                            <option value="controlSurface" ${componentType === 'controlSurface' ? 'selected' : ''}>Control Surface</option>
+                            <option value="thruster" ${componentType === 'thruster' ? 'selected' : ''}>Thruster</option>
+                            <option value="sensor" ${componentType === 'sensor' ? 'selected' : ''}>Sensor</option>
                         </select>
                     </div>
                 </div>
@@ -1247,7 +1453,128 @@ class ThreeScene {
             </div>
         `;
         
-        // Add button to apply/configure component
+        // Add component-specific data if we have it
+        if (componentData) {
+            html += `
+            <div class="property-group">
+                <div class="property-group-title">Component Data</div>
+                <div class="property-row">
+                    <div class="property-label">ID</div>
+                    <div class="property-value">${componentId}</div>
+                </div>`;
+            
+            // Display position and orientation based on component type
+            if (componentType === 'controlSurface') {
+                // Position
+                if (componentData.control_surface_location && Array.isArray(componentData.control_surface_location)) {
+                    html += `
+                    <div class="property-row">
+                        <div class="property-label">Model Position</div>
+                        <div class="property-value">
+                            [${componentData.control_surface_location.map(v => parseFloat(v).toFixed(3)).join(', ')}]
+                        </div>
+                    </div>`;
+                }
+                
+                // Orientation
+                if (componentData.control_surface_orientation && Array.isArray(componentData.control_surface_orientation)) {
+                    html += `
+                    <div class="property-row">
+                        <div class="property-label">Model Orientation (rad)</div>
+                        <div class="property-value">
+                            [${componentData.control_surface_orientation.map(v => parseFloat(v).toFixed(3)).join(', ')}]
+                        </div>
+                    </div>
+                    <div class="property-row">
+                        <div class="property-label">Model Orientation (deg)</div>
+                        <div class="property-value">
+                            [${componentData.control_surface_orientation.map(v => THREE.MathUtils.radToDeg(parseFloat(v)).toFixed(1)).join(', ')}]
+                        </div>
+                    </div>`;
+                }
+                
+                // Area
+                if (componentData.control_surface_area) {
+                    html += `
+                    <div class="property-row">
+                        <div class="property-label">Area</div>
+                        <div class="property-value">${parseFloat(componentData.control_surface_area).toFixed(3)} m²</div>
+                    </div>`;
+                }
+            } else if (componentType === 'thruster') {
+                // Position
+                if (componentData.thruster_location && Array.isArray(componentData.thruster_location)) {
+                    html += `
+                    <div class="property-row">
+                        <div class="property-label">Model Position</div>
+                        <div class="property-value">
+                            [${componentData.thruster_location.map(v => parseFloat(v).toFixed(3)).join(', ')}]
+                        </div>
+                    </div>`;
+                }
+                
+                // Orientation
+                if (componentData.thruster_orientation && Array.isArray(componentData.thruster_orientation)) {
+                    html += `
+                    <div class="property-row">
+                        <div class="property-label">Model Orientation (rad)</div>
+                        <div class="property-value">
+                            [${componentData.thruster_orientation.map(v => parseFloat(v).toFixed(3)).join(', ')}]
+                        </div>
+                    </div>
+                    <div class="property-row">
+                        <div class="property-label">Model Orientation (deg)</div>
+                        <div class="property-value">
+                            [${componentData.thruster_orientation.map(v => THREE.MathUtils.radToDeg(parseFloat(v)).toFixed(1)).join(', ')}]
+                        </div>
+                    </div>`;
+                }
+                
+                // Diameter
+                if (componentData.D_prop) {
+                    html += `
+                    <div class="property-row">
+                        <div class="property-label">Diameter</div>
+                        <div class="property-value">${parseFloat(componentData.D_prop).toFixed(3)} m</div>
+                    </div>`;
+                }
+            } else if (componentType === 'sensor') {
+                // Position
+                if (componentData.sensor_location && Array.isArray(componentData.sensor_location)) {
+                    html += `
+                    <div class="property-row">
+                        <div class="property-label">Model Position</div>
+                        <div class="property-value">
+                            [${componentData.sensor_location.map(v => parseFloat(v).toFixed(3)).join(', ')}]
+                        </div>
+                    </div>`;
+                }
+                
+                // Orientation
+                if (componentData.sensor_orientation && Array.isArray(componentData.sensor_orientation)) {
+                    html += `
+                    <div class="property-row">
+                        <div class="property-label">Model Orientation (quat)</div>
+                        <div class="property-value">
+                            [${componentData.sensor_orientation.map(v => parseFloat(v).toFixed(3)).join(', ')}]
+                        </div>
+                    </div>`;
+                }
+                
+                // Publish rate
+                if (componentData.publish_rate) {
+                    html += `
+                    <div class="property-row">
+                        <div class="property-label">Publish Rate</div>
+                        <div class="property-value">${parseFloat(componentData.publish_rate).toFixed(1)} Hz</div>
+                    </div>`;
+                }
+            }
+            
+            html += `</div>`;
+        }
+        
+        // Add configure button
         html += `
             <div class="mt-3">
                 <button id="btnConfigureComponent" class="btn btn-primary">Configure Component</button>
@@ -1283,6 +1610,19 @@ class ThreeScene {
                     const y = parseFloat(document.getElementById('posY').value);
                     const z = parseFloat(document.getElementById('posZ').value);
                     object.position.set(x, y, z);
+                    
+                    // If this is a component with axes, update the axes position too
+                    const axes = object.children.find(child => child.userData.isComponentAxes);
+                    if (axes) {
+                        // Get center offset of axes
+                        const offset = axes.position.clone();
+                        // Update component
+                        this.updateComponentPositionFromObject(object);
+                    } else {
+                        // Direct update
+                        this.updateComponentPositionFromObject(object);
+                    }
+                    
                     this.render();
                 });
             });
@@ -1293,6 +1633,12 @@ class ThreeScene {
                     const y = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotY').value));
                     const z = THREE.MathUtils.degToRad(parseFloat(document.getElementById('rotZ').value));
                     object.rotation.set(x, y, z);
+                    
+                    // Update component orientation in model if needed
+                    if (componentId && componentType) {
+                        this.updateComponentOrientationFromObject(object);
+                    }
+                    
                     this.render();
                 });
             });
@@ -2249,29 +2595,80 @@ class ThreeScene {
         const vesselModel = window.currentVesselModel;
         if (!vesselModel) return;
         
-        const componentData = vesselModel.getModelComponentData(object.uuid);
-        if (!componentData) return;
+        // First determine the component ID and type
+        let componentId, componentType;
+        
+        // Get from object's userData
+        if (object.userData.componentId && object.userData.componentType) {
+            componentId = object.userData.componentId;
+            componentType = object.userData.componentType;
+        } 
+        // Or try to get from mapping
+        else {
+            const componentData = vesselModel.getModelComponentData(object.uuid);
+            if (componentData) {
+                componentId = componentData.id;
+                componentType = componentData.type;
+            }
+        }
+        
+        if (!componentId || !componentType) {
+            console.warn('Cannot update position: Missing component ID or type');
+            return;
+        }
         
         // Get world position
         const worldPosition = new THREE.Vector3();
         object.getWorldPosition(worldPosition);
+        const position = [worldPosition.x, worldPosition.y, worldPosition.z];
         
-        // Update component position based on type
-        const componentType = componentData.type;
-        const componentId = componentData.id;
+        console.log(`Updating ${componentType} ${componentId} position:`, position);
         
-        if (componentType === 'controlSurface') {
-            vesselModel.updateControlSurface(componentId, {
-                control_surface_location: [worldPosition.x, worldPosition.y, worldPosition.z]
-            });
-        } else if (componentType === 'thruster') {
-            vesselModel.updateThruster(componentId, {
-                thruster_location: [worldPosition.x, worldPosition.y, worldPosition.z]
-            });
-        } else if (componentType === 'sensor') {
-            vesselModel.updateSensor(componentId, {
-                sensor_location: [worldPosition.x, worldPosition.y, worldPosition.z]
-            });
+        // Create update data with the appropriate property name
+        let updateData = {};
+        let locationKey;
+        
+        switch (componentType) {
+            case 'controlSurface':
+                locationKey = 'control_surface_location';
+                break;
+            case 'thruster':
+                locationKey = 'thruster_location';
+                break;
+            case 'sensor':
+                locationKey = 'sensor_location';
+                break;
+            default:
+                console.error('Unknown component type:', componentType);
+                return;
+        }
+        
+        updateData[locationKey] = position;
+        
+        // Update the component
+        let success = false;
+        try {
+            switch (componentType) {
+                case 'controlSurface':
+                    success = vesselModel.updateControlSurface(componentId, updateData);
+                    break;
+                case 'thruster':
+                    success = vesselModel.updateThruster(componentId, updateData);
+                    break;
+                case 'sensor':
+                    success = vesselModel.updateSensor(componentId, updateData);
+                    break;
+            }
+            
+            if (success) {
+                console.log(`Successfully updated ${componentType} ${componentId} position`);
+                // Save to history to ensure the change is recorded
+                vesselModel.saveToHistory();
+            } else {
+                console.error(`Failed to update ${componentType} ${componentId} position`);
+            }
+        } catch (error) {
+            console.error(`Error updating ${componentType} ${componentId} position:`, error);
         }
     }
 
@@ -2279,30 +2676,95 @@ class ThreeScene {
         const vesselModel = window.currentVesselModel;
         if (!vesselModel) return;
         
-        const componentData = vesselModel.getModelComponentData(object.uuid);
-        if (!componentData) return;
+        // First determine the component ID and type
+        let componentId, componentType;
+        
+        // Get from object's userData
+        if (object.userData.componentId && object.userData.componentType) {
+            componentId = object.userData.componentId;
+            componentType = object.userData.componentType;
+        } 
+        // Or try to get from mapping
+        else {
+            const componentData = vesselModel.getModelComponentData(object.uuid);
+            if (componentData) {
+                componentId = componentData.id;
+                componentType = componentData.type;
+            }
+        }
+        
+        if (!componentId || !componentType) {
+            console.warn('Cannot update orientation: Missing component ID or type');
+            return;
+        }
         
         // Get world orientation
         const worldQuaternion = new THREE.Quaternion();
         object.getWorldQuaternion(worldQuaternion);
-        const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
         
-        // Update component orientation based on type
-        const componentType = componentData.type;
-        const componentId = componentData.id;
+        // Convert to appropriate format based on component type
+        let orientation;
+        if (componentType === 'sensor') {
+            // For sensors, use quaternion
+            orientation = [
+                worldQuaternion.w,
+                worldQuaternion.x,
+                worldQuaternion.y,
+                worldQuaternion.z
+            ];
+        } else {
+            // For other components, use Euler angles
+            const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
+            orientation = [worldEuler.x, worldEuler.y, worldEuler.z];
+        }
         
-        if (componentType === 'controlSurface') {
-            vesselModel.updateControlSurface(componentId, {
-                control_surface_orientation: [worldEuler.x, worldEuler.y, worldEuler.z]
-            });
-        } else if (componentType === 'thruster') {
-            vesselModel.updateThruster(componentId, {
-                thruster_orientation: [worldEuler.x, worldEuler.y, worldEuler.z]
-            });
-        } else if (componentType === 'sensor') {
-            vesselModel.updateSensor(componentId, {
-                sensor_orientation: [worldEuler.x, worldEuler.y, worldEuler.z]
-            });
+        console.log(`Updating ${componentType} ${componentId} orientation:`, orientation);
+        
+        // Create update data with the appropriate property name
+        let updateData = {};
+        let orientationKey;
+        
+        switch (componentType) {
+            case 'controlSurface':
+                orientationKey = 'control_surface_orientation';
+                break;
+            case 'thruster':
+                orientationKey = 'thruster_orientation';
+                break;
+            case 'sensor':
+                orientationKey = 'sensor_orientation';
+                break;
+            default:
+                console.error('Unknown component type:', componentType);
+                return;
+        }
+        
+        updateData[orientationKey] = orientation;
+        
+        // Update the component
+        let success = false;
+        try {
+            switch (componentType) {
+                case 'controlSurface':
+                    success = vesselModel.updateControlSurface(componentId, updateData);
+                    break;
+                case 'thruster':
+                    success = vesselModel.updateThruster(componentId, updateData);
+                    break;
+                case 'sensor':
+                    success = vesselModel.updateSensor(componentId, updateData);
+                    break;
+            }
+            
+            if (success) {
+                console.log(`Successfully updated ${componentType} ${componentId} orientation`);
+                // Save to history to ensure the change is recorded
+                vesselModel.saveToHistory();
+            } else {
+                console.error(`Failed to update ${componentType} ${componentId} orientation`);
+            }
+        } catch (error) {
+            console.error(`Error updating ${componentType} ${componentId} orientation:`, error);
         }
     }
 
@@ -2447,11 +2909,81 @@ class ThreeScene {
     addComponentAxes(component, size = 0.15) {
         if (!component) {
             console.error('Cannot add axes to undefined component');
-            return;
+            return null;
+        }
+        
+        // First, attempt to get the component ID and type
+        let componentId = null;
+        let componentType = null;
+        
+        // Try to get directly from component's userData
+        if (component.userData.componentId && component.userData.componentType) {
+            componentId = component.userData.componentId;
+            componentType = component.userData.componentType;
+            console.log(`Using component userData for axes: ID=${componentId}, Type=${componentType}`);
+        } 
+        // Try to get from vessel model mapping
+        else if (window.currentVesselModel) {
+            const mappedData = window.currentVesselModel.getModelComponentData(component.uuid);
+            if (mappedData && mappedData.id && mappedData.type) {
+                componentId = mappedData.id;
+                componentType = mappedData.type;
+                
+                // Update the component userData too since it was missing
+                component.userData.componentId = componentId;
+                component.userData.componentType = componentType;
+                console.log(`Updated component from model mapping: ID=${componentId}, Type=${componentType}`);
+            }
+        }
+        
+        // If still not found, try to determine from name
+        if (!componentId || !componentType) {
+            console.warn('Component missing ID or type when creating axes:', component.name);
+            
+            const name = component.name || '';
+            // Parse from control surface name format
+            if (name.includes('Control Surface')) {
+                const idMatch = name.match(/Control Surface (\d+)/);
+                if (idMatch && idMatch[1]) {
+                    componentId = idMatch[1];
+                    componentType = 'controlSurface';
+                    console.log(`Recovered from name: ID=${componentId}, Type=${componentType}`);
+                    
+                    // Update component userData
+                    component.userData.componentId = componentId;
+                    component.userData.componentType = componentType;
+                }
+            } 
+            // Parse from thruster name format
+            else if (name.includes('Thruster')) {
+                const idMatch = name.match(/Thruster (\d+)/);
+                if (idMatch && idMatch[1]) {
+                    componentId = idMatch[1];
+                    componentType = 'thruster';
+                    console.log(`Recovered from name: ID=${componentId}, Type=${componentType}`);
+                    
+                    // Update component userData
+                    component.userData.componentId = componentId;
+                    component.userData.componentType = componentType;
+                }
+            } 
+            // Parse from sensor name format
+            else if (name.includes('Sensor')) {
+                const idMatch = name.match(/Sensor (\d+)/);
+                if (idMatch && idMatch[1]) {
+                    componentId = idMatch[1];
+                    componentType = 'sensor';
+                    console.log(`Recovered from name: ID=${componentId}, Type=${componentType}`);
+                    
+                    // Update component userData
+                    component.userData.componentId = componentId;
+                    component.userData.componentType = componentType;
+                }
+            }
         }
         
         // Remove existing axes if any
-        const existingAxes = component.children.find(child => child.name === 'componentAxes');
+        const existingAxes = component.children.find(child => child.userData.isComponentAxes);
         if (existingAxes) {
             component.remove(existingAxes);
         }
@@ -2460,10 +2992,17 @@ class ThreeScene {
         const axesGroup = new THREE.Group();
         axesGroup.name = 'componentAxes';
         
-        // Set property to indicate this is a component axes object
+        // Set properties to indicate this is a component axes object
         axesGroup.userData.isComponentAxes = true;
-        axesGroup.userData.componentId = component.userData.componentId;
-        axesGroup.userData.componentType = component.userData.componentType;
+        
+        // Set component ID and type if we have them
+        if (componentId && componentType) {
+            axesGroup.userData.componentId = componentId;
+            axesGroup.userData.componentType = componentType;
+            console.log(`Set axes userData: ID=${componentId}, Type=${componentType}`);
+        } else {
+            console.error(`Failed to determine component ID and type for: ${component.name}`);
+        }
         
         // Create axes
         const axisLength = size;
@@ -2547,9 +3086,13 @@ class ThreeScene {
         axesGroup.userData.selectable = true;
         axesGroup.userData.transformable = true;
         
+        // IMPORTANT: Store the component's center as the pivot point for rotations
+        axesGroup.userData.pivotPoint = center.clone();
+        
         // Add axes group to component
         component.add(axesGroup);
         
+        // Force a render to show the change
         this.render();
         
         return axesGroup;

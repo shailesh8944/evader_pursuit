@@ -466,17 +466,29 @@ class VesselModel {
     // Update control surface properties
     updateControlSurface(id, properties) {
         const surface = this.getControlSurface(id);
-        if (!surface) return false;
+        if (!surface) {
+            console.error(`Control surface with ID ${id} not found`);
+            return false;
+        }
         
         const validKeys = [
             'control_surface_type', 'control_surface_location', 'control_surface_orientation',
             'control_surface_area', 'control_surface_T'
         ];
         
+        console.log(`Updating control surface ${id} with:`, properties);
+        
         for (const [key, value] of Object.entries(properties)) {
             if (validKeys.includes(key)) {
                 if (key === 'control_surface_location' || key === 'control_surface_orientation') {
-                    surface[key] = value.map(val => parseFloat(val));
+                    if (!Array.isArray(value)) {
+                        console.error(`Invalid ${key} value:`, value);
+                        continue;
+                    }
+                    
+                    const parsedValues = value.map(val => parseFloat(val));
+                    console.log(`Setting ${key} to:`, parsedValues);
+                    surface[key] = parsedValues;
                 } else if (key === 'control_surface_area' || key === 'control_surface_T') {
                     surface[key] = parseFloat(value);
                 } else {
@@ -485,6 +497,7 @@ class VesselModel {
             }
         }
         
+        console.log(`Control surface ${id} after update:`, surface);
         this.saveToHistory();
         return true;
     }
@@ -492,17 +505,29 @@ class VesselModel {
     // Update thruster properties
     updateThruster(id, properties) {
         const thruster = this.getThruster(id);
-        if (!thruster) return false;
+        if (!thruster) {
+            console.error(`Thruster with ID ${id} not found`);
+            return false;
+        }
         
         const validKeys = [
             'thruster_name', 'thruster_type', 'thruster_location', 'thruster_orientation',
             'D_prop', 'T_prop', 'tp'
         ];
         
+        console.log(`Updating thruster ${id} with:`, properties);
+        
         for (const [key, value] of Object.entries(properties)) {
             if (validKeys.includes(key)) {
                 if (key === 'thruster_location' || key === 'thruster_orientation') {
-                    thruster[key] = value.map(val => parseFloat(val));
+                    if (!Array.isArray(value)) {
+                        console.error(`Invalid ${key} value:`, value);
+                        continue;
+                    }
+                    
+                    const parsedValues = value.map(val => parseFloat(val));
+                    console.log(`Setting ${key} to:`, parsedValues);
+                    thruster[key] = parsedValues;
                 } else if (key === 'D_prop' || key === 'T_prop' || key === 'tp') {
                     thruster[key] = parseFloat(value);
                 } else {
@@ -511,6 +536,7 @@ class VesselModel {
             }
         }
         
+        console.log(`Thruster ${id} after update:`, thruster);
         this.saveToHistory();
         return true;
     }
@@ -518,16 +544,28 @@ class VesselModel {
     // Update sensor properties
     updateSensor(id, properties) {
         const sensor = this.getSensor(id);
-        if (!sensor) return false;
+        if (!sensor) {
+            console.error(`Sensor with ID ${id} not found`);
+            return false;
+        }
         
         const validKeys = [
             'sensor_type', 'sensor_location', 'sensor_orientation', 'publish_rate'
         ];
         
+        console.log(`Updating sensor ${id} with:`, properties);
+        
         for (const [key, value] of Object.entries(properties)) {
             if (validKeys.includes(key)) {
                 if (key === 'sensor_location' || key === 'sensor_orientation') {
-                    sensor[key] = value.map(val => parseFloat(val));
+                    if (!Array.isArray(value)) {
+                        console.error(`Invalid ${key} value:`, value);
+                        continue;
+                    }
+                    
+                    const parsedValues = value.map(val => parseFloat(val));
+                    console.log(`Setting ${key} to:`, parsedValues);
+                    sensor[key] = parsedValues;
                 } else if (key === 'publish_rate') {
                     sensor[key] = parseFloat(value);
                 } else {
@@ -536,6 +574,7 @@ class VesselModel {
             }
         }
         
+        console.log(`Sensor ${id} after update:`, sensor);
         this.saveToHistory();
         return true;
     }

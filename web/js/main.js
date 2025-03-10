@@ -708,6 +708,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.currentVesselModel.mapModelComponent(objectUuid, componentData);
                 console.log(`Component ${componentData.name || object.name} configured as ${componentType}`);
                 
+                // CRITICAL FIX: Set component ID and type directly on the object's userData
+                // This ensures the object itself always has the correct identification
+                object.userData.componentId = componentData.id;
+                object.userData.componentType = componentType;
+                console.log(`Set component ID ${componentData.id} and type ${componentType} directly on object:`, object.name);
+                
+                // If there are existing axes, make sure they have the correct component ID and type
+                const axes = object.children.find(child => child.userData.isComponentAxes);
+                if (axes) {
+                    axes.userData.componentId = componentData.id;
+                    axes.userData.componentType = componentType;
+                    console.log(`Updated existing axes with component ID ${componentData.id} and type ${componentType}`);
+                } else {
+                    // Add axes if they don't exist yet
+                    const newAxes = threeScene.addComponentAxes(object);
+                    console.log(`Added new axes to component:`, newAxes);
+                }
+                
                 // Update the scene hierarchy
                 threeScene.updateSceneHierarchy();
                 
