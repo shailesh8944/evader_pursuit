@@ -44,27 +44,60 @@ class YAMLGenerator {
     }
 
     generateHydrodynamicsYAML(hydrodynamics, vesselName) {
+        console.log("Generating hydrodynamics YAML with data:", hydrodynamics);
+        
+        // Format the hydra file path
         const hydraFile = this.formatFilePath(vesselName, `HydRA/${vesselName.toUpperCase()}_hydra.json`);
         
-        return {
-            hydra_file: hydraFile,
-            dim_flag: hydrodynamics.dim_flag || false,
-            cross_flow_drag: hydrodynamics.cross_flow_drag || false,
-            
-            // Surge hydrodynamic derivatives
-            X_u_u: hydrodynamics.X_u_u || -0.01,
-            
-            // Sway hydrodynamic derivatives
-            Y_v_v: hydrodynamics.Y_v_v || -0.010659050686665396,
-            Y_r_r: hydrodynamics.Y_r_r || 0.0017799664706713543,
-            
-            // Yaw hydrodynamic derivatives
-            N_v_v: hydrodynamics.N_v_v || -0.0006242757399292063,
-            N_r_r: hydrodynamics.N_r_r || -0.001889456681929024,
-            
-            // Heave hydrodynamic derivatives
-            Z_w_w: hydrodynamics.Z_w_w || -0.01
+        // Group coefficients by type based on their prefix
+        const coefficientGroups = {
+            X: { title: "Surge hydrodynamic derivatives", coeffs: {} },
+            Y: { title: "Sway hydrodynamic derivatives", coeffs: {} },
+            Z: { title: "Heave hydrodynamic derivatives", coeffs: {} },
+            K: { title: "Roll hydrodynamic derivatives", coeffs: {} },
+            M: { title: "Pitch hydrodynamic derivatives", coeffs: {} },
+            N: { title: "Yaw hydrodynamic derivatives", coeffs: {} }
         };
+        
+        // Start with the standard header
+        let yamlContent = `hydra_file: ${hydraFile}
+dim_flag: ${hydrodynamics.dim_flag || false}
+cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
+`;
+
+        // Process all hydrodynamic coefficients and group them
+        Object.entries(hydrodynamics).forEach(([key, value]) => {
+            // Skip the non-coefficient properties
+            if (key === 'hydra_file' || key === 'dim_flag' || key === 'cross_flow_drag') {
+                return;
+            }
+            
+            // Group by first letter (the motion direction)
+            const prefix = key.charAt(0).toUpperCase();
+            if (coefficientGroups[prefix]) {
+                coefficientGroups[prefix].coeffs[key] = value;
+            } else {
+                // For any coefficients that don't match standard groups
+                console.log(`Unrecognized coefficient prefix in: ${key}`);
+            }
+        });
+        
+        // Add each group of coefficients to the YAML
+        Object.values(coefficientGroups).forEach(group => {
+            const coeffEntries = Object.entries(group.coeffs);
+            if (coeffEntries.length > 0) {
+                yamlContent += `\n# ${group.title}\n`;
+                coeffEntries.sort().forEach(([key, value]) => {
+                    yamlContent += `${key}: ${value}\n`;
+                });
+            }
+        });
+        
+        // Add the footer note
+        yamlContent += `\n## Consider underscore in the terms eg: X_u_u instead of Xuu\n\n\n\n`;
+
+        console.log("Generated hydrodynamics YAML:", yamlContent);
+        return yamlContent;
     }
 
     generateGeometryYAML(geometry, vesselName) {
@@ -237,33 +270,69 @@ class YAMLGenerator {
     }
 
     generateSimulationInputYAML(vesselConfig) {
-        const vesselName = vesselConfig.name || 'vessel';
+        const vesselName = vesselConfig.name || 'mavymini';
         
-        const simInput = {
-            ...this.defaultSimParams,
-            agents: [{
-                name: vesselName,
-                type: vesselConfig.type || 'auv',
-                geometry: this.formatFilePath(vesselName, 'geometry.yml'),
-                inertia: this.formatFilePath(vesselName, 'inertia.yml'),
-                hydrodynamics: this.formatFilePath(vesselName, 'hydrodynamics.yml'),
-                control_surfaces: this.formatFilePath(vesselName, 'control_surfaces.yml'),
-                initial_conditions: this.formatFilePath(vesselName, 'initial_conditions.yml'),
-                sensors: this.formatFilePath(vesselName, 'sensors.yml'),
-                guidance: this.formatFilePath(vesselName, 'guidance.yml'),
-                control: this.formatFilePath(vesselName, 'control.yml')
-            }]
-        };
+        // Customize the world_size array to use Inf for z dimension
+        const worldSize = [...this.defaultSimParams.world_size];
+        worldSize[2] = 'Inf'; // Use 'Inf' instead of a number for z dimension
+        
+        // Build the YAML content directly as a string to match the exact format
+        let yamlContent = `#Simulation Specific Inputs
+sim_time: ${vesselConfig.sim_time || 5}
+time_step: ${vesselConfig.time_step || 0.01}
+density: ${vesselConfig.density || 1000}
+gravity: ${vesselConfig.gravity || 9.80665}
+world_size: [${worldSize[0]}, ${worldSize[1]}, ${worldSize[2]}]
+gps_datum: [${this.defaultSimParams.gps_datum.join(', ')}]
 
-        if (vesselConfig.thrusters && vesselConfig.thrusters.thrusters && vesselConfig.thrusters.thrusters.length > 0) {
-            simInput.agents[0].thrusters = this.formatFilePath(vesselName, 'thrusters.yml');
-        }
+geofence:
+  - [12.993496, 80.239007]
+  - [12.993500, 80.238903]
+  - [12.993485, 80.238829]
+  - [12.993359, 80.238699]
+  - [12.993547, 80.238437]
+  - [12.993716, 80.238475]
+  - [12.994077, 80.239559]
+  - [12.993809, 80.239807]
+  - [12.993271, 80.240646]
+  - [12.993050, 80.240423]
+  - [12.993193, 80.239274]
+  - [12.993044, 80.239217]
+  - [12.993054, 80.239120]
+  - [12.993335, 80.239098]
+  - [12.993496, 80.239007] 
 
-        return simInput;
+nagents: 1
+
+agents:
+  -
+    name: ${vesselName}
+    type: ${vesselConfig.type || 'auv'}
+    geometry: /workspaces/mavlab/inputs/{name}/geometry.yml
+    inertia: /workspaces/mavlab/inputs/{name}/inertia.yml
+    hydrodynamics: /workspaces/mavlab/inputs/{name}/hydrodynamics.yml
+    control_surfaces: /workspaces/mavlab/inputs/{name}/control_surfaces.yml
+    initial_conditions: /workspaces/mavlab/inputs/{name}/initial_conditions.yml
+    sensors: /workspaces/mavlab/inputs/{name}/sensors.yml
+    guidance: /workspaces/mavlab/inputs/{name}/guidance.yml
+    control: /workspaces/mavlab/inputs/{name}/control.yml
+    thrusters: /workspaces/mavlab/inputs/{name}/thrusters.yml
+
+
+
+`;
+        
+        // Return the custom YAML string directly
+        return yamlContent;
     }
     
     // Convert JavaScript object to YAML string with proper formatting
     toYAML(obj, indent = 0) {
+        // If input is already a string, return it directly
+        if (typeof obj === 'string') {
+            return obj;
+        }
+        
         let yaml = '';
         const spaces = ' '.repeat(indent);
         
@@ -325,11 +394,15 @@ class YAMLGenerator {
     generateAllYAMLFiles(vesselModel) {
         const vessel = vesselModel.config;
         
+        // Generate simulation_input.yml and hydrodynamics.yml directly as formatted strings
+        const simulationInput = this.generateSimulationInputYAML(vessel);
+        const hydrodynamicsYaml = this.generateHydrodynamicsYAML(vessel.hydrodynamics, vessel.name);
+        
         const files = {
-            'simulation_input.yml': this.toYAML(this.generateSimulationInputYAML(vessel)),
+            'simulation_input.yml': simulationInput,
             'geometry.yml': this.toYAML(this.generateGeometryYAML(vessel.geometry, vessel.name)),
             'inertia.yml': this.toYAML(this.generateInertiaYAML(vessel.inertia)),
-            'hydrodynamics.yml': this.toYAML(this.generateHydrodynamicsYAML(vessel.hydrodynamics, vessel.name)),
+            'hydrodynamics.yml': hydrodynamicsYaml,
             'control_surfaces.yml': this.toYAML(this.generateControlSurfacesYAML(vessel.control_surfaces, vessel.name)),
             'initial_conditions.yml': this.toYAML(this.generateInitialConditionsYAML(vessel.initial_conditions)),
             'sensors.yml': this.toYAML(this.generateSensorsYAML(vessel.sensors)),

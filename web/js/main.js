@@ -821,6 +821,117 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('fbxSensorType').dispatchEvent(event);
             }
         });
+        
+        // Add handler for Edit Hydrodynamics button
+        document.getElementById('btnEditHydrodynamics')?.addEventListener('click', function() {
+            // Get current hydrodynamics values from vessel model
+            const hydrodynamics = window.currentVesselModel.config.hydrodynamics;
+            console.log("Opening hydrodynamics modal with current data:", hydrodynamics);
+            
+            // Populate the checkboxes
+            document.getElementById('dimFlag').checked = hydrodynamics.dim_flag || false;
+            document.getElementById('crossFlowDrag').checked = hydrodynamics.cross_flow_drag || false;
+            
+            // Generate text content for the textarea based on current hydrodynamics
+            const textContent = Object.entries(hydrodynamics)
+                .filter(([key]) => key !== 'dim_flag' && key !== 'cross_flow_drag' && key !== 'hydra_file')
+                .map(([key, value]) => `${key}: ${value}`)
+                .join('\n');
+            
+            document.getElementById('hydroCoefficients').value = textContent;
+            
+            // Show the modal
+            const hydrodynamicsModal = new bootstrap.Modal(document.getElementById('hydrodynamicsModal'));
+            hydrodynamicsModal.show();
+        });
+        
+        // Add handler for file upload
+        document.getElementById('hydroFileUpload')?.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('hydroCoefficients').value = e.target.result;
+                };
+                reader.readAsText(file);
+            }
+        });
+        
+        // Add handler for Save Hydrodynamics button
+        document.getElementById('btnSaveHydrodynamics')?.addEventListener('click', function() {
+            // Get values from the form
+            const coefficientText = document.getElementById('hydroCoefficients').value;
+            
+            // Parse the text into key-value pairs
+            const updatedHydrodynamics = {
+                dim_flag: document.getElementById('dimFlag').checked,
+                cross_flow_drag: document.getElementById('crossFlowDrag').checked,
+                // Keep the existing hydra_file value
+                hydra_file: window.currentVesselModel.config.hydrodynamics.hydra_file || ''
+            };
+            
+            // Track parsing issues for user feedback
+            const parseIssues = [];
+            
+            // Process each line of the text area
+            const lines = coefficientText.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // Skip empty lines and comment lines
+                if (!line || line.startsWith('#') || line.startsWith('//')) continue;
+                
+                // Parse key-value pairs (allow for different separators)
+                const match = line.match(/([^:=,\s]+)\s*[:=,]\s*(-?\d+\.?\d*)/);
+                if (match) {
+                    const [, key, valueStr] = match;
+                    const cleanKey = key.trim();
+                    const numValue = parseFloat(valueStr);
+                    
+                    if (isNaN(numValue)) {
+                        parseIssues.push(`Line ${i+1}: "${valueStr}" is not a valid number`);
+                    } else {
+                        updatedHydrodynamics[cleanKey] = numValue;
+                    }
+                } else if (line.includes(':') || line.includes('=')) {
+                    // Line has a separator but didn't parse correctly
+                    parseIssues.push(`Line ${i+1}: Format error in "${line}"`);
+                }
+            }
+            
+            console.log("Parsed hydrodynamics to save:", updatedHydrodynamics);
+            
+            // Show warning if there were parse issues
+            if (parseIssues.length > 0) {
+                const message = `Warning: Some lines couldn't be parsed:\n${parseIssues.slice(0, 3).join('\n')}${parseIssues.length > 3 ? `\n...and ${parseIssues.length - 3} more issues` : ''}`;
+                showNotification(message, 'warning');
+            }
+            
+            // Update the vessel model
+            window.currentVesselModel.updateHydrodynamics(updatedHydrodynamics);
+            
+            // Verify the update worked
+            console.log("Vessel hydrodynamics after update:", window.currentVesselModel.config.hydrodynamics);
+            
+            // Generate the hydrodynamics YAML directly and update the preview
+            const yamlGenerator = new YAMLGenerator();
+            const hydroYaml = yamlGenerator.generateHydrodynamicsYAML(
+                window.currentVesselModel.config.hydrodynamics, 
+                window.currentVesselModel.config.name
+            );
+            document.getElementById('hydrodynamics-yaml-content').textContent = hydroYaml;
+            
+            // Also update all other YAML previews
+            generateYAMLPreviews();
+            
+            // Close the modal
+            const hydrodynamicsModal = bootstrap.Modal.getInstance(document.getElementById('hydrodynamicsModal'));
+            hydrodynamicsModal.hide();
+            
+            // Show success notification
+            const coeffCount = Object.keys(updatedHydrodynamics).length - 3; // Subtract dim_flag, cross_flow_drag, hydra_file
+            showNotification(`Hydrodynamics updated with ${coeffCount} coefficients`, 'success');
+        });
     }
     
     // Initialize file handlers

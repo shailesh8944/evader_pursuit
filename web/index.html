@@ -200,6 +200,13 @@
                                     <small class="text-muted">Load Hydra output zip file</small>
                                 </div>
                             </div>
+                            <div class="form-group">
+                                <label>Hydrodynamics Parameters</label>
+                                <button class="btn btn-outline-primary w-100" id="btnEditHydrodynamics">
+                                    Edit Hydrodynamic Coefficients
+                                </button>
+                                <small class="text-muted">Edit drag coefficients and other hydrodynamic parameters</small>
+                            </div>
                         </div>
                     </div>
                     
@@ -687,6 +694,74 @@
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" id="btnDownloadZip">Download as ZIP</button>
                     <button type="button" class="btn btn-success" id="btnGenerateYaml">Generate YAML</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal for editing hydrodynamics parameters -->
+    <div class="modal fade" id="hydrodynamicsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Hydrodynamics Parameters</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group mb-3">
+                        <label>General Parameters</label>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="dimFlag">
+                            <label class="form-check-label" for="dimFlag">Dimensionalized Flag</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="crossFlowDrag">
+                            <label class="form-check-label" for="crossFlowDrag">Cross Flow Drag</label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="hydroFileUpload">Upload Coefficients File</label>
+                        <input type="file" class="form-control" id="hydroFileUpload" accept=".txt,.csv">
+                        <small class="text-muted">Upload a text file with coefficient values</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="hydroCoefficients">Hydrodynamic Coefficients</label>
+                        <textarea class="form-control" id="hydroCoefficients" rows="15" style="font-family: monospace;"></textarea>
+                        <small class="text-muted">Enter coefficients in the format: <code>COEFFICIENT_NAME: VALUE</code></small>
+                    </div>
+
+                    <div class="alert alert-info mt-3">
+                        <h6>Instructions:</h6>
+                        <p>Enter each coefficient on a new line using the format <code>COEFFICIENT_NAME: VALUE</code></p>
+                        <p>Example:</p>
+                        <pre style="background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 12px;"># Surge coefficients
+X_u_u: -0.01
+X_u_v: 0.05
+X_u_r: 0.001
+
+# Sway coefficients
+Y_v_v: -0.010659050686665396
+Y_r_r: 0.0017799664706713543
+
+# Other coefficients
+N_r_r: -0.001889456681929024
+Z_w_w: -0.01</pre>
+                        <p>Notes:</p>
+                        <ul style="font-size: 12px;">
+                            <li>You can add comments using <code>#</code> at the start of a line</li>
+                            <li>Empty lines are ignored</li>
+                            <li>All coefficients will be included in the hydrodynamics.yml file</li>
+                            <li>Common coefficient naming follows the format <code>FORCE_VELOCITY_VELOCITY</code>, where:</li>
+                            <li><strong>FORCE</strong> is X, Y, Z, K, M, or N (indicating the force/moment direction)</li>
+                            <li><strong>VELOCITY</strong> is u, v, w, p, q, or r (indicating the motion component)</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="btnSaveHydrodynamics">Save Changes</button>
                 </div>
             </div>
         </div>

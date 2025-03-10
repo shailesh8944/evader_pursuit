@@ -251,21 +251,30 @@ class VesselModel {
 
     // Update hydrodynamic coefficients
     updateHydrodynamics(coefficients) {
-        const validKeys = [
-            'dim_flag', 'cross_flow_drag',
-            'X_u_u', 'Y_v_v', 'Y_r_r', 'N_v_v', 'N_r_r', 'Z_w_w'
-        ];
+        console.log("Updating hydrodynamics with:", coefficients);
         
+        // Preserve the hydra_file value
+        const hydraFile = this.config.hydrodynamics.hydra_file || '';
+        
+        // Start with a fresh hydrodynamics object to remove any old coefficients
+        this.config.hydrodynamics = {
+            hydra_file: hydraFile
+        };
+        
+        // Add all the new coefficients
         for (const [key, value] of Object.entries(coefficients)) {
-            if (validKeys.includes(key)) {
-                if (key === 'dim_flag' || key === 'cross_flow_drag') {
-                    this.config.hydrodynamics[key] = Boolean(value);
-                } else {
-                    this.config.hydrodynamics[key] = parseFloat(value);
-                }
+            // Skip hydra_file as it's already handled
+            if (key === 'hydra_file') continue;
+            
+            if (key === 'dim_flag' || key === 'cross_flow_drag') {
+                this.config.hydrodynamics[key] = Boolean(value);
+            } else {
+                // Any other key is treated as a numeric coefficient
+                this.config.hydrodynamics[key] = parseFloat(value);
             }
         }
         
+        console.log("Updated hydrodynamics:", this.config.hydrodynamics);
         this.saveToHistory();
     }
 
