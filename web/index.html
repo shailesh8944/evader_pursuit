@@ -162,6 +162,9 @@
                         <button class="viewport-btn" id="btn-toggle-wireframe" title="Toggle Wireframe">
                             <i class="bi bi-bounding-box"></i>
                         </button>
+                        <button class="viewport-btn" id="btn-toggle-geometry" title="Toggle Geometry">
+                            <i class="bi bi-box"></i>
+                        </button>
                         <button class="viewport-btn" id="btn-center-view" title="Center View">
                             <i class="bi bi-fullscreen"></i>
                         </button>
@@ -192,6 +195,10 @@
                                 <div class="file-input-group">
                                     <input type="file" class="form-control" id="fbxFile" accept=".fbx,.stl,.obj,.gltf">
                                     <small class="text-muted">Load FBX, STL, OBJ, or GLTF file</small>
+                                </div>
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" id="toggleGeometryVisibility" checked>
+                                    <label class="form-check-label" for="toggleGeometryVisibility">Show 3D Model</label>
                                 </div>
                             </div>
                             <div class="form-group">
@@ -237,6 +244,39 @@
                                     <span>Sensor</span>
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Center Points Controls -->
+                    <div class="panel component-panel">
+                        <div class="panel-header">
+                            <h5>Geometry Centers</h5>
+                        </div>
+                        <div class="panel-body">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="toggleCenterPoints" checked>
+                                <label class="form-check-label" for="toggleCenterPoints">Show Center Points</label>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">CO - Center of Origin (Red)</small><br>
+                                <small class="text-muted">CG - Center of Gravity (Green)</small><br>
+                                <small class="text-muted">CB - Center of Buoyancy (Blue)</small>
+                            </div>
+                            <div class="mt-3">
+                                <button class="btn btn-sm btn-outline-primary w-100" id="btnEditGeometry">
+                                    <i class="bi bi-pencil-square"></i> Edit Geometry Parameters
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Component Info Panel -->
+                    <div class="panel component-panel" id="component-info-panel">
+                        <div class="panel-header">
+                            <h5>Component Info</h5>
+                        </div>
+                        <div class="panel-body" id="component-info">
+                            <div class="no-selection-message">Select a component to view its properties</div>
                         </div>
                     </div>
                 </div>
@@ -314,6 +354,13 @@
                                     Edit Inertia Parameters
                                 </button>
                                 <small class="text-muted">Configure mass, buoyancy, and inertia matrices</small>
+                            </div>
+                            
+                            <div class="form-group mt-3">
+                                <button class="btn btn-outline-primary w-100 mb-2" id="btnEditGeometry">
+                                    Edit Geometry Parameters
+                                </button>
+                                <small class="text-muted">Configure vessel dimensions, axes, and centers</small>
                             </div>
                         </div>
                     </div>
@@ -1134,6 +1181,159 @@ geofence:
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" id="btnSaveInertia">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal for editing geometry parameters -->
+    <div class="modal fade" id="geometryModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Geometry Parameters</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group mb-3">
+                        <label for="geometryFileUpload">Upload Geometry File</label>
+                        <input type="file" class="form-control" id="geometryFileUpload" accept=".yml,.yaml">
+                        <small class="text-muted">Upload a YAML file with geometry parameters</small>
+                    </div>
+                    
+                    <div class="alert alert-info" id="gdfFileInfo" style="display:none;">
+                        <i class="bi bi-info-circle"></i> Dimensions detected from GDF file have been loaded.
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="vesselLength">Length (m)</label>
+                                <input type="number" class="form-control" id="vesselLength" placeholder="Length" value="1.0" min="0.1" step="0.1">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="vesselBreadth">Breadth (m)</label>
+                                <input type="number" class="form-control" id="vesselBreadth" placeholder="Breadth" value="0.5" min="0.1" step="0.1">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="vesselDepth">Depth (m)</label>
+                                <input type="number" class="form-control" id="vesselDepth" placeholder="Depth" value="0.5" min="0.1" step="0.1">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">Axis Direction Configuration</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small">Select which axis corresponds to Length, Breadth, and Depth in your coordinate system.</p>
+                            
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label for="lengthAxis">Length Axis</label>
+                                        <select class="form-control" id="lengthAxis">
+                                            <option value="x" selected>X-axis</option>
+                                            <option value="y">Y-axis</option>
+                                            <option value="z">Z-axis</option>
+                                        </select>
+                                        <small class="text-muted">Main vessel axis (bow to stern)</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label for="breadthAxis">Breadth Axis</label>
+                                        <select class="form-control" id="breadthAxis">
+                                            <option value="x">X-axis</option>
+                                            <option value="y" selected>Y-axis</option>
+                                            <option value="z">Z-axis</option>
+                                        </select>
+                                        <small class="text-muted">Side-to-side vessel width</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label for="depthAxis">Depth Axis</label>
+                                        <select class="form-control" id="depthAxis">
+                                            <option value="x">X-axis</option>
+                                            <option value="y">Y-axis</option>
+                                            <option value="z" selected>Z-axis</option>
+                                        </select>
+                                        <small class="text-muted">Top-to-bottom vessel height</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="gyrationX">Gyration X (kx)</label>
+                                <input type="number" class="form-control" id="gyrationX" placeholder="X" value="1.0" min="0.1" step="0.1">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="gyrationY">Gyration Y (ky)</label>
+                                <input type="number" class="form-control" id="gyrationY" placeholder="Y" value="1.0" min="0.1" step="0.1">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="gyrationZ">Gyration Z (kz)</label>
+                                <input type="number" class="form-control" id="gyrationZ" placeholder="Z" value="1.0" min="0.1" step="0.1">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Center of Origin [x, y, z]</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="coX" placeholder="X" value="0" step="0.1">
+                                    <input type="number" class="form-control" id="coY" placeholder="Y" value="0" step="0.1">
+                                    <input type="number" class="form-control" id="coZ" placeholder="Z" value="0" step="0.1">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Center of Gravity [x, y, z]</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="cgX" placeholder="X" value="0" step="0.1">
+                                    <input type="number" class="form-control" id="cgY" placeholder="Y" value="0" step="0.1">
+                                    <input type="number" class="form-control" id="cgZ" placeholder="Z" value="0" step="0.1">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Center of Buoyancy [x, y, z]</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="cbX" placeholder="X" value="0" step="0.1">
+                                    <input type="number" class="form-control" id="cbY" placeholder="Y" value="0" step="0.1">
+                                    <input type="number" class="form-control" id="cbZ" placeholder="Z" value="0" step="0.1">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="geometryFilePath">Geometry File Path</label>
+                        <input type="text" class="form-control" id="geometryFilePath" placeholder="/workspaces/mavlab/inputs/vesselname/HydRA/input/vessel.gdf">
+                        <small class="text-muted">Path to the GDF file used for hydrodynamic calculations</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="btnSaveGeometry">Save Changes</button>
                 </div>
             </div>
         </div>

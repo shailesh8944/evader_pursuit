@@ -966,187 +966,52 @@ class ThreeScene {
     onObjectTransformed(object) {
         if (!object) return;
         
-        // If axes were transformed, update the parent component's data
-        if (object.userData.isComponentAxes && object.parent) {
-            const component = object.parent;
+        // Check if this is a center point
+        if (object.userData && object.userData.centerType) {
+            const type = object.userData.centerType;
+            const position = [
+                object.position.x,
+                object.position.y,
+                object.position.z
+            ];
             
-            // Try to get componentId and componentType from various sources
-            let componentId = object.userData.componentId;
-            let componentType = object.userData.componentType;
-            
-            // If not found in object, try the parent component
-            if (!componentId || !componentType) {
-                if (component.userData.componentId && component.userData.componentType) {
-                    componentId = component.userData.componentId;
-                    componentType = component.userData.componentType;
-                    
-                    // Update the axes with parent's data
-                    object.userData.componentId = componentId;
-                    object.userData.componentType = componentType;
-                    console.log(`Updated axes with component data from parent: ID=${componentId}, Type=${componentType}`);
-                }
-            }
-            
-            // If still not found, try the model mapping
-            if ((!componentId || !componentType) && window.currentVesselModel) {
-                // Try parent component's mapping
-                const mappedData = window.currentVesselModel.getModelComponentData(component.uuid);
-                if (mappedData && mappedData.id && mappedData.type) {
-                    componentId = mappedData.id;
-                    componentType = mappedData.type;
-                    
-                    // Update both component and axes
-                    component.userData.componentId = componentId;
-                    component.userData.componentType = componentType;
-                    object.userData.componentId = componentId;
-                    object.userData.componentType = componentType;
-                    console.log(`Updated from model mapping: ID=${componentId}, Type=${componentType}`);
-                }
-            }
-            
-            // If still no component ID/type, log warning but continue with visual transformation
-            if (!componentId || !componentType) {
-                console.warn('Component axes missing ID or type - cannot update vessel model');
-                console.warn('Will continue with visual transform only for:', object.parent.name);
+            // Update the model data
+            if (window.currentVesselModel && window.currentVesselModel.config) {
+                window.currentVesselModel.config.geometry[type] = position;
                 
-                // Just update the axes visually - don't try to update the vessel model
-                this.forceRender();
-                return;
-            }
-            
-            // Convert axes world position to an array
-            const worldPosition = new THREE.Vector3();
-            object.getWorldPosition(worldPosition);
-            const position = [worldPosition.x, worldPosition.y, worldPosition.z];
-            
-            // Get the world quaternion for rotation
-            const worldQuaternion = new THREE.Quaternion();
-            object.getWorldQuaternion(worldQuaternion);
-            
-            // Convert to the appropriate orientation format based on component type
-            let orientation;
-            if (componentType === 'sensor') {
-                // For sensors, use quaternion representation
-                orientation = [
-                    worldQuaternion.w,
-                    worldQuaternion.x,
-                    worldQuaternion.y,
-                    worldQuaternion.z
-                ];
-            } else {
-                // For control surfaces and thrusters, use Euler angles (in radians)
-                const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
-                orientation = [worldEuler.x, worldEuler.y, worldEuler.z];
-            }
-            
-            console.log(`${componentType} ${componentId} axes transformed`);
-            console.log('New position:', position);
-            console.log('New orientation (rad):', orientation);
-            console.log('New orientation (deg):', 
-                orientation.map(val => THREE.MathUtils.radToDeg(val).toFixed(2)));
-            
-            // Update the component in the vessel model
-            if (window.currentVesselModel) {
-                // Create property names based on component type
-                let locationKey, orientationKey;
-                switch (componentType) {
-                    case 'controlSurface':
-                        locationKey = 'control_surface_location';
-                        orientationKey = 'control_surface_orientation';
-                        break;
-                    case 'thruster':
-                        locationKey = 'thruster_location';
-                        orientationKey = 'thruster_orientation';
-                        break;
-                    case 'sensor':
-                        locationKey = 'sensor_location';
-                        orientationKey = 'sensor_orientation';
-                        break;
-                    default:
-                        console.error('Unknown component type:', componentType);
-                        return;
-                }
+                // Update UI if geometry modal is open
+                this.updateCenterPointUI(type, position);
                 
-                // Create update data object
-                const updateData = {};
-                updateData[locationKey] = position;
-                updateData[orientationKey] = orientation;
-                
-                console.log(`Updating ${componentType} ${componentId} with:`, updateData);
-                
-                // Call the appropriate update method
-                let success = false;
-                try {
-                    switch (componentType) {
-                        case 'controlSurface':
-                            success = window.currentVesselModel.updateControlSurface(componentId, updateData);
-                            break;
-                        case 'thruster':
-                            success = window.currentVesselModel.updateThruster(componentId, updateData);
-                            break;
-                        case 'sensor':
-                            success = window.currentVesselModel.updateSensor(componentId, updateData);
-                            break;
-                    }
-                    
-                    if (success) {
-                        console.log(`Successfully updated ${componentType} ${componentId} in vessel model`);
-                        
-                        // Verify the update by retrieving the component
-                        let updatedComponent;
-                        switch (componentType) {
-                            case 'controlSurface':
-                                updatedComponent = window.currentVesselModel.getControlSurface(componentId);
-                                break;
-                            case 'thruster':
-                                updatedComponent = window.currentVesselModel.getThruster(componentId);
-                                break;
-                            case 'sensor':
-                                updatedComponent = window.currentVesselModel.getSensor(componentId);
-                                break;
-                        }
-                        
-                        if (updatedComponent) {
-                            console.log(`${componentType} ${componentId} after update:`, updatedComponent);
-                            // Check if the values match what we expected
-                            const updatedPos = updatedComponent[locationKey];
-                            const updatedOri = updatedComponent[orientationKey];
-                            
-                            if (updatedPos && updatedOri) {
-                                console.log('Stored position:', updatedPos);
-                                console.log('Stored orientation:', updatedOri);
-                            } else {
-                                console.warn(`Could not verify ${locationKey} or ${orientationKey} in updated component`);
-                            }
-                        } else {
-                            console.error(`Could not retrieve updated ${componentType} ${componentId}`);
-                        }
-                        
-                        // Save to history to make sure changes are preserved
-                        window.currentVesselModel.saveToHistory();
-                    } else {
-                        console.error(`Failed to update ${componentType} ${componentId}`);
-                    }
-                } catch (error) {
-                    console.error(`Error updating ${componentType} ${componentId}:`, error);
-                }
+                console.log(`${type} position updated to:`, position);
             }
             
-            // IMPORTANT: DON'T update the component's visual appearance
-            // (Removed: this.updateComponentToMatchAxes(component, object);)
-            // This allows transforming just the axes without affecting the component
-            
-            // Update the properties panel
-            this.showComponentInfo(component);
-        } else {
-            // Normal object transformation
-            if (this.transformControls && this.transformControls.object) {
-                this.updateTransformInfo();
-            }
+            // Update transform info in the side panel
+            this.updateTransformInfo();
+            return;
         }
         
-        // Force immediate render for smoother transforms
-        this.forceRender();
+        // Handle other objects (original functionality)
+        this.updateTransformInfo();
+        
+        // Get the component from the model based on the UUID
+        if (window.currentVesselModel.isModelComponentMapped(object.uuid)) {
+            const componentData = window.currentVesselModel.getModelComponentData(object.uuid);
+            
+            if (componentData) {
+                const type = componentData.type;
+                const id = componentData.id;
+                
+                // Update position
+                if (object.position && (type === 'thruster' || type === 'controlSurface' || type === 'sensor')) {
+                    this.updateComponentPositionFromObject(object);
+                }
+                
+                // Update orientation
+                if (object.rotation && (type === 'thruster' || type === 'controlSurface' || type === 'sensor')) {
+                    this.updateComponentOrientationFromObject(object);
+                }
+            }
+        }
     }
 
     onWindowResize() {
@@ -1169,11 +1034,35 @@ class ThreeScene {
         
         if (intersects.length > 0) {
             // Find the first selectable object
-            const selectedIntersect = intersects.find(intersect => 
-                intersect.object.isMesh && 
-                intersect.object.userData && 
-                intersect.object.userData.selectable
-            );
+            const selectedIntersect = intersects.find(intersect => {
+                // Check if the object is selectable
+                const isSelectable = intersect.object.isMesh && 
+                                     intersect.object.userData && 
+                                     intersect.object.userData.selectable;
+                
+                if (!isSelectable) return false;
+                
+                // If vessel is hidden, don't allow selection of vessel parts but allow center points
+                if (this.vessel && !this.vessel.visible) {
+                    // Check if this object is part of the vessel
+                    let isPartOfVessel = false;
+                    this.vessel.traverse((child) => {
+                        if (child === intersect.object) {
+                            isPartOfVessel = true;
+                        }
+                    });
+                    
+                    // Allow selection of center points (which should have centerType property)
+                    const isCenterPoint = intersect.object.userData && 
+                                         intersect.object.userData.centerType !== undefined;
+                    
+                    // Only allow selection if it's NOT part of the vessel OR it's a center point
+                    return !isPartOfVessel || isCenterPoint;
+                }
+                
+                // If vessel is visible or doesn't exist, allow selection of any selectable object
+                return true;
+            });
             
             if (selectedIntersect) {
                 console.log('Selected object:', selectedIntersect.object.name);
@@ -1189,128 +1078,35 @@ class ThreeScene {
     }
 
     selectObject(object) {
-        if (!object) {
-            // If no object is provided, deselect the current selection
-            if (this.selectedObject) {
-                this.restoreOriginalMaterial(this.selectedObject);
-                this.selectedObject = null;
-                
-                // Hide transform controls
-                if (this.transformControls) {
-                    this.transformControls.detach();
-                }
-                
-                // Clear properties panel
-                const propertiesPanel = document.getElementById('object-properties');
-                if (propertiesPanel) {
-                    propertiesPanel.innerHTML = '<div class="no-selection-message">Select an object to view its properties</div>';
-                }
-            }
-            return;
-        }
-        
-        // Determine if we're selecting an axes group or a component
-        let targetObject = object;
-        let isAxes = false;
-        
-        // If we clicked on an axis component, navigate up to find the axes group
-        if (object.parent && object.parent.userData.isComponentAxes) {
-            targetObject = object.parent;
-            isAxes = true;
-        }
-        
-        // Check if the object itself is an axes group
-        if (object.userData.isComponentAxes) {
-            targetObject = object;
-            isAxes = true;
-        }
-        
-        // If this is axes, find the parent component
-        let parentComponent = null;
-        if (isAxes && targetObject.parent) {
-            parentComponent = targetObject.parent;
-        }
-        
-        // If we found axes but no parent component, something went wrong
-        if (isAxes && !parentComponent) {
-            console.warn('Found component axes without parent component');
-            return;
-        }
-        
-        // Deselect previous object if different
-        if (this.selectedObject && this.selectedObject !== targetObject) {
+        // Deselect previously selected object
+        if (this.selectedObject) {
             this.restoreOriginalMaterial(this.selectedObject);
+            this.selectedObject = null;
         }
         
-        // Set new selected object
-        this.selectedObject = targetObject;
+        this.transformControls.detach();
         
-        // Highlight the object
-        if (isAxes) {
-            // If we selected axes, highlight the parent component as well
-            this.highlightObject(parentComponent);
-        } else {
-            this.highlightObject(targetObject);
-        }
-        
-        // Set up transform controls for the selected object
-        if (this.transformControls) {
-            this.transformControls.detach();
+        // If a new object was selected
+        if (object) {
+            this.selectedObject = object;
             
-            // If selecting axes, attach controls to the axes
-            // If selecting a component, check if it has axes and attach to those
-            if (isAxes) {
-                // Make sure axes have correct componentId and componentType
-                if (parentComponent && (!targetObject.userData.componentId || !targetObject.userData.componentType)) {
-                    targetObject.userData.componentId = parentComponent.userData.componentId;
-                    targetObject.userData.componentType = parentComponent.userData.componentType;
-                    console.log('Updated axes with component data:', targetObject.userData);
-                }
+            if (object.userData.selectable) {
+                this.highlightObject(object);
                 
-                // Set the transform controls pivot point to the center of the component
-                if (targetObject.userData.pivotPoint) {
-                    this.transformControls.setRotationSnap(null); // No rotation snap
-                    this.transformControls.setTranslationSnap(null); // No translation snap
-                    this.transformControls.setScaleSnap(null); // No scale snap
-                    console.log('Using pivot point for transformations:', targetObject.userData.pivotPoint);
-                }
+                // Attach transform controls
+                this.transformControls.attach(object);
                 
-                this.transformControls.attach(targetObject);
-            } else {
-                // Check if component has axes
-                const componentAxes = targetObject.children.find(child => child.userData.isComponentAxes);
-                if (componentAxes) {
-                    // If component has axes, make sure they have correct data
-                    if (!componentAxes.userData.componentId || !componentAxes.userData.componentType) {
-                        componentAxes.userData.componentId = targetObject.userData.componentId;
-                        componentAxes.userData.componentType = targetObject.userData.componentType;
-                        console.log('Updated axes with component data:', componentAxes.userData);
-                    }
-                    
-                    // Set the transform controls pivot point if available
-                    if (componentAxes.userData.pivotPoint) {
-                        this.transformControls.setRotationSnap(null); // No rotation snap
-                        this.transformControls.setTranslationSnap(null); // No translation snap
-                        this.transformControls.setScaleSnap(null); // No scale snap
-                        console.log('Using pivot point for transformations:', componentAxes.userData.pivotPoint);
-                    }
-                    
-                    // Attach transform controls to the axes
-                    this.transformControls.attach(componentAxes);
-                    this.selectedObject = componentAxes; // Update selected object to the axes
+                // Check if this is a center point
+                if (object.userData && object.userData.centerType) {
+                    this.showCenterPointInfo(object);
                 } else {
-                    // If no axes, attach directly to the component
-                    this.transformControls.attach(targetObject);
+                    // Show component info in the side panel for other objects
+                    this.showComponentInfo(object);
                 }
             }
-        }
-        
-        // Show object properties
-        if (isAxes) {
-            // If axes selected, show properties of the parent component
-            this.showComponentInfo(parentComponent);
         } else {
-            this.showComponentInfo(targetObject);
+            // No object selected, clear info panel
+            this.clearComponentInfo();
         }
         
         this.render();
@@ -1860,6 +1656,59 @@ class ThreeScene {
         }
     }
 
+    toggleGeometry(visible = null) {
+        if (!this.vessel) return;
+        
+        // Toggle visibility of the entire vessel group or specific model parts
+        if (visible === null) {
+            // Toggle current state
+            this.vessel.visible = !this.vessel.visible;
+        } else {
+            // Set to specific state
+            this.vessel.visible = visible;
+        }
+        
+        // Handle transform controls and selection when hiding
+        if (!this.vessel.visible) {
+            // If vessel is not visible and the current selected object is part of the vessel model,
+            // deselect it but don't hide transform controls completely
+            if (this.transformControls.object) {
+                // Check if the selected object is part of the vessel model
+                let isPartOfVessel = false;
+                this.vessel.traverse((child) => {
+                    if (child === this.transformControls.object) {
+                        isPartOfVessel = true;
+                    }
+                });
+                
+                // Only deselect if it's part of the vessel model
+                if (isPartOfVessel) {
+                    this.restoreOriginalMaterial(this.transformControls.object);
+                    this.transformControls.detach();
+                    this.clearComponentInfo();
+                }
+            }
+        }
+        
+        // Update checkbox state
+        const checkbox = document.getElementById('toggleGeometryVisibility');
+        if (checkbox) {
+            checkbox.checked = this.vessel.visible;
+        }
+        
+        // Update UI notification
+        if (this.vessel.visible) {
+            console.log('Geometry visibility: shown');
+        } else {
+            console.log('Geometry visibility: hidden');
+        }
+        
+        this.render();
+        
+        // Return current visibility state
+        return this.vessel.visible;
+    }
+
     // Add new method to create body center coordinate system
     addBodyCenterSystem(position = new THREE.Vector3(0, 0, 0)) {
         // Remove existing BCS if any
@@ -2022,6 +1871,10 @@ class ThreeScene {
                     const size = new THREE.Vector3();
                     boundingBox.getSize(size);
                     
+                    // Extract dimensions before applying scale
+                    const modelDimensions = this.getModelDimensions(this.vessel);
+                    this.modelDimensions = modelDimensions; // Store for later reference
+                    
                     // Determine scale to normalize the model
                     const maxDimension = Math.max(size.x, size.y, size.z);
                     const scale = 5 / maxDimension;
@@ -2041,6 +1894,25 @@ class ThreeScene {
                     const axes = this.createLocalAxes(2);
                     this.vessel.add(axes);
                     
+                    // Setup center points visualization
+                    this.setupCenterPoints();
+                    
+                    // Check the state of the geometry visibility toggle and apply
+                    const toggleGeometryVisibility = document.getElementById('toggleGeometryVisibility');
+                    if (toggleGeometryVisibility) {
+                        this.vessel.visible = toggleGeometryVisibility.checked;
+                        
+                        // Update the toggle button in the viewport
+                        const toggleButton = document.getElementById('btn-toggle-geometry');
+                        if (toggleButton) {
+                            if (this.vessel.visible) {
+                                toggleButton.classList.add('active');
+                            } else {
+                                toggleButton.classList.remove('active');
+                            }
+                        }
+                    }
+                    
                     // Update scene hierarchy
                     this.updateSceneHierarchy();
                     
@@ -2050,8 +1922,11 @@ class ThreeScene {
                     // Force a render to show the model immediately
                     this.forceRender();
                     
-                    // Return the loaded model
-                    resolve(this.vessel);
+                    // Return the loaded model along with dimensions
+                    resolve({
+                        vessel: this.vessel,
+                        dimensions: modelDimensions
+                    });
                 } catch (error) {
                     console.error('Error loading FBX model:', error);
                     reject(error);
@@ -2605,7 +2480,7 @@ class ThreeScene {
         } 
         // Or try to get from mapping
         else {
-            const componentData = vesselModel.getModelComponentData(object.uuid);
+        const componentData = vesselModel.getModelComponentData(object.uuid);
             if (componentData) {
                 componentId = componentData.id;
                 componentType = componentData.type;
@@ -2686,7 +2561,7 @@ class ThreeScene {
         } 
         // Or try to get from mapping
         else {
-            const componentData = vesselModel.getModelComponentData(object.uuid);
+        const componentData = vesselModel.getModelComponentData(object.uuid);
             if (componentData) {
                 componentId = componentData.id;
                 componentType = componentData.type;
@@ -2714,7 +2589,7 @@ class ThreeScene {
             ];
         } else {
             // For other components, use Euler angles
-            const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
+        const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
             orientation = [worldEuler.x, worldEuler.y, worldEuler.z];
         }
         
@@ -3123,6 +2998,304 @@ class ThreeScene {
         sprite.scale.set(size, size, 1);
         
         return sprite;
+    }
+
+    // Add method to extract dimensions from FBX model
+    getModelDimensions(object) {
+        if (!object) {
+            console.error('Cannot get dimensions: No object provided');
+            return null;
+        }
+        
+        try {
+            // Calculate the bounding box
+            const boundingBox = new THREE.Box3().setFromObject(object);
+            const size = new THREE.Vector3();
+            boundingBox.getSize(size);
+            
+            // Get min and max points - Box3 has min and max properties, not getMin/getMax methods
+            const min = boundingBox.min;
+            const max = boundingBox.max;
+            
+            console.log(`FBX Bounding Box: Min(${min.x.toFixed(2)}, ${min.y.toFixed(2)}, ${min.z.toFixed(2)}), Max(${max.x.toFixed(2)}, ${max.y.toFixed(2)}, ${max.z.toFixed(2)})`);
+            console.log(`FBX Model dimensions: X: ${size.x.toFixed(2)}m, Y: ${size.y.toFixed(2)}m, Z: ${size.z.toFixed(2)}m`);
+            
+            // Determine which dimension is which (based on relative sizes)
+            const dimensions = [size.x, size.y, size.z];
+            const axes = ['x', 'y', 'z'];
+            
+            // Sort dimensions from largest to smallest
+            const sorted = dimensions.map((val, idx) => ({val, axis: axes[idx]}))
+                                 .sort((a, b) => b.val - a.val);
+            
+            // Assign dimensions based on the sorted order
+            const length = sorted[0].val;
+            const lengthAxis = sorted[0].axis;
+            
+            const breadth = sorted[1].val;
+            const breadthAxis = sorted[1].axis;
+            
+            const depth = sorted[2].val;
+            const depthAxis = sorted[2].axis;
+            
+            console.log(`Assigned FBX dimensions: Length: ${length.toFixed(2)}m (${lengthAxis}-axis), Breadth: ${breadth.toFixed(2)}m (${breadthAxis}-axis), Depth: ${depth.toFixed(2)}m (${depthAxis}-axis)`);
+            
+            // Get the center of the bounding box
+            const center = new THREE.Vector3();
+            boundingBox.getCenter(center);
+            
+            return {
+                length,
+                breadth, 
+                depth,
+                axes: {
+                    length: lengthAxis,
+                    breadth: breadthAxis,
+                    depth: depthAxis
+                },
+                boundingBox: {
+                    min: [min.x, min.y, min.z],
+                    max: [max.x, max.y, max.z],
+                    center: [center.x, center.y, center.z]
+                }
+            };
+        } catch (error) {
+            console.error('Error calculating model dimensions:', error);
+            return null;
+        }
+    }
+
+    // Add center points visualization and manipulation methods
+    createCenterPoint(type, position, color) {
+        // Create a visual representation of a center point
+        const geometry = new THREE.SphereGeometry(0.1, 16, 16);
+        const material = new THREE.MeshStandardMaterial({
+            color: color,
+            emissive: color,
+            emissiveIntensity: 0.3,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        const centerPoint = new THREE.Mesh(geometry, material);
+        centerPoint.position.set(position[0], position[1], position[2]);
+        centerPoint.userData.type = type;
+        centerPoint.userData.centerType = type;
+        centerPoint.userData.selectable = true;
+        centerPoint.name = `${type}_Point`;
+        
+        // Add small axes to the center point for orientation
+        const axes = this.createLocalAxes(0.2);
+        centerPoint.add(axes);
+        
+        // Add text label
+        const typeLabel = this.createTextSprite(type, 0.2, color);
+        typeLabel.position.set(0, 0.2, 0);
+        centerPoint.add(typeLabel);
+        
+        // Store reference
+        this[`${type.toLowerCase()}Point`] = centerPoint;
+        
+        return centerPoint;
+    }
+
+    updateCenterPointsVisibility(visible) {
+        // Update visibility of all center points
+        const centerPoints = ['CO', 'CG', 'CB'];
+        
+        for (const type of centerPoints) {
+            const pointKey = `${type.toLowerCase()}Point`;
+            if (this[pointKey]) {
+                this[pointKey].visible = visible;
+            }
+        }
+        
+        this.render();
+    }
+
+    updateCenterPoint(type, position) {
+        // Update the position of a center point
+        const pointKey = `${type.toLowerCase()}Point`;
+        if (this[pointKey]) {
+            this[pointKey].position.set(position[0], position[1], position[2]);
+            
+            // Update vessel model
+            if (window.currentVesselModel && window.currentVesselModel.config) {
+                window.currentVesselModel.config.geometry[type] = [
+                    position[0],
+                    position[1],
+                    position[2]
+                ];
+                
+                // Update UI if geometry modal is open
+                this.updateCenterPointUI(type, position);
+            }
+            
+            this.render();
+        }
+    }
+
+    updateCenterPointUI(type, position) {
+        // Update the UI form fields if geometry modal is open
+        const modalElement = document.getElementById('geometryModal');
+        if (modalElement && modalElement.classList.contains('show')) {
+            const xField = document.getElementById(`${type.toLowerCase()}X`);
+            const yField = document.getElementById(`${type.toLowerCase()}Y`);
+            const zField = document.getElementById(`${type.toLowerCase()}Z`);
+            
+            if (xField && yField && zField) {
+                xField.value = position[0].toFixed(2);
+                yField.value = position[1].toFixed(2);
+                zField.value = position[2].toFixed(2);
+            }
+        }
+    }
+
+    setupCenterPoints() {
+        // Set up center points (CO, CG, CB) visualization and controls
+        if (!this.vessel) return;
+        
+        // Remove existing center points
+        if (this.coPoint) this.scene.remove(this.coPoint);
+        if (this.cgPoint) this.scene.remove(this.cgPoint);
+        if (this.cbPoint) this.scene.remove(this.cbPoint);
+        
+        // Get geometry data from the model
+        const geometry = window.currentVesselModel.config.geometry;
+        
+        // Create CO point (Center of Origin) - Red
+        const coPosition = geometry.CO || [0, 0, 0];
+        this.coPoint = this.createCenterPoint('CO', coPosition, 0xff4444);
+        this.scene.add(this.coPoint);
+        
+        // Create CG point (Center of Gravity) - Green
+        const cgPosition = geometry.CG || [0, 0, 0];
+        this.cgPoint = this.createCenterPoint('CG', cgPosition, 0x44ff44);
+        this.scene.add(this.cgPoint);
+        
+        // Create CB point (Center of Buoyancy) - Blue
+        const cbPosition = geometry.CB || [0, 0, 0];
+        this.cbPoint = this.createCenterPoint('CB', cbPosition, 0x4444ff);
+        this.scene.add(this.cbPoint);
+        
+        // Initial visibility setting
+        this.updateCenterPointsVisibility(true);
+        
+        this.render();
+    }
+
+    // When a center point is transformed, update the model
+    onCenterPointTransformed(object) {
+        if (object && object.userData && object.userData.centerType) {
+            const type = object.userData.centerType;
+            const position = [
+                object.position.x,
+                object.position.y,
+                object.position.z
+            ];
+            
+            // Update the model data
+            if (window.currentVesselModel && window.currentVesselModel.config) {
+                window.currentVesselModel.config.geometry[type] = position;
+                
+                // Update UI
+                this.updateCenterPointUI(type, position);
+                
+                console.log(`${type} position updated to:`, position);
+            }
+        }
+    }
+
+    // Add method to show center point info
+    showCenterPointInfo(object) {
+        if (!object || !object.userData || !object.userData.centerType) return;
+        
+        const type = object.userData.centerType;
+        const position = [
+            object.position.x.toFixed(2),
+            object.position.y.toFixed(2),
+            object.position.z.toFixed(2)
+        ];
+        
+        // Update the component info panel in the right sidebar
+        const componentInfoPanel = document.getElementById('component-info');
+        if (componentInfoPanel) {
+            componentInfoPanel.innerHTML = `
+                <div class="panel-header">
+                    <h5>${type} Position</h5>
+                </div>
+                <div class="panel-body">
+                    <div class="info-item">
+                        <strong>Type:</strong> ${type === 'CO' ? 'Center of Origin' : 
+                                         type === 'CG' ? 'Center of Gravity' : 
+                                         'Center of Buoyancy'}
+                    </div>
+                    <div class="info-item">
+                        <strong>Position:</strong> [${position.join(', ')}]
+                    </div>
+                    <div class="form-group mt-3">
+                        <label>Position</label>
+                        <div class="transform-inputs">
+                            <div class="input-group">
+                                <span class="input-group-text">X</span>
+                                <input type="number" class="form-control" id="posX" value="${object.position.x.toFixed(2)}" step="0.1">
+                            </div>
+                            <div class="input-group">
+                                <span class="input-group-text">Y</span>
+                                <input type="number" class="form-control" id="posY" value="${object.position.y.toFixed(2)}" step="0.1">
+                            </div>
+                            <div class="input-group">
+                                <span class="input-group-text">Z</span>
+                                <input type="number" class="form-control" id="posZ" value="${object.position.z.toFixed(2)}" step="0.1">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-grid gap-2 mt-3">
+                        <button class="btn btn-primary" id="btnApplyTransform">Apply Changes</button>
+                    </div>
+                </div>
+            `;
+            
+            // Set up event listeners for the position inputs and apply button
+            const btnApplyTransform = document.getElementById('btnApplyTransform');
+            const posX = document.getElementById('posX');
+            const posY = document.getElementById('posY');
+            const posZ = document.getElementById('posZ');
+            
+            if (btnApplyTransform && posX && posY && posZ) {
+                btnApplyTransform.addEventListener('click', () => {
+                    const newX = parseFloat(posX.value);
+                    const newY = parseFloat(posY.value);
+                    const newZ = parseFloat(posZ.value);
+                    
+                    if (!isNaN(newX) && !isNaN(newY) && !isNaN(newZ)) {
+                        object.position.set(newX, newY, newZ);
+                        
+                        // Update the model
+                        if (window.currentVesselModel && window.currentVesselModel.config) {
+                            window.currentVesselModel.config.geometry[type] = [newX, newY, newZ];
+                            console.log(`Updated ${type} position to:`, [newX, newY, newZ]);
+                            
+                            // Update UI if geometry modal is open
+                            this.updateCenterPointUI(type, [newX, newY, newZ]);
+                        }
+                        
+                        this.render();
+                    }
+                });
+            }
+        }
+        
+        // Also update the transform info panel
+        this.updateTransformInfo();
+    }
+
+    // Add method to clear component info
+    clearComponentInfo() {
+        const componentInfoPanel = document.getElementById('component-info');
+        if (componentInfoPanel) {
+            componentInfoPanel.innerHTML = '<div class="no-selection-message">Select a component to view its properties</div>';
+        }
     }
 }
 

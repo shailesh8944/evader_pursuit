@@ -79,24 +79,29 @@ body {
 
 /* Left Sidebar */
 .left-sidebar {
-    width: var(--sidebar-width);
+    width: 320px;
+    height: 100%;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    resize: horizontal;
-    min-width: 250px;
-    max-width: 600px;
+    border-right: 1px solid var(--border-color);
+    background-color: var(--sidebar-bg);
+    transition: all 0.3s ease;
+    position: relative;
 }
 
 /* Right Sidebar */
 .right-sidebar {
-    width: var(--sidebar-width);
+    width: 320px;
+    height: 100%;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    resize: horizontal;
-    min-width: 250px;
-    max-width: 600px;
+    border-right: none;
+    border-left: 1px solid var(--border-color);
+    background-color: var(--sidebar-bg);
+    transition: all 0.3s ease;
+    position: relative;
 }
 
 /* Sidebar Tabs */
@@ -116,25 +121,50 @@ body {
 
 /* Sidebar Content */
 .sidebar-content {
+    display: none;
     flex: 1;
     overflow-y: auto;
-    display: none;
-    flex-direction: column;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    padding-bottom: 16px;
 }
 
 .sidebar-content.active {
     display: flex;
+    flex-direction: column;
+}
+
+/* Style scrollbars for better UI */
+.sidebar-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 4px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: 4px;
 }
 
 /* Panels */
 .panel {
-    margin: 10px;
-    border-radius: var(--border-radius);
+    margin-bottom: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
     overflow: hidden;
+    background-color: var(--panel-bg);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    flex-shrink: 0;
 }
 
 .panel-header {
-    padding: 8px 12px;
+    padding: 12px 16px;
+    background-color: var(--panel-header-bg);
+    border-bottom: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -147,7 +177,22 @@ body {
 }
 
 .panel-body {
-    padding: 12px;
+    padding: 16px;
+    overflow-y: auto;
+    max-height: 500px;
+    scrollbar-width: thin;
+}
+
+.panel-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.panel-body::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+.panel-body::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
 }
 
 .panel-actions {
@@ -212,7 +257,7 @@ body {
 
 /* Forms and inputs */
 .form-group {
-    margin-bottom: 12px;
+    margin-bottom: 16px;
 }
 
 .form-group label {
@@ -222,9 +267,22 @@ body {
 }
 
 .form-control {
+    display: block;
     width: 100%;
-    padding: 8px 10px;
+    padding: 8px 12px;
     font-size: 14px;
+    line-height: 1.5;
+    color: var(--input-text-color);
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus {
+    border-color: var(--accent-color);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
 .input-group {
@@ -242,27 +300,37 @@ small.text-muted {
 
 /* Component Buttons */
 .component-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 12px;
+    margin-top: 8px;
 }
 
 .component-btn {
-    padding: 10px;
-    border-radius: var(--border-radius);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
-    width: calc(33.33% - 7px);
+    padding: 14px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--btn-bg);
+    color: var(--text-color);
+    transition: all 0.2s ease;
     text-align: center;
-    height: 80px;
+    cursor: pointer;
+}
+
+.component-btn:hover {
+    background-color: var(--btn-hover-bg);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .component-btn i {
-    font-size: 20px;
-    margin-bottom: 5px;
+    font-size: 24px;
+    margin-bottom: 8px;
+    color: var(--accent-color);
 }
 
 /* Hierarchy Tree */
@@ -382,13 +450,23 @@ small.text-muted {
 }
 
 /* Responsive adjustments */
+@media (max-width: 1200px) {
+    .left-sidebar, .right-sidebar {
+        width: 280px;
+    }
+}
+
 @media (max-width: 992px) {
     .left-sidebar, .right-sidebar {
         width: 250px;
     }
     
-    .component-btn {
-        width: calc(50% - 5px);
+    .panel-header {
+        padding: 10px 12px;
+    }
+    
+    .panel-body {
+        padding: 12px;
     }
 }
 
@@ -430,4 +508,15 @@ small.text-muted {
 @keyframes slideIn {
     from { transform: translateX(100%); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }
+}
+
+/* Improve accessibility */
+input, select, button {
+    font-size: 14px !important;
+}
+
+.form-label, .form-check-label {
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: var(--label-color);
 }

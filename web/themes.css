@@ -46,6 +46,45 @@
     --code-bg: #f8f9fa;
     --tooltip-bg: #000000;
     --tooltip-text: #ffffff;
+    
+    /* Background colors */
+    --body-bg: #f8f9fa;
+    --toolbar-bg: #ffffff;
+    --panel-bg: #ffffff;
+    --panel-header-bg: #f8f9fa;
+    
+    /* Text colors */
+    --text-muted: #6c757d;
+    --text-light: #adb5bd;
+    --label-color: #495057;
+    
+    /* UI element colors */
+    --btn-bg: #f8f9fa;
+    --btn-hover-bg: #e9ecef;
+    --accent-color: #007bff;
+    --badge-bg: #e9ecef;
+    
+    /* Scrollbar colors */
+    --scrollbar-track: #f1f1f1;
+    --scrollbar-thumb: #c1c1c1;
+    
+    /* Viewport colors */
+    --grid-color: #cccccc;
+    --grid-axis-x: #ff5555;
+    --grid-axis-y: #55ff55;
+    --grid-axis-z: #5555ff;
+    
+    /* Other UI elements */
+    --border-radius: 4px;
+    --sidebar-width: 320px;
+    --toolbar-height: 50px;
+    --box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    
+    /* Syntax highlighting */
+    --code-comment: #6c757d;
+    --code-keyword: #007bff;
+    --code-string: #28a745;
+    --code-number: #fd7e14;
 }
 
 /* Dark theme variables */
@@ -92,6 +131,39 @@
     --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.3);
     --shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.5);
+    
+    /* Background colors */
+    --body-bg: #212529;
+    --toolbar-bg: #343a40;
+    --panel-bg: #343a40;
+    --panel-header-bg: #2d3339;
+    
+    /* Text colors */
+    --text-muted: #adb5bd;
+    --text-light: #6c757d;
+    --label-color: #e9ecef;
+    
+    /* UI element colors */
+    --btn-bg: #2d3339;
+    --btn-hover-bg: #495057;
+    --accent-color: #0d6efd;
+    --badge-bg: #495057;
+    
+    /* Scrollbar colors */
+    --scrollbar-track: #2d3339;
+    --scrollbar-thumb: #495057;
+    
+    /* Viewport colors */
+    --grid-color: #495057;
+    --grid-axis-x: #ff7777;
+    --grid-axis-y: #77ff77;
+    --grid-axis-z: #7777ff;
+    
+    /* Syntax highlighting */
+    --code-comment: #adb5bd;
+    --code-keyword: #0d6efd;
+    --code-string: #20c997;
+    --code-number: #fd7e14;
 }
 
 /* ====== CORE UI ELEMENTS ====== */

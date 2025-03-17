@@ -49,12 +49,19 @@ document.addEventListener('DOMContentLoaded', function() {
             threeScene.animate();
             
             // Initialize UI components
+            initializeTheme();
             initializeSidebars();
             initializeToolbar();
             initializeViewportControls(threeScene);
             initializeModals(threeScene);
             initializeFileHandlers(threeScene);
             initializeYAMLGeneration();
+            
+            // Initialize center points toggle
+            initializeCenterPointsControls(threeScene);
+            
+            // Show initial notification
+            showNotification('Vessel simulator initialized', 'info');
             
             console.log("Application initialized successfully");
         } catch (error) {
@@ -289,6 +296,40 @@ document.addEventListener('DOMContentLoaded', function() {
             threeScene.toggleWireframe();
             this.classList.toggle('active');
         });
+        
+        // Toggle geometry
+        const geometryToggleBtn = document.getElementById('btn-toggle-geometry');
+        if (geometryToggleBtn) {
+            // Set initial state if vessel exists
+            if (threeScene.vessel && threeScene.vessel.visible) {
+                geometryToggleBtn.classList.add('active');
+            }
+            
+            geometryToggleBtn.addEventListener('click', function() {
+                if (threeScene.vessel) {
+                    const isVisible = threeScene.toggleGeometry();
+                    
+                    // Update active state based on visibility
+                    if (isVisible) {
+                        this.classList.add('active');
+                    } else {
+                        this.classList.remove('active');
+                    }
+                    
+                    // Also update checkbox state in the sidebar
+                    const toggleGeometryVisibility = document.getElementById('toggleGeometryVisibility');
+                    if (toggleGeometryVisibility) {
+                        toggleGeometryVisibility.checked = isVisible;
+                    }
+                    
+                    showNotification(`3D model ${isVisible ? 'shown' : 'hidden'}`, 'info');
+                } else {
+                    showNotification('No 3D model loaded', 'warning');
+                    // Reset the toggle to active state if no model is loaded
+                    this.classList.add('active');
+                }
+            });
+        }
         
         // Center view
         document.getElementById('btn-center-view')?.addEventListener('click', function() {
@@ -1362,25 +1403,116 @@ document.addEventListener('DOMContentLoaded', function() {
                         try {
                             // Load the model if threeScene has the method
                             if (typeof threeScene.loadFBXModel === 'function') {
-                                const model = await threeScene.loadFBXModel(file);
+                                const result = await threeScene.loadFBXModel(file);
+                                const model = result.vessel;
+                                const dimensions = result.dimensions;
                                 
                                 // Store file reference
                                 window.currentVesselModel.setModelFile('fbx', file);
                                 
+                                // Update the vessel model dimensions if we have them
+                                if (dimensions) {
+                                    console.log("Updating vessel model with FBX dimensions:", dimensions);
+                                    
+                                    // Update the vessel model
+                                    window.currentVesselModel.updateDimensions(
+                                        dimensions.length,
+                                        dimensions.breadth,
+                                        dimensions.depth
+                                    );
+                                    
+                                    // Store axis configuration in the vessel model
+                                    window.currentVesselModel.config.geometry.axisConfig = dimensions.axes;
+                                    
+                                    // Store bounding box information
+                                    window.currentVesselModel.config.geometry.boundingBox = dimensions.boundingBox;
+                                    
+                                    // Update gyration values based on the new dimensions
+                                    if (typeof recalculateGyrationValues === 'function') {
+                                        recalculateGyrationValues();
+                                    }
+                                    
+                                    // If geometry modal is open, update its values
+                                    const geometryModal = document.getElementById('geometryModal');
+                                    if (geometryModal && geometryModal.classList.contains('show')) {
+                                        // Get UI elements
+                                        const vesselLength = document.getElementById('vesselLength');
+                                        const vesselBreadth = document.getElementById('vesselBreadth');
+                                        const vesselDepth = document.getElementById('vesselDepth');
+                                        const lengthAxis = document.getElementById('lengthAxis');
+                                        const breadthAxis = document.getElementById('breadthAxis');
+                                        const depthAxis = document.getElementById('depthAxis');
+                                        const gdfFileInfo = document.getElementById('gdfFileInfo');
+                                        
+                                        if (vesselLength && vesselBreadth && vesselDepth) {
+                                            // Update dimension inputs
+                                            vesselLength.value = dimensions.length.toFixed(2);
+                                            vesselBreadth.value = dimensions.breadth.toFixed(2);
+                                            vesselDepth.value = dimensions.depth.toFixed(2);
+                                        }
+                                        
+                                        if (lengthAxis && breadthAxis && depthAxis) {
+                                            // Update axis dropdowns
+                                            lengthAxis.value = dimensions.axes.length;
+                                            breadthAxis.value = dimensions.axes.breadth;
+                                            depthAxis.value = dimensions.axes.depth;
+                                        }
+                                        
+                                        // Update gyration display if available
+                                        const gyrationX = document.getElementById('gyrationX');
+                                        const gyrationY = document.getElementById('gyrationY');
+                                        const gyrationZ = document.getElementById('gyrationZ');
+                                        
+                                        if (gyrationX && gyrationY && gyrationZ) {
+                                            const gyrationValues = window.currentVesselModel.config.geometry.gyration || [0, 0, 0];
+                                            gyrationX.value = gyrationValues[0].toFixed(2);
+                                            gyrationY.value = gyrationValues[1].toFixed(2);
+                                            gyrationZ.value = gyrationValues[2].toFixed(2);
+                                        }
+                                        
+                                        // Show info message in the modal
+                                        if (gdfFileInfo) {
+                                            gdfFileInfo.style.display = 'block';
+                                            gdfFileInfo.innerHTML = `
+                                                <i class="bi bi-info-circle"></i> <strong>Dimensions detected from FBX file:</strong><br>
+                                                Length: ${dimensions.length.toFixed(2)}m (${dimensions.axes.length}-axis)<br>
+                                                Breadth: ${dimensions.breadth.toFixed(2)}m (${dimensions.axes.breadth}-axis)<br>
+                                                Depth: ${dimensions.depth.toFixed(2)}m (${dimensions.axes.depth}-axis)<br>
+                                                <small class="text-muted">Based on the bounding box of the geometry</small>
+                                            `;
+                                        }
+                                    }
+                                }
+                                
+                                showNotification(`3D model loaded successfully. Dimensions: L=${dimensions.length.toFixed(2)}m, B=${dimensions.breadth.toFixed(2)}m, D=${dimensions.depth.toFixed(2)}m`, 'success');
+                                
                                 // Update scene hierarchy
                                 threeScene.updateSceneHierarchy();
-                                
-                                // Show success message
-                                showNotification('3D model loaded successfully', 'success');
                             } else {
-                                console.error('threeScene.loadFBXModel is not a function');
-                                showNotification('FBX loading not supported in this version', 'error');
+                                console.warn("No dimensions extracted from FBX model");
+                                showNotification('3D model loaded successfully, but could not extract dimensions', 'warning');
                             }
                         } catch (error) {
                             console.error('Error loading 3D model:', error);
                             showNotification('Failed to load 3D model: ' + error.message, 'error');
                         }
                     }, 100);
+                }
+            });
+        }
+        
+        // Geometry visibility toggle
+        const toggleGeometryVisibility = document.getElementById('toggleGeometryVisibility');
+        if (toggleGeometryVisibility && threeScene) {
+            toggleGeometryVisibility.addEventListener('change', function() {
+                if (threeScene.vessel) {
+                    // Use the explicit state from the checkbox
+                    threeScene.toggleGeometry(this.checked);
+                    showNotification(`3D model ${this.checked ? 'shown' : 'hidden'}`, 'info');
+                } else {
+                    showNotification('No 3D model loaded', 'warning');
+                    // Reset the toggle to active state if no model is loaded
+                    this.classList.add('active');
                 }
             });
         }
@@ -1644,7 +1776,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (config.control_surfaces && Array.isArray(config.control_surfaces.control_surfaces)) {
                 console.log(`Control Surfaces: ${config.control_surfaces.control_surfaces.length}`);
                 console.log(config.control_surfaces.control_surfaces);
-            } else {
+                } else {
                 console.log('Control Surfaces: Not properly initialized');
                 console.log(config.control_surfaces);
             }
@@ -1915,4 +2047,917 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Start observing data-bs-theme attribute changes
     observer.observe(document.documentElement, { attributes: true });
+
+    // Geometry modal functionality
+    const btnEditGeometry = document.getElementById('btnEditGeometry');
+    const geometryModal = new bootstrap.Modal(document.getElementById('geometryModal'));
+    const geometryFileUpload = document.getElementById('geometryFileUpload');
+    const btnSaveGeometry = document.getElementById('btnSaveGeometry');
+    const gdfFileInfo = document.getElementById('gdfFileInfo');
+
+    // Elements for axis direction selection
+    const lengthAxis = document.getElementById('lengthAxis');
+    const breadthAxis = document.getElementById('breadthAxis');
+    const depthAxis = document.getElementById('depthAxis');
+
+    // Dimension inputs
+    const vesselLength = document.getElementById('vesselLength');
+    const vesselBreadth = document.getElementById('vesselBreadth');
+    const vesselDepth = document.getElementById('vesselDepth');
+
+    // Gyration inputs
+    const gyrationX = document.getElementById('gyrationX');
+    const gyrationY = document.getElementById('gyrationY');
+    const gyrationZ = document.getElementById('gyrationZ');
+
+    // Center point inputs
+    const coX = document.getElementById('coX');
+    const coY = document.getElementById('coY');
+    const coZ = document.getElementById('coZ');
+    const cgX = document.getElementById('cgX');
+    const cgY = document.getElementById('cgY');
+    const cgZ = document.getElementById('cgZ');
+    const cbX = document.getElementById('cbX');
+    const cbY = document.getElementById('cbY');
+    const cbZ = document.getElementById('cbZ');
+
+    // Geometry file path
+    const geometryFilePath = document.getElementById('geometryFilePath');
+
+    if (btnEditGeometry) {
+        btnEditGeometry.addEventListener('click', function() {
+            // Load current geometry data from the vessel model
+            const geometry = window.currentVesselModel.config.geometry;
+            
+            // Populate the form fields
+            vesselLength.value = geometry.length.toFixed(2);
+            vesselBreadth.value = geometry.breadth.toFixed(2);
+            vesselDepth.value = geometry.depth.toFixed(2);
+            
+            // Set gyration values
+            gyrationX.value = geometry.gyration[0].toFixed(2);
+            gyrationY.value = geometry.gyration[1].toFixed(2);
+            gyrationZ.value = geometry.gyration[2].toFixed(2);
+            
+            // Set center coordinates
+            coX.value = geometry.CO[0].toFixed(2);
+            coY.value = geometry.CO[1].toFixed(2);
+            coZ.value = geometry.CO[2].toFixed(2);
+            
+            cgX.value = geometry.CG[0].toFixed(2);
+            cgY.value = geometry.CG[1].toFixed(2);
+            cgZ.value = geometry.CG[2].toFixed(2);
+            
+            cbX.value = geometry.CB[0].toFixed(2);
+            cbY.value = geometry.CB[1].toFixed(2);
+            cbZ.value = geometry.CB[2].toFixed(2);
+            
+            // Set geometry file path
+            geometryFilePath.value = geometry.geometry_file || '';
+            
+            // Set axis directions if available
+            if (geometry.axisConfig) {
+                lengthAxis.value = geometry.axisConfig.length || 'x';
+                breadthAxis.value = geometry.axisConfig.breadth || 'y';
+                depthAxis.value = geometry.axisConfig.depth || 'z';
+            } else {
+                // Default to X = length, Y = breadth, Z = depth
+                lengthAxis.value = 'x';
+                breadthAxis.value = 'y';
+                depthAxis.value = 'z';
+            }
+            
+            // Show dimension source info if available
+            if (gdfFileInfo) {
+                // Check which file type was used for dimension extraction
+                let sourceFile = 'Unknown';
+                if (window.currentVesselModel.modelData.gdfFile) {
+                    sourceFile = 'GDF';
+                } else if (window.currentVesselModel.modelData.fbxFile) {
+                    sourceFile = 'FBX';
+                } else if (window.currentVesselModel.modelData.stlFile) {
+                    sourceFile = 'STL';
+                }
+                
+                if (sourceFile !== 'Unknown') {
+                    gdfFileInfo.style.display = 'block';
+                    gdfFileInfo.innerHTML = `
+                        <i class="bi bi-info-circle"></i> <strong>Dimensions from ${sourceFile} file:</strong><br>
+                        Length: ${geometry.length.toFixed(2)}m (${lengthAxis.value}-axis)<br>
+                        Breadth: ${geometry.breadth.toFixed(2)}m (${breadthAxis.value}-axis)<br>
+                        Depth: ${geometry.depth.toFixed(2)}m (${depthAxis.value}-axis)<br>
+                        <small class="text-muted">Based on the bounding box of the ${sourceFile.toLowerCase()} model</small>
+                    `;
+                } else {
+                    gdfFileInfo.style.display = 'none';
+                }
+            }
+            
+            // Show the modal
+            geometryModal.show();
+        });
+    }
+
+    // Handler for geometry file upload
+    if (geometryFileUpload) {
+        geometryFileUpload.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const content = e.target.result;
+                        const geometryData = jsyaml.load(content);
+                        
+                        // Update the form with the loaded values
+                        if (geometryData) {
+                            if (geometryData.length) vesselLength.value = parseFloat(geometryData.length).toFixed(2);
+                            if (geometryData.breadth) vesselBreadth.value = parseFloat(geometryData.breadth).toFixed(2);
+                            if (geometryData.depth) vesselDepth.value = parseFloat(geometryData.depth).toFixed(2);
+                            
+                            if (geometryData.gyration) {
+                                const gyration = parseArrayFromString(geometryData.gyration);
+                                if (gyration.length >= 3) {
+                                    gyrationX.value = parseFloat(gyration[0]).toFixed(2);
+                                    gyrationY.value = parseFloat(gyration[1]).toFixed(2);
+                                    gyrationZ.value = parseFloat(gyration[2]).toFixed(2);
+                                }
+                            }
+                            
+                            if (geometryData.CO) {
+                                const co = parseArrayFromString(geometryData.CO);
+                                if (co.length >= 3) {
+                                    coX.value = parseFloat(co[0]).toFixed(2);
+                                    coY.value = parseFloat(co[1]).toFixed(2);
+                                    coZ.value = parseFloat(co[2]).toFixed(2);
+                                }
+                            }
+                            
+                            if (geometryData.CG) {
+                                const cg = parseArrayFromString(geometryData.CG);
+                                if (cg.length >= 3) {
+                                    cgX.value = parseFloat(cg[0]).toFixed(2);
+                                    cgY.value = parseFloat(cg[1]).toFixed(2);
+                                    cgZ.value = parseFloat(cg[2]).toFixed(2);
+                                }
+                            }
+                            
+                            if (geometryData.CB) {
+                                const cb = parseArrayFromString(geometryData.CB);
+                                if (cb.length >= 3) {
+                                    cbX.value = parseFloat(cb[0]).toFixed(2);
+                                    cbY.value = parseFloat(cb[1]).toFixed(2);
+                                    cbZ.value = parseFloat(cb[2]).toFixed(2);
+                                }
+                            }
+                            
+                            if (geometryData.geometry_file) geometryFilePath.value = geometryData.geometry_file;
+                        }
+                        
+                        // Show success message
+                        showToast('Geometry file loaded successfully', 'success');
+                    } catch (error) {
+                        console.error('Error parsing geometry YAML:', error);
+                        showToast('Error loading geometry file: ' + error.message, 'error');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+    }
+
+    // Helper function to parse array from string like [1.0, 2.0, 3.0]
+    function parseArrayFromString(str) {
+        if (Array.isArray(str)) return str;
+        if (typeof str !== 'string') return [];
+        
+        try {
+            // Remove brackets and split by comma
+            const cleanStr = str.replace(/[\[\]]/g, '').trim();
+            return cleanStr.split(',').map(item => parseFloat(item.trim()));
+        } catch (error) {
+            console.error('Error parsing array string:', error);
+            return [];
+        }
+    }
+
+    // Add function to update dimensions based on axis changes
+    function updateDimensionsBasedOnAxis(currentAxis, previousAxis) {
+        // If we don't have the previous axis configuration, we can't remap dimensions
+        if (!previousAxis) return;
+        
+        console.log(`Axis changed from ${previousAxis} to ${currentAxis}`);
+        
+        // Get current dimension values
+        const currentLength = parseFloat(vesselLength.value) || 0;
+        const currentBreadth = parseFloat(vesselBreadth.value) || 0;
+        const currentDepth = parseFloat(vesselDepth.value) || 0;
+        
+        // Get current axis settings
+        const currentLengthAxis = lengthAxis.value;
+        const currentBreadthAxis = breadthAxis.value;
+        const currentDepthAxis = depthAxis.value;
+        
+        // Create dimension maps - mapping from axis to dimension value
+        const previousDimensionMap = {
+            length: previousAxis.length,
+            breadth: previousAxis.breadth,
+            depth: previousAxis.depth
+        };
+        
+        const currentDimensionMap = {
+            length: currentLengthAxis,
+            breadth: currentBreadthAxis,
+            depth: currentDepthAxis
+        };
+        
+        // Get previous dimension values for each axis
+        const oldValueMap = {
+            [previousAxis.length]: currentLength,
+            [previousAxis.breadth]: currentBreadth,
+            [previousAxis.depth]: currentDepth
+        };
+        
+        console.log("Previous axis to dimension map:", previousDimensionMap);
+        console.log("Current axis to dimension map:", currentDimensionMap);
+        console.log("Old values by axis:", oldValueMap);
+        
+        // Remap the dimensions based on axis changes
+        const newLength = oldValueMap[currentDimensionMap.length] || currentLength;
+        const newBreadth = oldValueMap[currentDimensionMap.breadth] || currentBreadth;
+        const newDepth = oldValueMap[currentDimensionMap.depth] || currentDepth;
+        
+        console.log(`Remapped dimensions: Length: ${newLength}, Breadth: ${newBreadth}, Depth: ${newDepth}`);
+        
+        // Update the UI
+        vesselLength.value = newLength.toFixed(2);
+        vesselBreadth.value = newBreadth.toFixed(2);
+        vesselDepth.value = newDepth.toFixed(2);
+        
+        // Update info message if visible
+        if (gdfFileInfo && gdfFileInfo.style.display === 'block') {
+            const infoHtml = gdfFileInfo.innerHTML;
+            // Update the axis information in the info text
+            const updatedHtml = infoHtml.replace(
+                /Length: ([\d.]+)m \(([xyz])-axis\)/,
+                `Length: ${newLength.toFixed(2)}m (${currentLengthAxis}-axis)`
+            ).replace(
+                /Breadth: ([\d.]+)m \(([xyz])-axis\)/,
+                `Breadth: ${newBreadth.toFixed(2)}m (${currentBreadthAxis}-axis)`
+            ).replace(
+                /Depth: ([\d.]+)m \(([xyz])-axis\)/,
+                `Depth: ${newDepth.toFixed(2)}m (${currentDepthAxis}-axis)`
+            );
+            
+            gdfFileInfo.innerHTML = updatedHtml;
+        }
+        
+        // Recalculate gyration after dimension change
+        recalculateGyrationValues();
+    }
+
+    // Update the axis selection event listeners
+    if (lengthAxis && breadthAxis && depthAxis) {
+        // Store the current axis configuration for comparison when changed
+        let previousAxisConfig = {
+            length: lengthAxis.value || 'x',
+            breadth: breadthAxis.value || 'y',
+            depth: depthAxis.value || 'z'
+        };
+        
+        lengthAxis.addEventListener('change', function() {
+            // If both other axes are set to the same as this one, switch one of them
+            if (breadthAxis.value === this.value && depthAxis.value === this.value) {
+                // Find an available axis
+                const axes = ['x', 'y', 'z'];
+                const availableAxes = axes.filter(a => a !== this.value);
+                
+                breadthAxis.value = availableAxes[0];
+                depthAxis.value = availableAxes[1];
+            } 
+            // If just one other axis is the same, switch it
+            else if (breadthAxis.value === this.value) {
+                const axes = ['x', 'y', 'z'];
+                const availableAxes = axes.filter(a => a !== this.value && a !== depthAxis.value);
+                breadthAxis.value = availableAxes[0];
+            }
+            else if (depthAxis.value === this.value) {
+                const axes = ['x', 'y', 'z'];
+                const availableAxes = axes.filter(a => a !== this.value && a !== breadthAxis.value);
+                depthAxis.value = availableAxes[0];
+            }
+            
+            // Get current axis configuration
+            const currentAxisConfig = {
+                length: lengthAxis.value,
+                breadth: breadthAxis.value,
+                depth: depthAxis.value
+            };
+            
+            // Update dimensions based on axis changes
+            updateDimensionsBasedOnAxis(currentAxisConfig, previousAxisConfig);
+            
+            // Update the previous config for next change
+            previousAxisConfig = { ...currentAxisConfig };
+        });
+        
+        breadthAxis.addEventListener('change', function() {
+            // Handle axis conflicts similar to length axis
+            if (lengthAxis.value === this.value && depthAxis.value === this.value) {
+                const axes = ['x', 'y', 'z'];
+                const availableAxes = axes.filter(a => a !== this.value);
+                
+                lengthAxis.value = availableAxes[0];
+                depthAxis.value = availableAxes[1];
+            } 
+            else if (lengthAxis.value === this.value) {
+                const axes = ['x', 'y', 'z'];
+                const availableAxes = axes.filter(a => a !== this.value && a !== depthAxis.value);
+                lengthAxis.value = availableAxes[0];
+            }
+            else if (depthAxis.value === this.value) {
+                const axes = ['x', 'y', 'z'];
+                const availableAxes = axes.filter(a => a !== this.value && a !== lengthAxis.value);
+                depthAxis.value = availableAxes[0];
+            }
+            
+            // Get current axis configuration
+            const currentAxisConfig = {
+                length: lengthAxis.value,
+                breadth: breadthAxis.value,
+                depth: depthAxis.value
+            };
+            
+            // Update dimensions based on axis changes
+            updateDimensionsBasedOnAxis(currentAxisConfig, previousAxisConfig);
+            
+            // Update the previous config for next change
+            previousAxisConfig = { ...currentAxisConfig };
+        });
+        
+        depthAxis.addEventListener('change', function() {
+            // Handle axis conflicts similar to other axes
+            if (lengthAxis.value === this.value && breadthAxis.value === this.value) {
+                const axes = ['x', 'y', 'z'];
+                const availableAxes = axes.filter(a => a !== this.value);
+                
+                lengthAxis.value = availableAxes[0];
+                breadthAxis.value = availableAxes[1];
+            } 
+            else if (lengthAxis.value === this.value) {
+                const axes = ['x', 'y', 'z'];
+                const availableAxes = axes.filter(a => a !== this.value && a !== breadthAxis.value);
+                lengthAxis.value = availableAxes[0];
+            }
+            else if (breadthAxis.value === this.value) {
+                const axes = ['x', 'y', 'z'];
+                const availableAxes = axes.filter(a => a !== this.value && a !== lengthAxis.value);
+                breadthAxis.value = availableAxes[0];
+            }
+            
+            // Get current axis configuration
+            const currentAxisConfig = {
+                length: lengthAxis.value,
+                breadth: breadthAxis.value,
+                depth: depthAxis.value
+            };
+            
+            // Update dimensions based on axis changes
+            updateDimensionsBasedOnAxis(currentAxisConfig, previousAxisConfig);
+            
+            // Update the previous config for next change
+            previousAxisConfig = { ...currentAxisConfig };
+        });
+        
+        // Also recalculate when dimensions change
+        vesselLength.addEventListener('change', recalculateGyrationValues);
+        vesselBreadth.addEventListener('change', recalculateGyrationValues);
+        vesselDepth.addEventListener('change', recalculateGyrationValues);
+        
+        // If vessel type changes, also recalculate
+        const vesselTypeSelect = document.getElementById('vesselType');
+        if (vesselTypeSelect) {
+            vesselTypeSelect.addEventListener('change', recalculateGyrationValues);
+        }
+    }
+
+    /**
+     * Extract dimensions from GDF file content
+     * @param {string} gdfContent - The content of the GDF file
+     * @returns {Object|null} - Object containing dimensions or null if extraction failed
+     */
+    function updateDimensionsFromGDF(gdfContent) {
+        console.log("Starting dimension extraction from GDF file");
+        
+        try {
+            // Split by lines and filter out empty ones
+            const lines = gdfContent.split('\n').filter(line => line.trim() !== '');
+            
+            if (lines.length < 10) {
+                console.error("GDF file doesn't have enough lines");
+                return null;
+            }
+
+            // Parse header information
+            let uLen = 1.0; // Default unit length
+            let iSymx = 0, iSymy = 0; // Symmetry flags
+            
+            // Try to extract ULEN (unit length) - typically in the first few lines
+            for (let i = 0; i < Math.min(5, lines.length); i++) {
+                const line = lines[i].trim();
+                if (line.includes('ULEN')) {
+                    const match = line.match(/ULEN\s*=\s*([0-9.]+)/i);
+                    if (match && match[1]) {
+                        uLen = parseFloat(match[1]);
+                        console.log(`Found ULEN = ${uLen}`);
+                        break;
+                    }
+                }
+            }
+            
+            // Extract symmetry flags if present
+            for (let i = 0; i < Math.min(10, lines.length); i++) {
+                const line = lines[i].trim();
+                if (line.includes('ISX') || line.includes('ISYM')) {
+                    const matchX = line.match(/ISX\s*=\s*(\d+)/i) || line.match(/ISYM.*X\s*=\s*(\d+)/i);
+                    const matchY = line.match(/ISY\s*=\s*(\d+)/i) || line.match(/ISYM.*Y\s*=\s*(\d+)/i);
+                    
+                    if (matchX && matchX[1]) iSymx = parseInt(matchX[1]);
+                    if (matchY && matchY[1]) iSymy = parseInt(matchY[1]);
+                    
+                    console.log(`Found symmetry flags: iSymx = ${iSymx}, iSymy = ${iSymy}`);
+                    break;
+                }
+            }
+
+            // Find where vertices begin - usually after a line containing "NPAN" or a section break
+            let vertexStartIndex = -1;
+            for (let i = 0; i < Math.min(20, lines.length); i++) {
+                if (lines[i].includes('PANS') || lines[i].includes('NPAN') || 
+                    lines[i].match(/^\s*\d+\s+\d+\s*$/)) { // Typically a line with number of panels/vertices
+                    vertexStartIndex = i + 1;
+                    break;
+                }
+            }
+            
+            if (vertexStartIndex === -1) {
+                // If we couldn't find a clear marker, look for the first line that looks like coordinates
+                for (let i = 5; i < Math.min(30, lines.length); i++) {
+                    // Check if line matches pattern of three floating point numbers
+                    if (lines[i].match(/^\s*-?\d+(\.\d+)?\s+-?\d+(\.\d+)?\s+-?\d+(\.\d+)?\s*$/)) {
+                        vertexStartIndex = i;
+                        break;
+                    }
+                }
+            }
+            
+            if (vertexStartIndex === -1) {
+                console.error("Could not find vertex data in GDF file");
+                return null;
+            }
+            
+            console.log(`Starting to read vertices from line ${vertexStartIndex}`);
+            
+            // Read vertex data
+            const vertices = [];
+            for (let i = vertexStartIndex; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // Skip empty lines or lines that look like headers/comments
+                if (line === '' || line.startsWith('#') || line.startsWith('!')) continue;
+                
+                // Check if we've reached the end of vertex data (typically marked by a new section)
+                if (line.match(/^[A-Z]/) && !line.match(/^[XYZ]/)) {
+                    console.log(`Reached end of vertex data at line ${i}`);
+                    break;
+                }
+                
+                // Parse coordinates
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 3) {
+                    try {
+                        const x = parseFloat(parts[0]) * uLen;
+                        const y = parseFloat(parts[1]) * uLen;
+                        const z = parseFloat(parts[2]) * uLen;
+                        
+                        // Apply symmetry if needed
+                        vertices.push([x, y, z]);
+                        
+                        if (iSymx === 1) {
+                            vertices.push([x, -y, z]);
+                        }
+                        
+                        if (iSymy === 1) {
+                            vertices.push([x, y, -z]);
+                            if (iSymx === 1) {
+                                vertices.push([x, -y, -z]);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(`Could not parse vertex at line ${i}: ${line}`);
+                    }
+                }
+            }
+            
+            if (vertices.length === 0) {
+                console.error("No valid vertices found in GDF file");
+                return null;
+            }
+            
+            console.log(`Extracted ${vertices.length} vertices from GDF file`);
+            
+            // Find min and max for each coordinate
+            let minX = Number.MAX_VALUE, maxX = -Number.MAX_VALUE;
+            let minY = Number.MAX_VALUE, maxY = -Number.MAX_VALUE;
+            let minZ = Number.MAX_VALUE, maxZ = -Number.MAX_VALUE;
+            
+            for (const [x, y, z] of vertices) {
+                minX = Math.min(minX, x);
+                maxX = Math.max(maxX, x);
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+                minZ = Math.min(minZ, z);
+                maxZ = Math.max(maxZ, z);
+            }
+            
+            // Calculate extents in each direction
+            const xExtent = Math.abs(maxX - minX);
+            const yExtent = Math.abs(maxY - minY);
+            const zExtent = Math.abs(maxZ - minZ);
+            
+            console.log(`Bounding box: X: ${minX.toFixed(2)} to ${maxX.toFixed(2)} (${xExtent.toFixed(2)})`);
+            console.log(`Bounding box: Y: ${minY.toFixed(2)} to ${maxY.toFixed(2)} (${yExtent.toFixed(2)})`);
+            console.log(`Bounding box: Z: ${minZ.toFixed(2)} to ${maxZ.toFixed(2)} (${zExtent.toFixed(2)})`);
+            
+            // Determine which dimension is which (based on relative sizes)
+            const dimensions = [xExtent, yExtent, zExtent];
+            const axes = ['x', 'y', 'z'];
+            
+            // Sort dimensions from largest to smallest
+            const sorted = dimensions.map((val, idx) => ({val, axis: axes[idx]}))
+                                   .sort((a, b) => b.val - a.val);
+            
+            // Assign dimensions based on the sorted order
+            const length = sorted[0].val;
+            const lengthAxis = sorted[0].axis;
+            
+            const breadth = sorted[1].val;
+            const breadthAxis = sorted[1].axis;
+            
+            const depth = sorted[2].val;
+            const depthAxis = sorted[2].axis;
+            
+            console.log(`Assigned: Length: ${length.toFixed(2)} (${lengthAxis}-axis), Breadth: ${breadth.toFixed(2)} (${breadthAxis}-axis), Depth: ${depth.toFixed(2)} (${depthAxis}-axis)`);
+            
+            // Update form fields if available
+            if (vesselLength) vesselLength.value = length.toFixed(2);
+            if (vesselBreadth) vesselBreadth.value = breadth.toFixed(2);
+            if (vesselDepth) vesselDepth.value = depth.toFixed(2);
+            
+            // Update axis selections if available
+            if (lengthAxis) lengthAxis.value = lengthAxis;
+            if (breadthAxis) breadthAxis.value = breadthAxis;
+            if (depthAxis) depthAxis.value = depthAxis;
+            
+            // Also update gyration values if needed
+            if (window.currentVesselModel && window.currentVesselModel.config.vesselType) {
+                recalculateGyrationValues();
+            }
+            
+            return {
+                length,
+                breadth,
+                depth,
+                axes: {
+                    length: lengthAxis,
+                    breadth: breadthAxis,
+                    depth: depthAxis
+                },
+                boundingBox: {
+                    min: [minX, minY, minZ],
+                    max: [maxX, maxY, maxZ],
+                    center: [
+                        (minX + maxX) / 2,
+                        (minY + maxY) / 2,
+                        (minZ + maxZ) / 2
+                    ]
+                }
+            };
+        } catch (error) {
+            console.error("Error extracting dimensions from GDF:", error);
+            return null;
+        }
+    }
+
+    // Enhance GDF file upload handler to extract dimensions
+        const gdfFileInput = document.getElementById('gdfFile');
+    if (gdfFileInput) {
+        gdfFileInput.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const content = e.target.result;
+                        
+                        // Show toast notification that we're processing the file
+                        showToast('Processing GDF file...', 'info');
+                        
+                        // Update vessel model with GDF file path (use absolute path for simulation)
+                        const gdfFilePath = `/workspaces/mavlab/inputs/${window.currentVesselModel.config.name}/HydRA/input/${file.name}`;
+                        window.currentVesselModel.config.geometry.geometry_file = gdfFilePath;
+                        
+                        // Update the geometry file path input if it's visible
+                        if (geometryFilePath) {
+                            geometryFilePath.value = gdfFilePath;
+                        }
+                        
+                        // Extract dimensions from GDF content
+                        const dimensions = updateDimensionsFromGDF(content);
+                        if (dimensions) {
+                            console.log("Successfully extracted dimensions from GDF file:", dimensions);
+                            
+                            // Update the vessel model with the extracted dimensions
+                            window.currentVesselModel.updateDimensions(
+                                dimensions.length,
+                                dimensions.breadth,
+                                dimensions.depth
+                            );
+                            
+                            // Store axis configuration in the vessel model
+                            window.currentVesselModel.config.geometry.axisConfig = dimensions.axes;
+                            
+                            // Store bounding box information if available
+                            if (dimensions.boundingBox) {
+                                window.currentVesselModel.config.geometry.boundingBox = dimensions.boundingBox;
+                            }
+                            
+                            // Also update gyration values based on the new dimensions
+                            const gyrationValues = [
+                                parseFloat(gyrationX.value),
+                                parseFloat(gyrationY.value),
+                                parseFloat(gyrationZ.value)
+                            ];
+                            window.currentVesselModel.config.geometry.gyration = gyrationValues;
+                            
+                            // If geometry modal is open, update its values too
+                            if (document.getElementById('geometryModal') && 
+                                document.getElementById('geometryModal').classList.contains('show')) {
+                                
+                                // Update dimension inputs
+                                vesselLength.value = dimensions.length.toFixed(2);
+                                vesselBreadth.value = dimensions.breadth.toFixed(2);
+                                vesselDepth.value = dimensions.depth.toFixed(2);
+                                
+                                // Update axis dropdowns
+                                lengthAxis.value = dimensions.axes.length;
+                                breadthAxis.value = dimensions.axes.breadth;
+                                depthAxis.value = dimensions.axes.depth;
+                                
+                                // Update gyration display
+                                gyrationX.value = gyrationValues[0].toFixed(2);
+                                gyrationY.value = gyrationValues[1].toFixed(2);
+                                gyrationZ.value = gyrationValues[2].toFixed(2);
+                                
+                                // Show detailed info message
+                                gdfFileInfo.style.display = 'block';
+                                gdfFileInfo.innerHTML = `
+                                    <i class="bi bi-info-circle"></i> <strong>Dimensions detected from GDF file:</strong><br>
+                                    Length: ${dimensions.length.toFixed(2)}m (${dimensions.axes.length}-axis)<br>
+                                    Breadth: ${dimensions.breadth.toFixed(2)}m (${dimensions.axes.breadth}-axis)<br>
+                                    Depth: ${dimensions.depth.toFixed(2)}m (${dimensions.axes.depth}-axis)<br>
+                                    <small class="text-muted">Based on the bounding box of the geometry</small>
+                                `;
+                            }
+                            
+                            showToast(`GDF file loaded: ${file.name}. Dimensions extracted: L=${dimensions.length.toFixed(2)}m, B=${dimensions.breadth.toFixed(2)}m, D=${dimensions.depth.toFixed(2)}m`, 'success');
+                        } else {
+                            showToast('GDF file loaded, but unable to extract dimensions. Check the file format.', 'warning');
+                        }
+                        
+                        // Save to history after changes
+                        window.currentVesselModel.saveToHistory();
+                        
+                        // Continue with GDF mesh creation for visualization
+                        try {
+                            const gdfLoader = new GDFLoader();
+                            const mesh = gdfLoader.parse(content).createGeometry();
+                            if (mesh && window.threeScene) {
+                                // Clear existing meshes if needed
+                                if (window.currentVesselModel.gdfMesh) {
+                                    window.threeScene.remove(window.currentVesselModel.gdfMesh);
+                                }
+                                
+                                // Add the new mesh to the scene
+                                window.currentVesselModel.gdfMesh = mesh;
+                                window.threeScene.add(mesh);
+                                
+                                // Center camera on the model
+                                if (window.centerCameraOnObject) {
+                                    window.centerCameraOnObject(mesh);
+                                }
+                                
+                                console.log("GDF mesh created and added to scene");
+                            } else {
+                                console.warn("Could not create mesh from GDF file");
+                            }
+                        } catch (meshError) {
+                            console.error('Error creating mesh from GDF:', meshError);
+                        }
+                    } catch (error) {
+                        console.error('Error processing GDF file:', error);
+                        showToast('Error processing GDF file: ' + error.message, 'error');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+    }
+
+    // Save geometry settings when the save button is clicked
+    if (btnSaveGeometry) {
+        btnSaveGeometry.addEventListener('click', function() {
+            try {
+                // Get values from form
+                const length = parseFloat(vesselLength.value);
+                const breadth = parseFloat(vesselBreadth.value);
+                const depth = parseFloat(vesselDepth.value);
+                
+                // Validate dimensions
+                if (isNaN(length) || isNaN(breadth) || isNaN(depth) || 
+                    length <= 0 || breadth <= 0 || depth <= 0) {
+                    throw new Error('Dimensions must be positive numbers');
+                }
+                
+                // Get gyration values
+                const gyration = [
+                    parseFloat(gyrationX.value),
+                    parseFloat(gyrationY.value),
+                    parseFloat(gyrationZ.value)
+                ];
+                
+                // Get center points
+                const CO = [parseFloat(coX.value), parseFloat(coY.value), parseFloat(coZ.value)];
+                const CG = [parseFloat(cgX.value), parseFloat(cgY.value), parseFloat(cgZ.value)];
+                const CB = [parseFloat(cbX.value), parseFloat(cbY.value), parseFloat(cbZ.value)];
+                
+                // Get axis configuration
+                const axisConfig = {
+                    length: lengthAxis.value,
+                    breadth: breadthAxis.value,
+                    depth: depthAxis.value
+                };
+                
+                // Validate that axis values are unique
+                if (axisConfig.length === axisConfig.breadth || 
+                    axisConfig.length === axisConfig.depth || 
+                    axisConfig.breadth === axisConfig.depth) {
+                    throw new Error('Each axis (length, breadth, depth) must be assigned to a different coordinate axis (x, y, z)');
+                }
+                
+                // Update vessel model with new geometry data
+                window.currentVesselModel.config.geometry.length = length;
+                window.currentVesselModel.config.geometry.breadth = breadth;
+                window.currentVesselModel.config.geometry.depth = depth;
+                window.currentVesselModel.config.geometry.gyration = gyration;
+                window.currentVesselModel.config.geometry.CO = CO;
+                window.currentVesselModel.config.geometry.CG = CG;
+                window.currentVesselModel.config.geometry.CB = CB;
+                window.currentVesselModel.config.geometry.geometry_file = geometryFilePath.value;
+                
+                // Store axis direction configuration in the model
+                window.currentVesselModel.config.geometry.axisConfig = axisConfig;
+                
+                // Save to history
+                window.currentVesselModel.saveToHistory();
+                
+                // Close the modal
+                geometryModal.hide();
+                
+                // Show success message
+                showToast('Geometry parameters saved successfully', 'success');
+            } catch (error) {
+                console.error('Error saving geometry parameters:', error);
+                showToast('Error: ' + error.message, 'error');
+            }
+        });
+    }
+
+    // Helper function to recalculate gyration values based on dimensions and selected axes
+    function recalculateGyrationValues() {
+        try {
+            if (!window.currentVesselModel || !window.currentVesselModel.config) {
+                console.warn("Cannot recalculate gyration values: vessel model not available");
+                return;
+            }
+            
+            // Get current dimensions
+            const length = parseFloat(vesselLength.value) || 0;
+            const breadth = parseFloat(vesselBreadth.value) || 0;
+            const depth = parseFloat(vesselDepth.value) || 0;
+            
+            if (length <= 0 || breadth <= 0 || depth <= 0) {
+                console.warn("Cannot recalculate gyration: invalid dimensions");
+                return;
+            }
+            
+            // Get current axis configuration
+            const lAxis = lengthAxis.value;
+            const bAxis = breadthAxis.value;
+            const dAxis = depthAxis.value;
+            
+            // Create a mapping of dimensions to axes
+            const dimensionMap = {
+                x: 0,
+                y: 0,
+                z: 0
+            };
+            
+            // Map each axis to its corresponding dimension value
+            dimensionMap[lAxis] = length;
+            dimensionMap[bAxis] = breadth;
+            dimensionMap[dAxis] = depth;
+            
+            console.log("Dimension map for gyration calculation:", dimensionMap);
+            
+            // Calculate gyration values based on vessel type and dimensions
+            const vesselType = window.currentVesselModel.config.vesselType || 'generic';
+            let gyrationValues = [0, 0, 0];
+            
+            switch (vesselType.toLowerCase()) {
+                case 'tug':
+                case 'tugboat':
+                    // For tugs: kxx ≈ 0.35-0.4*B, kyy ≈ 0.25*L, kzz ≈ 0.25-0.3*L
+                    gyrationValues[0] = 0.38 * dimensionMap['y']; // kxx = 0.38*B
+                    gyrationValues[1] = 0.25 * dimensionMap['x']; // kyy = 0.25*L
+                    gyrationValues[2] = 0.28 * dimensionMap['x']; // kzz = 0.28*L
+                    break;
+                    
+                case 'container':
+                case 'containership':
+                    // For container ships: kxx ≈ 0.4*B, kyy ≈ 0.25*L, kzz ≈ 0.26*L
+                    gyrationValues[0] = 0.4 * dimensionMap['y'];  // kxx = 0.4*B
+                    gyrationValues[1] = 0.25 * dimensionMap['x']; // kyy = 0.25*L
+                    gyrationValues[2] = 0.26 * dimensionMap['x']; // kzz = 0.26*L
+                    break;
+                    
+                case 'tanker':
+                    // For tankers: kxx ≈ 0.35-0.4*B, kyy ≈ 0.24-0.26*L, kzz ≈ 0.24-0.26*L
+                    gyrationValues[0] = 0.38 * dimensionMap['y'];  // kxx = 0.38*B
+                    gyrationValues[1] = 0.25 * dimensionMap['x']; // kyy = 0.25*L
+                    gyrationValues[2] = 0.25 * dimensionMap['x']; // kzz = 0.25*L
+                    break;
+                    
+                case 'ferry':
+                    // For ferries: kxx ≈ 0.4-0.45*B, kyy ≈ 0.25-0.3*L, kzz ≈ 0.25-0.3*L
+                    gyrationValues[0] = 0.42 * dimensionMap['y'];  // kxx = 0.42*B
+                    gyrationValues[1] = 0.28 * dimensionMap['x']; // kyy = 0.28*L
+                    gyrationValues[2] = 0.28 * dimensionMap['x']; // kzz = 0.28*L
+                    break;
+                    
+                case 'sailboat':
+                case 'sailship':
+                    // For sailboats: kxx ≈ 0.4-0.45*B, kyy ≈ 0.2-0.25*L, kzz ≈ 0.2-0.25*L
+                    gyrationValues[0] = 0.43 * dimensionMap['y'];  // kxx = 0.43*B
+                    gyrationValues[1] = 0.23 * dimensionMap['x']; // kyy = 0.23*L
+                    gyrationValues[2] = 0.23 * dimensionMap['x']; // kzz = 0.23*L
+                    break;
+                    
+                case 'generic':
+                default:
+                    // Generic ship: kxx ≈ 0.4*B, kyy ≈ 0.25*L, kzz ≈ 0.25*L
+                    gyrationValues[0] = 0.4 * dimensionMap['y'];  // kxx = 0.4*B
+                    gyrationValues[1] = 0.25 * dimensionMap['x']; // kyy = 0.25*L
+                    gyrationValues[2] = 0.25 * dimensionMap['x']; // kzz = 0.25*L
+                    break;
+            }
+            
+            // Update the input fields
+            if (gyrationX && gyrationY && gyrationZ) {
+                gyrationX.value = gyrationValues[0].toFixed(2);
+                gyrationY.value = gyrationValues[1].toFixed(2);
+                gyrationZ.value = gyrationValues[2].toFixed(2);
+            }
+            
+            // Also update the model configuration
+            window.currentVesselModel.config.geometry.gyration = gyrationValues.map(v => parseFloat(v.toFixed(2)));
+            
+            console.log(`Updated gyration values for ${vesselType}: [${gyrationValues.map(v => v.toFixed(2)).join(', ')}]`);
+        } catch (error) {
+            console.error("Error recalculating gyration values:", error);
+        }
+    }
+
+    // Add a new function to initialize center points controls
+    function initializeCenterPointsControls(threeScene) {
+        const toggleCenterPoints = document.getElementById('toggleCenterPoints');
+        if (toggleCenterPoints) {
+            toggleCenterPoints.addEventListener('change', function() {
+                if (threeScene && typeof threeScene.updateCenterPointsVisibility === 'function') {
+                    threeScene.updateCenterPointsVisibility(this.checked);
+                    showNotification(`Center points ${this.checked ? 'visible' : 'hidden'}`, 'info');
+                }
+            });
+        }
+    }
 }); 

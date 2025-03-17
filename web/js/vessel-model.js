@@ -156,21 +156,42 @@ class VesselModel {
 
     // Update vessel dimensions and recalculate dependent values
     updateDimensions(length, breadth, depth) {
-        if (length <= 0 || breadth <= 0 || depth <= 0) {
-            throw new Error('Dimensions must be positive values');
+        if (!this.config || !this.config.geometry) {
+            console.error("Vessel model configuration is not properly initialized");
+            return this;
+        }
+        
+        // Validate dimensions
+        if (parseFloat(length) <= 0 || parseFloat(breadth) <= 0 || parseFloat(depth) <= 0) {
+            console.warn('Dimensions must be positive values');
+            return this;
         }
         
         this.config.geometry.length = parseFloat(length);
         this.config.geometry.breadth = parseFloat(breadth);
         this.config.geometry.depth = parseFloat(depth);
-
+        
+        console.log(`Updated vessel dimensions: L=${length}m, B=${breadth}m, D=${depth}m`);
+        
         // Update gyration radii based on dimensions
-        this.updateGyrationRadii();
+        if (typeof this.updateGyrationRadii === 'function') {
+            this.updateGyrationRadii();
+        }
         
         // Update inertia matrix
-        this.updateInertiaMatrix();
+        if (typeof this.updateInertiaMatrix === 'function') {
+            this.updateInertiaMatrix();
+        }
         
+        // Update any UI elements if needed
+        if (typeof this.updateUIElements === 'function') {
+            this.updateUIElements();
+        }
+        
+        // Save to history
         this.saveToHistory();
+        
+        return this;
     }
     
     // Update gyration radii based on vessel type and dimensions
@@ -711,11 +732,18 @@ class VesselModel {
     setModelFile(fileType, file) {
         if (fileType === 'fbx') {
             this.modelData.fbxFile = file;
+            // Set a default model file path for the geometry
+            // This will be used for visualization purposes in the sim
+            const fbxFilePath = `/workspaces/mavlab/inputs/${this.config.name}/visualization/${file.name}`;
+            this.config.visualization = this.config.visualization || {};
+            this.config.visualization.model_file = fbxFilePath;
         } else if (fileType === 'stl') {
             this.modelData.stlFile = file;
         } else if (fileType === 'gdf') {
             this.modelData.gdfFile = file;
-            this.config.geometry.geometry_file = file.name;
+            // Set the GDF file path for hydrodynamics calculations
+            const gdfFilePath = `/workspaces/mavlab/inputs/${this.config.name}/HydRA/input/${file.name}`;
+            this.config.geometry.geometry_file = gdfFilePath;
         } else if (fileType === 'hydra') {
             this.modelData.hydraZipFile = file;
         }
