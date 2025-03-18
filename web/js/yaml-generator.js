@@ -400,15 +400,91 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
             folder.file(filename, content);
         }
         
-        // Create HydRA folder
-        folder.folder('HydRA');
-        
-        // Create a default NACA file if we have control surfaces
-        if (vesselModel.config.control_surfaces && vesselModel.config.control_surfaces.control_surfaces.length > 0) {
-            const nacaNumber = vesselModel.config.control_surfaces.naca_number || '0015';
-            if (vesselModel.getDefaultNacaFile) {
-                folder.file(`NACA${nacaNumber}.csv`, vesselModel.getDefaultNacaFile());
+        // Handle HydRA files
+        if (vesselModel.modelData && vesselModel.modelData.hydraZipFile) {
+            try {
+                console.log("Processing HydRA zip file...");
+                
+                // Load the HydRA zip file
+                const hydraZip = await JSZip.loadAsync(vesselModel.modelData.hydraZipFile);
+                const hydraFolder = folder.folder('HydRA');
+                
+                // Process all files in the HydRA zip, preserving internal structure
+                const promises = [];
+                hydraZip.forEach((relativePath, zipEntry) => {
+                    // Skip directories, we'll create them as needed
+                    if (!zipEntry.dir) {
+                        // Preserve the internal directory structure but under the HydRA folder
+                        // Remove any potential top-level folder from the path
+                        let targetPath = relativePath;
+                        const pathParts = relativePath.split('/');
+                        
+                        // If the file is nested under directories, preserve that structure
+                        if (pathParts.length > 1) {
+                            // Remove first part if it's a root folder name
+                            // This keeps the structure but removes any source root folder name
+                            const fileNameWithPath = pathParts.slice(1).join('/');
+                            targetPath = fileNameWithPath;
+                        }
+                        
+                        console.log(`Extracting HydRA file: ${relativePath} → ${targetPath}`);
+                        
+                        // Add file to the HydRA folder, preserving internal paths
+                        const promise = zipEntry.async('blob').then(content => {
+                            hydraFolder.file(targetPath, content);
+                        });
+                        
+                        promises.push(promise);
+                    }
+                });
+                
+                // Wait for all files to be processed
+                await Promise.all(promises);
+                console.log("HydRA zip processing complete");
+            } catch (error) {
+                console.error("Error processing HydRA zip:", error);
+                // Create an empty HydRA folder as fallback
+                folder.folder('HydRA');
             }
+        } else {
+            // No HydRA zip, just create an empty folder
+            folder.folder('HydRA');
+        }
+        
+        // Include NACA file - always try to add it if available
+        try {
+            const nacaNumber = vesselModel.config.control_surfaces?.naca_number || '0015';
+            
+            // Check if we have a getDefaultNacaFile method that might return the uploaded file
+            if (vesselModel.getDefaultNacaFile) {
+                const nacaContent = vesselModel.getDefaultNacaFile();
+                
+                // Check if the result is a Promise
+                if (nacaContent instanceof Promise) {
+                    // Handle promise-based content
+                    const resolvedContent = await nacaContent;
+                    folder.file(`NACA${nacaNumber}.csv`, resolvedContent);
+                    console.log(`Added NACA${nacaNumber}.csv file to zip (from uploaded file)`);
+                } else {
+                    // Handle direct string content
+                    folder.file(`NACA${nacaNumber}.csv`, nacaContent);
+                    console.log(`Added NACA${nacaNumber}.csv file to zip (from default data)`);
+                }
+            }
+        } catch (error) {
+            console.error("Error adding NACA file:", error);
+            // Use a default NACA file as fallback
+            const nacaNumber = vesselModel.config.control_surfaces?.naca_number || '0015';
+            folder.file(`NACA${nacaNumber}.csv`, 
+                `Alpha,CL,CD
+-15.0,-1.45,0.0528
+-10.0,-1.10,0.0233
+-5.0,-0.55,0.0086
+0.0,0.00,0.0052
+5.0,0.55,0.0086
+10.0,1.10,0.0233
+15.0,1.45,0.0528`);
+            console.log(`Added default NACA${nacaNumber}.csv file to zip due to error`);
         }
         
         // Generate zip content

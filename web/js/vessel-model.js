@@ -728,78 +728,106 @@ class VesselModel {
         return this.modelData.componentMap.has(uuid);
     }
     
-    // Set 3D model file
+    // Set model file (3D, Hydra, NACA)
     setModelFile(fileType, file) {
+        if (!file) return;
+        
+        console.log(`Setting ${fileType} file:`, file.name);
+        
         if (fileType === 'fbx') {
+            // Store the FBX file
             this.modelData.fbxFile = file;
-            // Set a default model file path for the geometry
-            // This will be used for visualization purposes in the sim
-            const fbxFilePath = `/workspaces/mavlab/inputs/${this.config.name}/visualization/${file.name}`;
-            this.config.visualization = this.config.visualization || {};
-            this.config.visualization.model_file = fbxFilePath;
-        } else if (fileType === 'stl') {
-            this.modelData.stlFile = file;
-        } else if (fileType === 'gdf') {
-            this.modelData.gdfFile = file;
-            // Set the GDF file path for hydrodynamics calculations
-            const gdfFilePath = `/workspaces/mavlab/inputs/${this.config.name}/HydRA/input/${file.name}`;
-            this.config.geometry.geometry_file = gdfFilePath;
         } else if (fileType === 'hydra') {
             this.modelData.hydraZipFile = file;
+        } else if (fileType === 'naca') {
+            // Validate file type (should be CSV)
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                console.warn(`NACA file should be a CSV file. Received: ${file.type}`);
+                // We'll still accept it, but warn
+            }
+            
+            // Store the NACA file
+            this.modelData.nacaFile = file;
+            
+            // Try to parse file name to extract NACA profile number
+            const fileNameMatch = file.name.match(/NACA(\d{4})/i);
+            if (fileNameMatch && fileNameMatch[1]) {
+                // Extract NACA number from file name
+                const nacaNumber = fileNameMatch[1];
+                this.setNacaProfile(nacaNumber);
+            }
+            
+            console.log(`NACA file set: ${file.name}`);
         }
     }
     
-    // Create default NACA file content for control surfaces
+    // Set NACA profile number
+    setNacaProfile(nacaNumber) {
+        if (!nacaNumber) return;
+        
+        this.config.control_surfaces.naca_number = nacaNumber;
+        console.log(`NACA profile set to: ${nacaNumber}`);
+    }
+    
+    // Get NACA file content (uploaded file or default data)
     getDefaultNacaFile() {
-        // NACA 0015 airfoil data (x, y coordinates)
-        return `x,y
-0.0000,0.0000
-0.0125,0.0315
-0.0250,0.0436
-0.0500,0.0600
-0.0750,0.0722
-0.1000,0.0816
-0.1500,0.0947
-0.2000,0.1033
-0.2500,0.1086
-0.3000,0.1111
-0.3500,0.1110
-0.4000,0.1086
-0.4500,0.1039
-0.5000,0.0972
-0.5500,0.0887
-0.6000,0.0786
-0.6500,0.0675
-0.7000,0.0555
-0.7500,0.0433
-0.8000,0.0312
-0.8500,0.0199
-0.9000,0.0102
-0.9500,0.0025
-1.0000,0.0000
-0.9500,-0.0025
-0.9000,-0.0102
-0.8500,-0.0199
-0.8000,-0.0312
-0.7500,-0.0433
-0.7000,-0.0555
-0.6500,-0.0675
-0.6000,-0.0786
-0.5500,-0.0887
-0.5000,-0.0972
-0.4500,-0.1039
-0.4000,-0.1086
-0.3500,-0.1110
-0.3000,-0.1111
-0.2500,-0.1086
-0.2000,-0.1033
-0.1500,-0.0947
-0.1000,-0.0816
-0.0750,-0.0722
-0.0500,-0.0600
-0.0250,-0.0436
-0.0125,-0.0315
-0.0000,0.0000`;
+        // If we have a custom NACA file, return its content
+        if (this.modelData.nacaFile) {
+            console.log(`Reading uploaded NACA file: ${this.modelData.nacaFile.name}`);
+            
+            // Return a promise that resolves to the file content
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                
+                reader.onload = (e) => {
+                    try {
+                        const content = e.target.result;
+                        
+                        // Basic validation to ensure it looks like CSV
+                        if (!content.includes(',')) {
+                            console.warn('NACA file does not appear to be a valid CSV.');
+                            // We'll still use it but warn
+                        }
+                        
+                        console.log(`Successfully read NACA file (${content.length} bytes)`);
+                        resolve(content);
+                    } catch (err) {
+                        console.error('Error processing NACA file content:', err);
+                        reject(err);
+                    }
+                };
+                
+                reader.onerror = (e) => {
+                    console.error('Failed to read NACA file:', e);
+                    reject(new Error('Failed to read NACA file'));
+                };
+                
+                reader.readAsText(this.modelData.nacaFile);
+            });
+        }
+        
+        // Default NACA 0015 airfoil data (Alpha, CL, CD format)
+        console.log('Using default NACA airfoil data');
+        // If window.showNotification exists, use it to inform the user
+        if (window.showNotification && !this.hasShownDefaultNacaNotification) {
+            window.showNotification('Using default NACA 0015 airfoil data. Upload a custom CSV file if needed.', 'info');
+            this.hasShownDefaultNacaNotification = true; // Only show once per session
+        }
+        
+        return `Alpha,CL,CD
+-15.0,-1.45,0.0528
+-12.5,-1.30,0.0347
+-10.0,-1.10,0.0233
+-7.5,-0.85,0.0141
+-5.0,-0.55,0.0086
+-2.5,-0.25,0.0060
+0.0,0.00,0.0052
+2.5,0.25,0.0060
+5.0,0.55,0.0086
+7.5,0.85,0.0141
+10.0,1.10,0.0233
+12.5,1.30,0.0347
+15.0,1.45,0.0528`;
     }
 
     // Export the vessel configuration as JSON

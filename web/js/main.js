@@ -1368,6 +1368,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 showNotification("Error: " + error.message, "error");
             }
         });
+        
+        // YAML Generator modal
+        const yamlModal = document.getElementById('yamlModal');
+        if (yamlModal) {
+            yamlModal.addEventListener('shown.bs.modal', function() {
+                // Generate previews
+                generateYAMLPreviews();
+                
+                // Update the included files section
+                updateYAMLIncludedFilesInfo();
+            });
+        }
     }
     
     // Initialize file handlers
@@ -1517,24 +1529,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
         
-        // GDF file upload
-        const gdfFileInput = document.getElementById('gdfFile');
-        if (gdfFileInput) {
-            gdfFileInput.addEventListener('change', function() {
-                if (this.files && this.files[0]) {
-                    const file = this.files[0];
-                    
-                    // Store file reference
-                    window.currentVesselModel.setModelFile('gdf', file);
-                    
-                    // Update geometry file path in config
-                    window.currentVesselModel.config.geometry.geometry_file = file.name;
-                    
-                    showNotification('GDF file loaded', 'success');
-                }
-            });
-        }
-        
         // Hydra output zip upload
         const hydraZipInput = document.getElementById('hydraZip');
         if (hydraZipInput) {
@@ -1550,6 +1544,50 @@ document.addEventListener('DOMContentLoaded', function() {
                     window.currentVesselModel.config.hydrodynamics.hydra_file = `/workspaces/mavlab/inputs/${vesselName}/HydRA/${vesselName.toUpperCase()}_hydra.json`;
                     
                     showNotification('Hydra output loaded', 'success');
+                }
+            });
+        }
+        
+        // NACA airfoil file upload
+        const nacaFileInput = document.getElementById('nacaFileUpload');
+        if (nacaFileInput) {
+            nacaFileInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const file = this.files[0];
+                    
+                    try {
+                        // Store file reference in vessel model - this also handles extracting NACA number from filename
+                        window.currentVesselModel.setModelFile('naca', file);
+                        
+                        // Update the input field with the NACA number if it was extracted
+                        const nacaNumber = window.currentVesselModel.config.control_surfaces.naca_number;
+                        if (document.getElementById('nacaNumber')) {
+                            document.getElementById('nacaNumber').value = nacaNumber;
+                        }
+                        
+                        showNotification(`NACA file loaded: ${file.name}. Profile: ${nacaNumber}`, 'success');
+                    } catch (error) {
+                        console.error('Error processing NACA file:', error);
+                        showNotification('Error processing NACA file: ' + error.message, 'error');
+                    }
+                }
+            });
+        }
+        
+        // NACA profile number
+        const nacaNumberInput = document.getElementById('nacaNumber');
+        if (nacaNumberInput) {
+            nacaNumberInput.addEventListener('change', function() {
+                const nacaNumber = this.value.trim();
+                if (nacaNumber) {
+                    window.currentVesselModel.setNacaProfile(nacaNumber);
+                    
+                    // Update all control surface NACA profiles
+                    const controlSurfaces = window.currentVesselModel.config.control_surfaces.control_surfaces;
+                    if (controlSurfaces.length > 0) {
+                        // Update existing control surfaces with new NACA profile
+                        showNotification(`Updated NACA profile for all control surfaces to ${nacaNumber}`, 'info');
+                    }
                 }
             });
         }
@@ -1606,6 +1644,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     throw new Error('No YAML files were generated');
                 }
                 
+                // Update the included files section
+                updateYAMLIncludedFilesInfo();
+                
                 // Create a notification with the result
                 let message = `YAML files generated for vessel: ${vesselName}\n`;
                 message += `Output path: ${outputPath}${vesselName}/`;
@@ -1623,6 +1664,25 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
+        // Add handler for the refresh previews button
+        document.getElementById('btnRefreshPreviews')?.addEventListener('click', function() {
+            showNotification('Refreshing YAML previews...', 'info');
+            
+            try {
+                // Generate the previews
+                const yamlFiles = generateYAMLPreviews();
+                
+                if (yamlFiles && Object.keys(yamlFiles).length > 0) {
+                    showNotification(`Successfully refreshed ${Object.keys(yamlFiles).length} YAML previews`, 'success');
+                } else {
+                    showNotification('No YAML previews were generated', 'warning');
+                }
+            } catch (error) {
+                console.error('Error refreshing previews:', error);
+                showNotification('Failed to refresh previews: ' + error.message, 'error');
+            }
+        });
+        
         document.getElementById('btnDownloadZip')?.addEventListener('click', async function() {
             const vesselName = window.currentVesselModel.config.name;
             
@@ -1634,6 +1694,9 @@ document.addEventListener('DOMContentLoaded', function() {
             showNotification('Preparing ZIP file...', 'info');
             
             try {
+                // Update the included files section before download
+                updateYAMLIncludedFilesInfo();
+                
                 // Create a zip file with all YAML files - use setTimeout to allow UI to update
                 setTimeout(async () => {
                     try {
@@ -1667,48 +1730,97 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Generate YAML previews in the modal
     function generateYAMLPreviews() {
-        try {
-            // Ensure vessel has a name
-            if (!window.currentVesselModel.config.name) {
+        // Check if the vessel has a name
+        if (!window.currentVesselModel || !window.currentVesselModel.config || !window.currentVesselModel.config.name) {
+            console.warn('Vessel has no name set. Using default "vessel".');
+            if (window.currentVesselModel && window.currentVesselModel.config) {
                 window.currentVesselModel.config.name = 'vessel';
-                document.getElementById('vesselName').value = 'vessel';
-                showNotification('Using default vessel name "vessel"', 'warning');
             }
-            
-            // First, let's log the component counts to verify data
-            logComponentCounts();
-            
-            // Generate YAML files using the special formatter for simulation_input.yml
-            const yamlGenerator = new YAMLGenerator();
-            const simulationInputYaml = yamlGenerator.generateSimulationInputYAML(window.currentVesselModel.config);
-            
-            // Generate other YAML files
+        }
+        
+        try {
+            // Generate YAML files
             const yamlFiles = window.currentVesselModel.generateYAMLFiles();
             
-            // Check if YAML files were generated
-            console.log('Generated YAML files:', Object.keys(yamlFiles));
+            if (!yamlFiles || Object.keys(yamlFiles).length === 0) {
+                console.warn('No YAML files were generated');
+                return {};
+            }
             
-            // Display previews for each YAML file
-            document.getElementById('simulation-yaml-content').textContent = simulationInputYaml || '';
-            document.getElementById('geometry-yaml-content').textContent = yamlFiles['geometry.yml'] || '';
-            document.getElementById('inertia-yaml-content').textContent = yamlFiles['inertia.yml'] || '';
-            document.getElementById('hydrodynamics-yaml-content').textContent = yamlFiles['hydrodynamics.yml'] || '';
+            // Define mapping from file names to element IDs
+            const fileToElementMap = {
+                'simulation_input.yml': 'simulation-yaml-content',
+                'geometry.yml': 'geometry-yaml-content',
+                'inertia.yml': 'inertia-yaml-content',
+                'hydrodynamics.yml': 'hydrodynamics-yaml-content',
+                'propulsion.yml': 'thrusters-yaml-content',  // Map to thrusters-yaml-content
+                'control_surfaces.yml': 'control-surfaces-yaml-content',
+                'sensors.yml': 'sensors-yaml-content',
+                'initial_conditions.yml': 'initial-conditions-yaml-content',
+                'guidance.yml': 'guidance-yaml-content',
+                'control.yml': 'control-yaml-content'
+            };
             
-            // For control surfaces, add some extra debug information
-            const controlSurfacesYaml = yamlFiles['control_surfaces.yml'] || '';
-            document.getElementById('control-surfaces-yaml-content').textContent = 
-                `# Number of control surfaces: ${window.currentVesselModel.config.control_surfaces?.control_surfaces?.length || 0}\n` +
-                controlSurfacesYaml;
+            // Update each preview field
+            for (const [fileName, content] of Object.entries(yamlFiles)) {
+                const elementId = fileToElementMap[fileName];
                 
-            document.getElementById('thrusters-yaml-content').textContent = yamlFiles['thrusters.yml'] || '';
-            document.getElementById('sensors-yaml-content').textContent = yamlFiles['sensors.yml'] || '';
-            document.getElementById('guidance-yaml-content').textContent = yamlFiles['guidance.yml'] || '';
-            document.getElementById('control-yaml-content').textContent = yamlFiles['control.yml'] || '';
-            document.getElementById('initial-conditions-yaml-content').textContent = yamlFiles['initial_conditions.yml'] || '';
+                if (elementId) {
+                    const previewElement = document.getElementById(elementId);
+                    
+                    if (previewElement) {
+                        previewElement.textContent = content;
+                    } else {
+                        console.warn(`Preview element with ID ${elementId} not found for file ${fileName}`);
+                    }
+                } else {
+                    console.warn(`No mapping found for file ${fileName}`);
+                }
+            }
+            
+            // Update included files information
+            updateYAMLIncludedFilesInfo();
+            
+            return yamlFiles;
         } catch (error) {
             console.error('Error generating YAML previews:', error);
-            showNotification('Error generating YAML previews', 'error');
+            return {};
         }
+    }
+    
+    /**
+     * Update the included files section in the YAML generation modal
+     */
+    function updateYAMLIncludedFilesInfo() {
+        const includedFilesElement = document.getElementById('yamlIncludedFiles');
+        if (!includedFilesElement) return;
+        
+        // Create a list of included files
+        let filesList = '<ul class="mb-0">';
+        
+        // Check for NACA file
+        if (window.currentVesselModel.modelData.nacaFile) {
+            const nacaNumber = window.currentVesselModel.config.control_surfaces.naca_number || '0015';
+            filesList += `<li><i class="bi bi-file-earmark-text"></i> <strong>NACA${nacaNumber}.csv</strong> - Custom NACA airfoil data</li>`;
+        } else {
+            const nacaNumber = window.currentVesselModel.config.control_surfaces.naca_number || '0015';
+            filesList += `<li><i class="bi bi-file-earmark-text"></i> <strong>NACA${nacaNumber}.csv</strong> - Default NACA airfoil data</li>`;
+        }
+        
+        // Check for HydRA zip
+        if (window.currentVesselModel.modelData.hydraZipFile) {
+            filesList += `<li><i class="bi bi-file-earmark-zip"></i> <strong>HydRA/</strong> - Extracted HydRA output files</li>`;
+        } else {
+            filesList += `<li><i class="bi bi-folder"></i> <strong>HydRA/</strong> - Empty HydRA folder</li>`;
+        }
+        
+        // Add all the YAML files
+        filesList += `<li><i class="bi bi-file-earmark-code"></i> <strong>*.yml</strong> - All configuration YAML files</li>`;
+        
+        filesList += '</ul>';
+        
+        // Update the element content
+        includedFilesElement.innerHTML = filesList;
     }
     
     // --------- Utility Functions ---------
@@ -2826,408 +2938,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Extract dimensions from GDF file content
-     * @param {string} gdfContent - The content of the GDF file
-     * @returns {Object|null} - Object containing dimensions or null if extraction failed
+     * Recalculate gyration values based on vessel dimensions
      */
-    function updateDimensionsFromGDF(gdfContent) {
-        console.log("Starting dimension extraction from GDF file");
-        
-        try {
-            // Split by lines and filter out empty ones
-            const lines = gdfContent.split('\n').filter(line => line.trim() !== '');
-            
-            if (lines.length < 10) {
-                console.error("GDF file doesn't have enough lines");
-                return null;
-            }
-
-            // Parse header information
-            let uLen = 1.0; // Default unit length
-            let iSymx = 0, iSymy = 0; // Symmetry flags
-            
-            // Try to extract ULEN (unit length) - typically in the first few lines
-            for (let i = 0; i < Math.min(5, lines.length); i++) {
-                const line = lines[i].trim();
-                if (line.includes('ULEN')) {
-                    const match = line.match(/ULEN\s*=\s*([0-9.]+)/i);
-                    if (match && match[1]) {
-                        uLen = parseFloat(match[1]);
-                        console.log(`Found ULEN = ${uLen}`);
-                        break;
-                    }
-                }
-            }
-            
-            // Extract symmetry flags if present
-            for (let i = 0; i < Math.min(10, lines.length); i++) {
-                const line = lines[i].trim();
-                if (line.includes('ISX') || line.includes('ISYM')) {
-                    const matchX = line.match(/ISX\s*=\s*(\d+)/i) || line.match(/ISYM.*X\s*=\s*(\d+)/i);
-                    const matchY = line.match(/ISY\s*=\s*(\d+)/i) || line.match(/ISYM.*Y\s*=\s*(\d+)/i);
-                    
-                    if (matchX && matchX[1]) iSymx = parseInt(matchX[1]);
-                    if (matchY && matchY[1]) iSymy = parseInt(matchY[1]);
-                    
-                    console.log(`Found symmetry flags: iSymx = ${iSymx}, iSymy = ${iSymy}`);
-                    break;
-                }
-            }
-
-            // Find where vertices begin - usually after a line containing "NPAN" or a section break
-            let vertexStartIndex = -1;
-            for (let i = 0; i < Math.min(20, lines.length); i++) {
-                if (lines[i].includes('PANS') || lines[i].includes('NPAN') || 
-                    lines[i].match(/^\s*\d+\s+\d+\s*$/)) { // Typically a line with number of panels/vertices
-                    vertexStartIndex = i + 1;
-                    break;
-                }
-            }
-            
-            if (vertexStartIndex === -1) {
-                // If we couldn't find a clear marker, look for the first line that looks like coordinates
-                for (let i = 5; i < Math.min(30, lines.length); i++) {
-                    // Check if line matches pattern of three floating point numbers
-                    if (lines[i].match(/^\s*-?\d+(\.\d+)?\s+-?\d+(\.\d+)?\s+-?\d+(\.\d+)?\s*$/)) {
-                        vertexStartIndex = i;
-                        break;
-                    }
-                }
-            }
-            
-            if (vertexStartIndex === -1) {
-                console.error("Could not find vertex data in GDF file");
-                return null;
-            }
-            
-            console.log(`Starting to read vertices from line ${vertexStartIndex}`);
-            
-            // Read vertex data
-            const vertices = [];
-            for (let i = vertexStartIndex; i < lines.length; i++) {
-                const line = lines[i].trim();
-                
-                // Skip empty lines or lines that look like headers/comments
-                if (line === '' || line.startsWith('#') || line.startsWith('!')) continue;
-                
-                // Check if we've reached the end of vertex data (typically marked by a new section)
-                if (line.match(/^[A-Z]/) && !line.match(/^[XYZ]/)) {
-                    console.log(`Reached end of vertex data at line ${i}`);
-                    break;
-                }
-                
-                // Parse coordinates
-                const parts = line.trim().split(/\s+/);
-                if (parts.length >= 3) {
-                    try {
-                        const x = parseFloat(parts[0]) * uLen;
-                        const y = parseFloat(parts[1]) * uLen;
-                        const z = parseFloat(parts[2]) * uLen;
-                        
-                        // Apply symmetry if needed
-                        vertices.push([x, y, z]);
-                        
-                        if (iSymx === 1) {
-                            vertices.push([x, -y, z]);
-                        }
-                        
-                        if (iSymy === 1) {
-                            vertices.push([x, y, -z]);
-                            if (iSymx === 1) {
-                                vertices.push([x, -y, -z]);
-                            }
-                        }
-                    } catch (e) {
-                        console.warn(`Could not parse vertex at line ${i}: ${line}`);
-                    }
-                }
-            }
-            
-            if (vertices.length === 0) {
-                console.error("No valid vertices found in GDF file");
-                return null;
-            }
-            
-            console.log(`Extracted ${vertices.length} vertices from GDF file`);
-            
-            // Find min and max for each coordinate
-            let minX = Number.MAX_VALUE, maxX = -Number.MAX_VALUE;
-            let minY = Number.MAX_VALUE, maxY = -Number.MAX_VALUE;
-            let minZ = Number.MAX_VALUE, maxZ = -Number.MAX_VALUE;
-            
-            for (const [x, y, z] of vertices) {
-                minX = Math.min(minX, x);
-                maxX = Math.max(maxX, x);
-                minY = Math.min(minY, y);
-                maxY = Math.max(maxY, y);
-                minZ = Math.min(minZ, z);
-                maxZ = Math.max(maxZ, z);
-            }
-            
-            // Calculate extents in each direction
-            const xExtent = Math.abs(maxX - minX);
-            const yExtent = Math.abs(maxY - minY);
-            const zExtent = Math.abs(maxZ - minZ);
-            
-            console.log(`Bounding box: X: ${minX.toFixed(2)} to ${maxX.toFixed(2)} (${xExtent.toFixed(2)})`);
-            console.log(`Bounding box: Y: ${minY.toFixed(2)} to ${maxY.toFixed(2)} (${yExtent.toFixed(2)})`);
-            console.log(`Bounding box: Z: ${minZ.toFixed(2)} to ${maxZ.toFixed(2)} (${zExtent.toFixed(2)})`);
-            
-            // Determine which dimension is which (based on relative sizes)
-            const dimensions = [xExtent, yExtent, zExtent];
-            const axes = ['x', 'y', 'z'];
-            
-            // Sort dimensions from largest to smallest
-            const sorted = dimensions.map((val, idx) => ({val, axis: axes[idx]}))
-                                   .sort((a, b) => b.val - a.val);
-            
-            // Assign dimensions based on the sorted order
-            const length = sorted[0].val;
-            const lengthAxis = sorted[0].axis;
-            
-            const breadth = sorted[1].val;
-            const breadthAxis = sorted[1].axis;
-            
-            const depth = sorted[2].val;
-            const depthAxis = sorted[2].axis;
-            
-            console.log(`Assigned: Length: ${length.toFixed(2)} (${lengthAxis}-axis), Breadth: ${breadth.toFixed(2)} (${breadthAxis}-axis), Depth: ${depth.toFixed(2)} (${depthAxis}-axis)`);
-            
-            // Update form fields if available
-            if (vesselLength) vesselLength.value = length.toFixed(2);
-            if (vesselBreadth) vesselBreadth.value = breadth.toFixed(2);
-            if (vesselDepth) vesselDepth.value = depth.toFixed(2);
-            
-            // Update axis selections if available
-            if (lengthAxis) lengthAxis.value = lengthAxis;
-            if (breadthAxis) breadthAxis.value = breadthAxis;
-            if (depthAxis) depthAxis.value = depthAxis;
-            
-            // Also update gyration values if needed
-            if (window.currentVesselModel && window.currentVesselModel.config.vesselType) {
-                recalculateGyrationValues();
-            }
-            
-            return {
-                length,
-                breadth,
-                depth,
-                axes: {
-                    length: lengthAxis,
-                    breadth: breadthAxis,
-                    depth: depthAxis
-                },
-                boundingBox: {
-                    min: [minX, minY, minZ],
-                    max: [maxX, maxY, maxZ],
-                    center: [
-                        (minX + maxX) / 2,
-                        (minY + maxY) / 2,
-                        (minZ + maxZ) / 2
-                    ]
-                }
-            };
-        } catch (error) {
-            console.error("Error extracting dimensions from GDF:", error);
-            return null;
-        }
-    }
-
-    // Enhance GDF file upload handler to extract dimensions
-        const gdfFileInput = document.getElementById('gdfFile');
-    if (gdfFileInput) {
-        gdfFileInput.addEventListener('change', function() {
-            const file = this.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        const content = e.target.result;
-                        
-                        // Show toast notification that we're processing the file
-                        showToast('Processing GDF file...', 'info');
-                        
-                        // Update vessel model with GDF file path (use absolute path for simulation)
-                        const gdfFilePath = `/workspaces/mavlab/inputs/${window.currentVesselModel.config.name}/HydRA/input/${file.name}`;
-                        window.currentVesselModel.config.geometry.geometry_file = gdfFilePath;
-                        
-                        // Update the geometry file path input if it's visible
-                        if (geometryFilePath) {
-                            geometryFilePath.value = gdfFilePath;
-                        }
-                        
-                        // Extract dimensions from GDF content
-                        const dimensions = updateDimensionsFromGDF(content);
-                        if (dimensions) {
-                            console.log("Successfully extracted dimensions from GDF file:", dimensions);
-                            
-                            // Update the vessel model with the extracted dimensions
-                            window.currentVesselModel.updateDimensions(
-                                dimensions.length,
-                                dimensions.breadth,
-                                dimensions.depth
-                            );
-                            
-                            // Store axis configuration in the vessel model
-                            window.currentVesselModel.config.geometry.axisConfig = dimensions.axes;
-                            
-                            // Store bounding box information if available
-                            if (dimensions.boundingBox) {
-                                window.currentVesselModel.config.geometry.boundingBox = dimensions.boundingBox;
-                            }
-                            
-                            // Also update gyration values based on the new dimensions
-                            const gyrationValues = [
-                                parseFloat(gyrationX.value),
-                                parseFloat(gyrationY.value),
-                                parseFloat(gyrationZ.value)
-                            ];
-                            window.currentVesselModel.config.geometry.gyration = gyrationValues;
-                            
-                            // If geometry modal is open, update its values too
-                            if (document.getElementById('geometryModal') && 
-                                document.getElementById('geometryModal').classList.contains('show')) {
-                                
-                                // Update dimension inputs
-                                vesselLength.value = dimensions.length.toFixed(2);
-                                vesselBreadth.value = dimensions.breadth.toFixed(2);
-                                vesselDepth.value = dimensions.depth.toFixed(2);
-                                
-                                // Update axis dropdowns
-                                lengthAxis.value = dimensions.axes.length;
-                                breadthAxis.value = dimensions.axes.breadth;
-                                depthAxis.value = dimensions.axes.depth;
-                                
-                                // Update gyration display
-                                gyrationX.value = gyrationValues[0].toFixed(2);
-                                gyrationY.value = gyrationValues[1].toFixed(2);
-                                gyrationZ.value = gyrationValues[2].toFixed(2);
-                                
-                                // Show detailed info message
-                                gdfFileInfo.style.display = 'block';
-                                gdfFileInfo.innerHTML = `
-                                    <i class="bi bi-info-circle"></i> <strong>Dimensions detected from GDF file:</strong><br>
-                                    Length: ${dimensions.length.toFixed(2)}m (${dimensions.axes.length}-axis)<br>
-                                    Breadth: ${dimensions.breadth.toFixed(2)}m (${dimensions.axes.breadth}-axis)<br>
-                                    Depth: ${dimensions.depth.toFixed(2)}m (${dimensions.axes.depth}-axis)<br>
-                                    <small class="text-muted">Based on the bounding box of the geometry</small>
-                                `;
-                            }
-                            
-                            showToast(`GDF file loaded: ${file.name}. Dimensions extracted: L=${dimensions.length.toFixed(2)}m, B=${dimensions.breadth.toFixed(2)}m, D=${dimensions.depth.toFixed(2)}m`, 'success');
-                        } else {
-                            showToast('GDF file loaded, but unable to extract dimensions. Check the file format.', 'warning');
-                        }
-                        
-                        // Save to history after changes
-                        window.currentVesselModel.saveToHistory();
-                        
-                        // Continue with GDF mesh creation for visualization
-                        try {
-                            const gdfLoader = new GDFLoader();
-                            const mesh = gdfLoader.parse(content).createGeometry();
-                            if (mesh && window.threeScene) {
-                                // Clear existing meshes if needed
-                                if (window.currentVesselModel.gdfMesh) {
-                                    window.threeScene.remove(window.currentVesselModel.gdfMesh);
-                                }
-                                
-                                // Add the new mesh to the scene
-                                window.currentVesselModel.gdfMesh = mesh;
-                                window.threeScene.add(mesh);
-                                
-                                // Center camera on the model
-                                if (window.centerCameraOnObject) {
-                                    window.centerCameraOnObject(mesh);
-                                }
-                                
-                                console.log("GDF mesh created and added to scene");
-                            } else {
-                                console.warn("Could not create mesh from GDF file");
-                            }
-                        } catch (meshError) {
-                            console.error('Error creating mesh from GDF:', meshError);
-                        }
-                    } catch (error) {
-                        console.error('Error processing GDF file:', error);
-                        showToast('Error processing GDF file: ' + error.message, 'error');
-                    }
-                };
-                reader.readAsText(file);
-            }
-        });
-    }
-
-    // Save geometry settings when the save button is clicked
-    if (btnSaveGeometry) {
-        btnSaveGeometry.addEventListener('click', function() {
-            try {
-                // Get values from form
-                const length = parseFloat(vesselLength.value);
-                const breadth = parseFloat(vesselBreadth.value);
-                const depth = parseFloat(vesselDepth.value);
-                
-                // Validate dimensions
-                if (isNaN(length) || isNaN(breadth) || isNaN(depth) || 
-                    length <= 0 || breadth <= 0 || depth <= 0) {
-                    throw new Error('Dimensions must be positive numbers');
-                }
-                
-                // Get gyration values
-                const gyration = [
-                    parseFloat(gyrationX.value),
-                    parseFloat(gyrationY.value),
-                    parseFloat(gyrationZ.value)
-                ];
-                
-                // Get center points
-                const CO = [parseFloat(coX.value), parseFloat(coY.value), parseFloat(coZ.value)];
-                const CG = [parseFloat(cgX.value), parseFloat(cgY.value), parseFloat(cgZ.value)];
-                const CB = [parseFloat(cbX.value), parseFloat(cbY.value), parseFloat(cbZ.value)];
-                
-                // Get axis configuration
-                const axisConfig = {
-                    length: lengthAxis.value,
-                    breadth: breadthAxis.value,
-                    depth: depthAxis.value
-                };
-                
-                // Validate that axis values are unique
-                if (axisConfig.length === axisConfig.breadth || 
-                    axisConfig.length === axisConfig.depth || 
-                    axisConfig.breadth === axisConfig.depth) {
-                    throw new Error('Each axis (length, breadth, depth) must be assigned to a different coordinate axis (x, y, z)');
-                }
-                
-                // Update vessel model with new geometry data
-                window.currentVesselModel.config.geometry.length = length;
-                window.currentVesselModel.config.geometry.breadth = breadth;
-                window.currentVesselModel.config.geometry.depth = depth;
-                window.currentVesselModel.config.geometry.gyration = gyration;
-                window.currentVesselModel.config.geometry.CO = CO;
-                window.currentVesselModel.config.geometry.CG = CG;
-                window.currentVesselModel.config.geometry.CB = CB;
-                window.currentVesselModel.config.geometry.geometry_file = geometryFilePath.value;
-                
-                // Store axis direction configuration in the model
-                window.currentVesselModel.config.geometry.axisConfig = axisConfig;
-                
-                // Save to history
-                window.currentVesselModel.saveToHistory();
-                
-                // Close the modal
-                geometryModal.hide();
-                
-                // Show success message
-                showToast('Geometry parameters saved successfully', 'success');
-            } catch (error) {
-                console.error('Error saving geometry parameters:', error);
-                showToast('Error: ' + error.message, 'error');
-            }
-        });
-    }
-
-    // Helper function to recalculate gyration values based on dimensions and selected axes
     function recalculateGyrationValues() {
         try {
             if (!window.currentVesselModel || !window.currentVesselModel.config) {
@@ -3865,5 +3577,94 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Make sure we also update the YAML
         updateGeofenceYaml();
+    }
+
+    /**
+     * Center the camera on a specific point
+     */
+    function centerCameraOnPoint(point) {
+        if (!threeScene || !threeScene.camera || !threeScene.controls) return;
+        
+        // Set the orbit controls target to the point
+        threeScene.controls.target.copy(point);
+        threeScene.controls.update();
+    }
+
+    // GDF dimension extraction function removed
+    
+    /**
+     * Format a value with proper units
+     */
+    function formatWithUnits(value, units) {
+        return `${parseFloat(value).toFixed(2)} ${units}`;
+    }
+
+    // Save geometry settings when the save button is clicked
+    if (btnSaveGeometry) {
+        btnSaveGeometry.addEventListener('click', function() {
+            try {
+                // Get values from form
+                const length = parseFloat(vesselLength.value);
+                const breadth = parseFloat(vesselBreadth.value);
+                const depth = parseFloat(vesselDepth.value);
+                
+                // Validate dimensions
+                if (isNaN(length) || isNaN(breadth) || isNaN(depth) || 
+                    length <= 0 || breadth <= 0 || depth <= 0) {
+                    throw new Error('Dimensions must be positive numbers');
+                }
+                
+                // Get gyration values
+                const gyration = [
+                    parseFloat(gyrationX.value),
+                    parseFloat(gyrationY.value),
+                    parseFloat(gyrationZ.value)
+                ];
+                
+                // Get center points
+                const CO = [parseFloat(coX.value), parseFloat(coY.value), parseFloat(coZ.value)];
+                const CG = [parseFloat(cgX.value), parseFloat(cgY.value), parseFloat(cgZ.value)];
+                const CB = [parseFloat(cbX.value), parseFloat(cbY.value), parseFloat(cbZ.value)];
+                
+                // Get axis configuration
+                const axisConfig = {
+                    length: lengthAxis.value,
+                    breadth: breadthAxis.value,
+                    depth: depthAxis.value
+                };
+                
+                // Validate that axis values are unique
+                if (axisConfig.length === axisConfig.breadth || 
+                    axisConfig.length === axisConfig.depth || 
+                    axisConfig.breadth === axisConfig.depth) {
+                    throw new Error('Each axis (length, breadth, depth) must be assigned to a different coordinate axis (x, y, z)');
+                }
+                
+                // Update vessel model with new geometry data
+                window.currentVesselModel.config.geometry.length = length;
+                window.currentVesselModel.config.geometry.breadth = breadth;
+                window.currentVesselModel.config.geometry.depth = depth;
+                window.currentVesselModel.config.geometry.gyration = gyration;
+                window.currentVesselModel.config.geometry.CO = CO;
+                window.currentVesselModel.config.geometry.CG = CG;
+                window.currentVesselModel.config.geometry.CB = CB;
+                window.currentVesselModel.config.geometry.geometry_file = geometryFilePath.value;
+                
+                // Store axis direction configuration in the model
+                window.currentVesselModel.config.geometry.axisConfig = axisConfig;
+                
+                // Save to history
+                window.currentVesselModel.saveToHistory();
+                
+                // Close the modal
+                geometryModal.hide();
+                
+                // Show success message
+                showToast('Geometry parameters saved successfully', 'success');
+            } catch (error) {
+                console.error('Error saving geometry parameters:', error);
+                showToast('Error: ' + error.message, 'error');
+            }
+        });
     }
 }); 
