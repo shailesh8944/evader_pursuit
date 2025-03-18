@@ -1475,9 +1475,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                             gdfFileInfo.style.display = 'block';
                                             gdfFileInfo.innerHTML = `
                                                 <i class="bi bi-info-circle"></i> <strong>Dimensions detected from FBX file:</strong><br>
-                                                Length: ${dimensions.length.toFixed(2)}m (${dimensions.axes.length}-axis)<br>
-                                                Breadth: ${dimensions.breadth.toFixed(2)}m (${dimensions.axes.breadth}-axis)<br>
-                                                Depth: ${dimensions.depth.toFixed(2)}m (${dimensions.axes.depth}-axis)<br>
+                                                Length: ${dimensions.length.toFixed(2)}m (${lengthAxis.value}-axis)<br>
+                                                Breadth: ${dimensions.breadth.toFixed(2)}m (${breadthAxis.value}-axis)<br>
+                                                Depth: ${dimensions.depth.toFixed(2)}m (${depthAxis.value}-axis)<br>
                                                 <small class="text-muted">Based on the bounding box of the geometry</small>
                                             `;
                                         }
@@ -1678,14 +1678,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // First, let's log the component counts to verify data
             logComponentCounts();
             
-            // Generate YAML files
+            // Generate YAML files using the special formatter for simulation_input.yml
+            const yamlGenerator = new YAMLGenerator();
+            const simulationInputYaml = yamlGenerator.generateSimulationInputYAML(window.currentVesselModel.config);
+            
+            // Generate other YAML files
             const yamlFiles = window.currentVesselModel.generateYAMLFiles();
             
             // Check if YAML files were generated
             console.log('Generated YAML files:', Object.keys(yamlFiles));
             
             // Display previews for each YAML file
-            document.getElementById('simulation-yaml-content').textContent = yamlFiles['simulation_input.yml'] || '';
+            document.getElementById('simulation-yaml-content').textContent = simulationInputYaml || '';
             document.getElementById('geometry-yaml-content').textContent = yamlFiles['geometry.yml'] || '';
             document.getElementById('inertia-yaml-content').textContent = yamlFiles['inertia.yml'] || '';
             document.getElementById('hydrodynamics-yaml-content').textContent = yamlFiles['hydrodynamics.yml'] || '';
@@ -1698,29 +1702,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 
             document.getElementById('thrusters-yaml-content').textContent = yamlFiles['thrusters.yml'] || '';
             document.getElementById('sensors-yaml-content').textContent = yamlFiles['sensors.yml'] || '';
-            document.getElementById('initial-conditions-yaml-content').textContent = yamlFiles['initial_conditions.yml'] || '';
             document.getElementById('guidance-yaml-content').textContent = yamlFiles['guidance.yml'] || '';
             document.getElementById('control-yaml-content').textContent = yamlFiles['control.yml'] || '';
-            
-            // Check if specific files are missing
-            if (!yamlFiles['control_surfaces.yml'] && window.currentVesselModel.config.control_surfaces.control_surfaces.length > 0) {
-                console.warn('Control surfaces YAML file is missing despite having control surfaces data');
-                showNotification('Error generating control surfaces YAML', 'warning');
-            }
-            
-            if (!yamlFiles['thrusters.yml'] && window.currentVesselModel.config.thrusters.thrusters.length > 0) {
-                console.warn('Thrusters YAML file is missing despite having thrusters data');
-                showNotification('Error generating thrusters YAML', 'warning');
-            }
-            
-            if (!yamlFiles['sensors.yml'] && window.currentVesselModel.config.sensors.sensors.length > 0) {
-                console.warn('Sensors YAML file is missing despite having sensors data');
-                showNotification('Error generating sensors YAML', 'warning');
-            }
-            
+            document.getElementById('initial-conditions-yaml-content').textContent = yamlFiles['initial_conditions.yml'] || '';
         } catch (error) {
             console.error('Error generating YAML previews:', error);
-            showNotification('Failed to generate YAML previews: ' + error.message, 'error');
+            showNotification('Error generating YAML previews', 'error');
         }
     }
     
@@ -1833,8 +1820,49 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
             }
             
-            // Generate YAML string from current simulation parameters
-            const yamlString = jsyaml.dump(simParams, { lineWidth: -1 });
+            // Populate basic parameters tab
+            document.getElementById('simTimeSetting').value = simParams.sim_time || 100;
+            document.getElementById('timeStepSetting').value = simParams.time_step || 0.01;
+            document.getElementById('densitySetting').value = simParams.density || 1025;
+            document.getElementById('gravitySetting').value = simParams.gravity || 9.80665;
+            
+            if (simParams.world_size && Array.isArray(simParams.world_size)) {
+                document.getElementById('worldSizeXSetting').value = simParams.world_size[0] || 1000;
+                document.getElementById('worldSizeYSetting').value = simParams.world_size[1] || 1000;
+                
+                // Handle infinite Z dimension (either 'Inf' or a number)
+                const zValue = simParams.world_size[2];
+                const isInfinite = zValue === 'Inf' || zValue === Infinity;
+                document.getElementById('infiniteZSetting').checked = isInfinite;
+                document.getElementById('worldSizeZSetting').value = isInfinite ? 100 : (zValue || 100);
+            }
+            
+            if (simParams.gps_datum && Array.isArray(simParams.gps_datum)) {
+                document.getElementById('gpsDatumLatSetting').value = simParams.gps_datum[0] || 12.99300;
+                document.getElementById('gpsDatumLonSetting').value = simParams.gps_datum[1] || 80.23913;
+                document.getElementById('gpsDatumAltSetting').value = simParams.gps_datum[2] || -87.0;
+            }
+            
+            document.getElementById('numAgentsSetting').value = simParams.nagents || 1;
+            
+            // Populate geofence table
+            const geofenceTableBody = document.getElementById('geofenceTableBody');
+            geofenceTableBody.innerHTML = ''; // Clear existing rows
+            
+            if (simParams.geofence && Array.isArray(simParams.geofence)) {
+                simParams.geofence.forEach((point, index) => {
+                    if (Array.isArray(point) && point.length >= 2) {
+                        addGeofenceTableRow(point[0], point[1]);
+                    }
+                });
+            } else {
+                // Add default empty row if no geofence exists
+                addGeofenceTableRow(12.993496, 80.239007);
+            }
+            
+            // Generate YAML string from current simulation parameters for the YAML editor tab
+            // Use the formatted YAML generator instead of jsyaml.dump
+            const yamlString = yamlGenerator.generateFormattedSimulationYAML(simParams);
             document.getElementById('simParamsYaml').value = yamlString;
             
             console.log("Opening simulation params modal with:", simParams);
@@ -1842,10 +1870,197 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show the modal
             const simParamsModal = new bootstrap.Modal(document.getElementById('simParamsModal'));
             simParamsModal.show();
+            
+            // Initialize the map after the modal is shown
+            document.getElementById('simParamsModal').addEventListener('shown.bs.modal', function() {
+                // Initialize geofence map when the modal is shown
+                initializeGeofenceMap();
+                
+                // Add listeners for tab switches
+                const tabList = document.getElementById('simParamsTabs');
+                if (tabList) {
+                    const tabs = tabList.querySelectorAll('button[data-bs-toggle="tab"]');
+                    tabs.forEach(tab => {
+                        tab.addEventListener('shown.bs.tab', function(event) {
+                            if (event.target.id === 'geofence-tab') {
+                                // When switching to geofence tab, make sure the map is initialized
+                                setTimeout(() => {
+                                    if (geofenceMap) {
+                                        geofenceMap.invalidateSize();
+                                        
+                                        // If we have a polygon, zoom to fit its bounds
+                                        if (geofencePoints.length >= 3) {
+                                            const polygon = L.polygon(geofencePoints);
+                                            geofenceMap.fitBounds(polygon.getBounds());
+                                        }
+                                    }
+                                }, 100); // Small delay to ensure DOM is ready
+                            } else if (event.target.id === 'yaml-params-tab') {
+                                // When switching to YAML tab, update from current form values
+                                if (document.getElementById('basic-params').classList.contains('active')) {
+                                    updateYAMLFromBasicParams();
+                                } else if (document.getElementById('geofence-params').classList.contains('active')) {
+                                    updateGeofenceYaml();
+                                }
+                            }
+                        });
+                    });
+                }
+            }, { once: true });
+            
         } catch (error) {
             console.error("Error opening simulation parameters modal:", error);
             showNotification("Error loading simulation parameters", "error");
         }
+    });
+    
+    // Helper function to add a row to the geofence table
+    function addGeofenceTableRow(lat = 0, lon = 0) {
+        const geofenceTableBody = document.getElementById('geofenceTableBody');
+        const rowIndex = geofenceTableBody.children.length;
+        
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `
+            <td>
+                <input type="number" class="form-control form-control-sm geofence-lat" 
+                       value="${lat}" step="0.000001" min="-90" max="90">
+            </td>
+            <td>
+                <input type="number" class="form-control form-control-sm geofence-lon" 
+                       value="${lon}" step="0.000001" min="-180" max="180">
+            </td>
+            <td class="text-center">
+                <button type="button" class="btn btn-sm btn-danger remove-geofence-point">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        `;
+        geofenceTableBody.appendChild(newRow);
+        
+        // Add event listener to the remove button
+        const removeButton = newRow.querySelector('.remove-geofence-point');
+        removeButton?.addEventListener('click', function() {
+            // Remove the row from the table
+            newRow.remove();
+            
+            // Update the YAML
+            updateGeofenceYaml();
+            
+            // Also update the map if it's initialized
+            if (geofenceMap) {
+                // Rebuild geofencePoints array from the table
+                const rows = document.getElementById('geofenceTableBody').querySelectorAll('tr');
+                geofencePoints = [];
+                rows.forEach(row => {
+                    const latInput = row.querySelector('.geofence-lat');
+                    const lonInput = row.querySelector('.geofence-lon');
+                    
+                    if (latInput && lonInput) {
+                        const lat = parseFloat(latInput.value);
+                        const lon = parseFloat(lonInput.value);
+                        geofencePoints.push([lat, lon]);
+                    }
+                });
+                
+                // Redraw the geofence on the map
+                drawGeofenceOnMap();
+            }
+        });
+        
+        // Add event listeners to the lat/lon inputs to update the YAML when they change
+        const latInput = newRow.querySelector('.geofence-lat');
+        const lonInput = newRow.querySelector('.geofence-lon');
+        
+        const updateInputHandler = function() {
+            updateGeofenceYaml();
+            
+            // Also update the map if it's initialized
+            if (geofenceMap) {
+                // Rebuild geofencePoints array from the table
+                const rows = document.getElementById('geofenceTableBody').querySelectorAll('tr');
+                geofencePoints = [];
+                rows.forEach(row => {
+                    const latInput = row.querySelector('.geofence-lat');
+                    const lonInput = row.querySelector('.geofence-lon');
+                    
+                    if (latInput && lonInput) {
+                        const lat = parseFloat(latInput.value);
+                        const lon = parseFloat(lonInput.value);
+                        geofencePoints.push([lat, lon]);
+                    }
+                });
+                
+                // Redraw the geofence on the map
+                drawGeofenceOnMap();
+            }
+        };
+        
+        latInput?.addEventListener('change', updateInputHandler);
+        lonInput?.addEventListener('change', updateInputHandler);
+    }
+    
+    // Function to update the YAML editor when geofence points change
+    function updateGeofenceYaml() {
+        // Skip if we're not on the geofence tab
+        if (!document.getElementById('geofence-params').classList.contains('active')) {
+            return;
+        }
+        
+        try {
+            // Get current YAML
+            const yamlText = document.getElementById('simParamsYaml').value;
+            const simParams = jsyaml.load(yamlText) || {};
+            
+            // Get geofence points from table
+            const geofencePoints = [];
+            const rows = document.getElementById('geofenceTableBody').querySelectorAll('tr');
+            rows.forEach(row => {
+                const latInput = row.querySelector('.geofence-lat');
+                const lonInput = row.querySelector('.geofence-lon');
+                
+                if (latInput && lonInput) {
+                    const lat = parseFloat(latInput.value);
+                    const lon = parseFloat(lonInput.value);
+                    geofencePoints.push([lat, lon]);
+                }
+            });
+            
+            // Update geofence in simParams
+            simParams.geofence = geofencePoints;
+            
+            // Use the YAMLGenerator for consistent formatting
+            const yamlGenerator = new YAMLGenerator();
+            const yamlString = yamlGenerator.generateFormattedSimulationYAML(simParams);
+            
+            document.getElementById('simParamsYaml').value = yamlString;
+        } catch (error) {
+            console.error("Error updating geofence YAML:", error);
+        }
+    }
+    
+    // Add handler for Add Geofence Point button
+    document.getElementById('addGeofencePoint')?.addEventListener('click', function() {
+        // Get the last point's coordinates to use as a starting point
+        const rows = document.getElementById('geofenceTableBody').querySelectorAll('tr');
+        let lat = 12.993496, lon = 80.239007; // Default if no points
+        
+        if (rows.length > 0) {
+            const lastRow = rows[rows.length - 1];
+            const latInput = lastRow.querySelector('.geofence-lat');
+            const lonInput = lastRow.querySelector('.geofence-lon');
+            
+            if (latInput && lonInput) {
+                lat = parseFloat(latInput.value);
+                lon = parseFloat(lonInput.value);
+                
+                // Slightly offset the new point to make it visible
+                lat += 0.0001;
+                lon += 0.0001;
+            }
+        }
+        
+        addGeofenceTableRow(lat, lon);
+        updateGeofenceYaml();
     });
     
     // Add handler for simulation parameters file upload
@@ -1854,15 +2069,180 @@ document.addEventListener('DOMContentLoaded', function() {
         if (file) {
             const reader = new FileReader();
             reader.onload = function(e) {
-                document.getElementById('simParamsYaml').value = e.target.result;
+                const yamlText = e.target.result;
+                
+                try {
+                    // Parse the YAML to update the UI
+                    const simParams = jsyaml.load(yamlText);
+                    if (simParams) {
+                        // Format the YAML using our formatter to ensure consistent format
+                        const yamlGenerator = new YAMLGenerator();
+                        const formattedYaml = yamlGenerator.generateFormattedSimulationYAML(simParams);
+                        
+                        // Set the textarea value to the formatted YAML
+                        document.getElementById('simParamsYaml').value = formattedYaml;
+                        
+                        // Update UI elements
+                        updateSimParamsUIFromYAML(simParams);
+                        
+                        showNotification("Simulation parameters loaded successfully", "success");
+                    }
+                } catch (error) {
+                    console.error("Error parsing uploaded YAML:", error);
+                    showNotification("Error parsing YAML file", "error");
+                }
             };
             reader.readAsText(file);
         }
     });
     
+    // Function to update UI from YAML
+    function updateSimParamsUIFromYAML(simParams) {
+        // Update basic parameters tab
+        if (simParams.sim_time !== undefined) document.getElementById('simTimeSetting').value = simParams.sim_time;
+        if (simParams.time_step !== undefined) document.getElementById('timeStepSetting').value = simParams.time_step;
+        if (simParams.density !== undefined) document.getElementById('densitySetting').value = simParams.density;
+        if (simParams.gravity !== undefined) document.getElementById('gravitySetting').value = simParams.gravity;
+        
+        if (simParams.world_size && Array.isArray(simParams.world_size)) {
+            document.getElementById('worldSizeXSetting').value = simParams.world_size[0] || 1000;
+            document.getElementById('worldSizeYSetting').value = simParams.world_size[1] || 1000;
+            
+            // Handle infinite Z dimension
+            const zValue = simParams.world_size[2];
+            const isInfinite = zValue === 'Inf' || zValue === Infinity;
+            document.getElementById('infiniteZSetting').checked = isInfinite;
+            document.getElementById('worldSizeZSetting').value = isInfinite ? 100 : (zValue || 100);
+        }
+        
+        if (simParams.gps_datum && Array.isArray(simParams.gps_datum)) {
+            document.getElementById('gpsDatumLatSetting').value = simParams.gps_datum[0] || 12.99300;
+            document.getElementById('gpsDatumLonSetting').value = simParams.gps_datum[1] || 80.23913;
+            document.getElementById('gpsDatumAltSetting').value = simParams.gps_datum[2] || -87.0;
+        }
+        
+        if (simParams.nagents !== undefined) document.getElementById('numAgentsSetting').value = simParams.nagents;
+        
+        // Update geofence table
+        if (simParams.geofence && Array.isArray(simParams.geofence)) {
+            const geofenceTableBody = document.getElementById('geofenceTableBody');
+            geofenceTableBody.innerHTML = ''; // Clear existing rows
+            
+            simParams.geofence.forEach((point, index) => {
+                if (Array.isArray(point) && point.length >= 2) {
+                    addGeofenceTableRow(point[0], point[1]);
+                }
+            });
+        }
+    }
+    
+    // Add handler for the YAML text area to update UI when YAML changes
+    document.getElementById('simParamsYaml')?.addEventListener('change', function() {
+        try {
+            const yamlText = this.value;
+            const simParams = jsyaml.load(yamlText);
+            if (simParams) {
+                // First update the UI elements
+                updateSimParamsUIFromYAML(simParams);
+                
+                // Then reformat the YAML to ensure consistent formatting
+                // but only if not on the YAML editor tab (to avoid disrupting manual editing)
+                if (!document.getElementById('yaml-params').classList.contains('active')) {
+                    const yamlGenerator = new YAMLGenerator();
+                    const formattedYaml = yamlGenerator.generateFormattedSimulationYAML(simParams);
+                    this.value = formattedYaml;
+                }
+            }
+        } catch (error) {
+            console.error("Error parsing YAML:", error);
+        }
+    });
+    
+    // Add handlers for tab switching
+    document.getElementById('basic-params-tab')?.addEventListener('click', function() {
+        // When switching to basic params tab, update the YAML from UI
+        updateYAMLFromBasicParams();
+    });
+    
+    document.getElementById('geofence-tab')?.addEventListener('click', function() {
+        // When switching to geofence tab, make sure the table is up to date
+        updateGeofenceTableFromYAML();
+    });
+    
+    // Function to update YAML from basic parameters
+    function updateYAMLFromBasicParams() {
+        try {
+            // Get current YAML
+            const yamlText = document.getElementById('simParamsYaml').value;
+            const simParams = jsyaml.load(yamlText) || {};
+            
+            // Update basic parameters
+            simParams.sim_time = parseFloat(document.getElementById('simTimeSetting').value);
+            simParams.time_step = parseFloat(document.getElementById('timeStepSetting').value);
+            simParams.density = parseFloat(document.getElementById('densitySetting').value);
+            simParams.gravity = parseFloat(document.getElementById('gravitySetting').value);
+            
+            // Handle world size
+            const isInfiniteZ = document.getElementById('infiniteZSetting').checked;
+            simParams.world_size = [
+                parseFloat(document.getElementById('worldSizeXSetting').value),
+                parseFloat(document.getElementById('worldSizeYSetting').value),
+                isInfiniteZ ? 'Inf' : parseFloat(document.getElementById('worldSizeZSetting').value)
+            ];
+            
+            // Handle GPS datum
+            simParams.gps_datum = [
+                parseFloat(document.getElementById('gpsDatumLatSetting').value),
+                parseFloat(document.getElementById('gpsDatumLonSetting').value),
+                parseFloat(document.getElementById('gpsDatumAltSetting').value)
+            ];
+            
+            // Handle nagents
+            simParams.nagents = parseInt(document.getElementById('numAgentsSetting').value);
+            
+            // Use the YAMLGenerator for consistent formatting
+            const yamlGenerator = new YAMLGenerator();
+            const yamlString = yamlGenerator.generateFormattedSimulationYAML(simParams);
+            
+            document.getElementById('simParamsYaml').value = yamlString;
+        } catch (error) {
+            console.error("Error updating YAML from basic parameters:", error);
+        }
+    }
+    
+    // Function to update geofence table from YAML
+    function updateGeofenceTableFromYAML() {
+        try {
+            // Get current YAML
+            const yamlText = document.getElementById('simParamsYaml').value;
+            const simParams = jsyaml.load(yamlText) || {};
+            
+            // Update geofence table
+            if (simParams.geofence && Array.isArray(simParams.geofence)) {
+                const geofenceTableBody = document.getElementById('geofenceTableBody');
+                geofenceTableBody.innerHTML = ''; // Clear existing rows
+                
+                simParams.geofence.forEach((point, index) => {
+                    if (Array.isArray(point) && point.length >= 2) {
+                        addGeofenceTableRow(point[0], point[1]);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error("Error updating geofence table from YAML:", error);
+        }
+    }
+    
     // Add handler for Save Simulation Parameters button
     document.getElementById('btnSaveSimParams')?.addEventListener('click', function() {
         try {
+            // Update YAML from UI first
+            if (document.getElementById('basic-params').classList.contains('active')) {
+                updateYAMLFromBasicParams();
+            } else if (document.getElementById('geofence-params').classList.contains('active')) {
+                updateGeofenceYaml();
+            }
+            
             // Get the YAML text from the textarea
             const yamlText = document.getElementById('simParamsYaml').value;
             
@@ -1874,7 +2254,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error("Invalid YAML format");
             }
             
-            // Add the fullReplace flag to replace all parameters
+            // Create a clean copy without extra fields
+            const cleanParams = { ...simParams };
+            delete cleanParams.fullReplace; // Remove this field if it exists
+            
+            // Add the fullReplace flag internally for the update process
             simParams.fullReplace = true;
             
             // Update the vessel model with the new parameters
@@ -2959,5 +3343,527 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
+    }
+
+    // Add handler for Copy from Map button
+    document.getElementById('copyFromMapGeofence')?.addEventListener('click', function() {
+        // Since there's no actual map integration yet, use default geofence coordinates
+        // In a real implementation, this would get coordinates from a map selection
+        const yamlGenerator = new YAMLGenerator();
+        const defaultGeofence = [
+            [12.993496, 80.239007],
+            [12.993500, 80.238903],
+            [12.993485, 80.238829],
+            [12.993359, 80.238699],
+            [12.993547, 80.238437],
+            [12.993716, 80.238475],
+            [12.994077, 80.239559],
+            [12.993809, 80.239807],
+            [12.993271, 80.240646],
+            [12.993050, 80.240423],
+            [12.993193, 80.239274],
+            [12.993044, 80.239217],
+            [12.993054, 80.239120],
+            [12.993335, 80.239098],
+            [12.993496, 80.239007] // Closing point to complete the polygon
+        ];
+        
+        // Clear existing geofence points
+        const geofenceTableBody = document.getElementById('geofenceTableBody');
+        geofenceTableBody.innerHTML = '';
+        
+        // Add new points from the default geofence
+        defaultGeofence.forEach(point => {
+            addGeofenceTableRow(point[0], point[1]);
+        });
+        
+        // Update the YAML
+        updateGeofenceYaml();
+        
+        // Show notification
+        showNotification("Geofence coordinates imported", "success");
+    });
+
+    // Initialize and handle the geofence map
+    let geofenceMap = null;
+    let geofenceLayer = null;
+    let datumMarker = null;
+    let geofencePoints = [];
+    
+    // Fullscreen map variables
+    let fullscreenGeofenceMap = null;
+    let fullscreenGeofenceLayer = null;
+    let fullscreenDatumMarker = null;
+    
+    function initializeGeofenceMap() {
+        // Skip if the map is already initialized
+        if (geofenceMap) {
+            return;
+        }
+        
+        // Create a map centered on a default location (Chennai, India)
+        geofenceMap = L.map('geofence-map').setView([12.9930, 80.2392], 15);
+        
+        // Add OpenStreetMap as the base layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(geofenceMap);
+        
+        // Create a feature group for the geofence polygon
+        geofenceLayer = L.featureGroup().addTo(geofenceMap);
+
+        // Add handler for the expand map button
+        document.getElementById('expandMapBtn')?.addEventListener('click', function() {
+            openFullscreenMap();
+        });
+        
+        // Get current simulation parameters
+        const simParams = window.currentVesselModel.config.simulation || {};
+        
+        // Initialize with GPS datum if available
+        if (simParams.gps_datum && Array.isArray(simParams.gps_datum) && simParams.gps_datum.length >= 2) {
+            const [lat, lon] = simParams.gps_datum;
+            datumMarker = L.marker([lat, lon], { 
+                title: 'GPS Datum',
+                draggable: true,
+                icon: L.divIcon({
+                    className: 'datum-marker', 
+                    html: '<i class="bi bi-geo-alt-fill" style="color: blue; font-size: 24px;"></i>',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 24]
+                })
+            }).addTo(geofenceMap);
+            
+            // Update form values when the datum marker is dragged
+            datumMarker.on('dragend', function(e) {
+                const position = datumMarker.getLatLng();
+                document.getElementById('gpsDatumLatSetting').value = position.lat.toFixed(6);
+                document.getElementById('gpsDatumLonSetting').value = position.lng.toFixed(6);
+                updateYAMLFromBasicParams();
+            });
+            
+            // Center the map on the GPS datum
+            geofenceMap.setView([lat, lon], 15);
+        }
+        
+        // Initialize with geofence if available
+        if (simParams.geofence && Array.isArray(simParams.geofence) && simParams.geofence.length >= 3) {
+            geofencePoints = simParams.geofence.map(point => {
+                if (Array.isArray(point) && point.length >= 2) {
+                    return [point[0], point[1]];
+                }
+                return null;
+            }).filter(point => point !== null);
+            
+            drawGeofenceOnMap();
+        }
+        
+        // Click handler for adding geofence points
+        geofenceMap.on('click', function(e) {
+            const latlng = e.latlng;
+            
+            // Add to our geofence points array
+            geofencePoints.push([latlng.lat, latlng.lng]);
+            
+            // Redraw the geofence
+            drawGeofenceOnMap();
+            
+            // Update the geofence table
+            updateGeofenceTableFromMap();
+        });
+        
+        // Add handler for Set GPS Datum button
+        document.getElementById('setGpsDatum')?.addEventListener('click', function() {
+            // Enable datum selection mode
+            showNotification("Click on the map to set GPS Datum location", "info");
+            
+            // We need to use a one-time event handler that stops propagation to prevent adding a geofence point
+            const mapClickHandler = function(e) {
+                // Stop propagation to prevent the regular map click handler from firing
+                e.originalEvent.stopPropagation();
+                e.originalEvent.preventDefault();
+                
+                const latlng = e.latlng;
+                
+                // Remove existing marker if present
+                if (datumMarker) {
+                    datumMarker.remove();
+                }
+                
+                // Create new marker
+                datumMarker = L.marker([latlng.lat, latlng.lng], { 
+                    title: 'GPS Datum',
+                    draggable: true,
+                    icon: L.divIcon({
+                        className: 'datum-marker', 
+                        html: '<i class="bi bi-geo-alt-fill" style="color: blue; font-size: 24px;"></i>',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 24]
+                    })
+                }).addTo(geofenceMap);
+                
+                // Update form values
+                document.getElementById('gpsDatumLatSetting').value = latlng.lat.toFixed(6);
+                document.getElementById('gpsDatumLonSetting').value = latlng.lng.toFixed(6);
+                
+                // Update the YAML
+                updateYAMLFromBasicParams();
+                
+                // Update marker drag event
+                datumMarker.on('dragend', function(e) {
+                    const position = datumMarker.getLatLng();
+                    document.getElementById('gpsDatumLatSetting').value = position.lat.toFixed(6);
+                    document.getElementById('gpsDatumLonSetting').value = position.lng.toFixed(6);
+                    updateYAMLFromBasicParams();
+                });
+                
+                showNotification("GPS Datum updated", "success");
+                
+                // Remove this one-time handler
+                geofenceMap.off('click', mapClickHandler);
+            };
+            
+            // Use this handler once
+            geofenceMap.once('click', mapClickHandler);
+        });
+        
+        // Add handler for Clear Geofence button
+        document.getElementById('clearGeofence')?.addEventListener('click', function() {
+            geofencePoints = [];
+            drawGeofenceOnMap();
+            updateGeofenceTableFromMap();
+            showNotification("Geofence cleared", "info");
+        });
+        
+        // Add handler for Update from Map button
+        document.getElementById('copyFromMapGeofence')?.addEventListener('click', function() {
+            updateGeofenceTableFromMap();
+            showNotification("Geofence table updated from map", "success");
+        });
+    }
+    
+    // Initialize fullscreen map
+    function openFullscreenMap() {
+        // Show the modal
+        const fullscreenMapModal = new bootstrap.Modal(document.getElementById('fullscreenMapModal'));
+        fullscreenMapModal.show();
+        
+        // Initialize the map after the modal is shown
+        document.getElementById('fullscreenMapModal').addEventListener('shown.bs.modal', function() {
+            // Create a new map instance for the fullscreen view
+            if (!fullscreenGeofenceMap) {
+                fullscreenGeofenceMap = L.map('fullscreen-geofence-map');
+                
+                // Add OpenStreetMap as the base layer
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                }).addTo(fullscreenGeofenceMap);
+                
+                // Create a feature group for the geofence polygon
+                fullscreenGeofenceLayer = L.featureGroup().addTo(fullscreenGeofenceMap);
+                
+                // Click handler for adding geofence points
+                fullscreenGeofenceMap.on('click', function(e) {
+                    const latlng = e.latlng;
+                    
+                    // Add to our geofence points array
+                    geofencePoints.push([latlng.lat, latlng.lng]);
+                    
+                    // Redraw the geofence on both maps
+                    drawGeofenceOnMap();
+                    drawGeofenceOnFullscreenMap();
+                    
+                    // Update the geofence table
+                    updateGeofenceTableFromMap();
+                });
+                
+                // Add handler for the fullscreen Set GPS Datum button
+                document.getElementById('fullscreenSetGpsDatum')?.addEventListener('click', function() {
+                    // Enable datum selection mode
+                    showNotification("Click on the map to set GPS Datum location", "info");
+                    
+                    // We need to use a one-time event handler that stops propagation
+                    const mapClickHandler = function(e) {
+                        // Stop propagation to prevent the regular map click handler from firing
+                        e.originalEvent.stopPropagation();
+                        e.originalEvent.preventDefault();
+                        
+                        const latlng = e.latlng;
+                        
+                        // Remove existing markers if present
+                        if (datumMarker) {
+                            datumMarker.remove();
+                        }
+                        if (fullscreenDatumMarker) {
+                            fullscreenDatumMarker.remove();
+                        }
+                        
+                        // Create new markers on both maps
+                        datumMarker = L.marker([latlng.lat, latlng.lng], { 
+                            title: 'GPS Datum',
+                            draggable: true,
+                            icon: L.divIcon({
+                                className: 'datum-marker', 
+                                html: '<i class="bi bi-geo-alt-fill" style="color: blue; font-size: 24px;"></i>',
+                                iconSize: [24, 24],
+                                iconAnchor: [12, 24]
+                            })
+                        }).addTo(geofenceMap);
+                        
+                        fullscreenDatumMarker = L.marker([latlng.lat, latlng.lng], { 
+                            title: 'GPS Datum',
+                            draggable: true,
+                            icon: L.divIcon({
+                                className: 'datum-marker', 
+                                html: '<i class="bi bi-geo-alt-fill" style="color: blue; font-size: 24px;"></i>',
+                                iconSize: [24, 24],
+                                iconAnchor: [12, 24]
+                            })
+                        }).addTo(fullscreenGeofenceMap);
+                        
+                        // Update form values
+                        document.getElementById('gpsDatumLatSetting').value = latlng.lat.toFixed(6);
+                        document.getElementById('gpsDatumLonSetting').value = latlng.lng.toFixed(6);
+                        
+                        // Update the YAML
+                        updateYAMLFromBasicParams();
+                        
+                        // Update drag events for both markers
+                        datumMarker.on('dragend', function(e) {
+                            const position = datumMarker.getLatLng();
+                            document.getElementById('gpsDatumLatSetting').value = position.lat.toFixed(6);
+                            document.getElementById('gpsDatumLonSetting').value = position.lng.toFixed(6);
+                            
+                            // Also update the fullscreen marker
+                            if (fullscreenDatumMarker) {
+                                fullscreenDatumMarker.setLatLng(position);
+                            }
+                            
+                            updateYAMLFromBasicParams();
+                        });
+                        
+                        fullscreenDatumMarker.on('dragend', function(e) {
+                            const position = fullscreenDatumMarker.getLatLng();
+                            document.getElementById('gpsDatumLatSetting').value = position.lat.toFixed(6);
+                            document.getElementById('gpsDatumLonSetting').value = position.lng.toFixed(6);
+                            
+                            // Also update the regular marker
+                            if (datumMarker) {
+                                datumMarker.setLatLng(position);
+                            }
+                            
+                            updateYAMLFromBasicParams();
+                        });
+                        
+                        showNotification("GPS Datum updated", "success");
+                        
+                        // Remove this one-time handler
+                        fullscreenGeofenceMap.off('click', mapClickHandler);
+                    };
+                    
+                    // Use this handler once
+                    fullscreenGeofenceMap.once('click', mapClickHandler);
+                });
+                
+                // Add handler for the fullscreen Clear Geofence button
+                document.getElementById('fullscreenClearGeofence')?.addEventListener('click', function() {
+                    geofencePoints = [];
+                    drawGeofenceOnMap();
+                    drawGeofenceOnFullscreenMap();
+                    updateGeofenceTableFromMap();
+                    showNotification("Geofence cleared", "info");
+                });
+            }
+            
+            // Sync the view with the regular map
+            if (geofenceMap) {
+                const center = geofenceMap.getCenter();
+                const zoom = geofenceMap.getZoom();
+                fullscreenGeofenceMap.setView(center, zoom);
+            } else {
+                fullscreenGeofenceMap.setView([12.9930, 80.2392], 15);
+            }
+            
+            // Draw the current geofence
+            drawGeofenceOnFullscreenMap();
+            
+            // Add the datum marker if it exists
+            if (datumMarker) {
+                const position = datumMarker.getLatLng();
+                
+                // Remove existing marker if present
+                if (fullscreenDatumMarker) {
+                    fullscreenDatumMarker.remove();
+                }
+                
+                // Create new marker
+                fullscreenDatumMarker = L.marker([position.lat, position.lng], { 
+                    title: 'GPS Datum',
+                    draggable: true,
+                    icon: L.divIcon({
+                        className: 'datum-marker', 
+                        html: '<i class="bi bi-geo-alt-fill" style="color: blue; font-size: 24px;"></i>',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 24]
+                    })
+                }).addTo(fullscreenGeofenceMap);
+                
+                // Update drag event
+                fullscreenDatumMarker.on('dragend', function(e) {
+                    const newPosition = fullscreenDatumMarker.getLatLng();
+                    document.getElementById('gpsDatumLatSetting').value = newPosition.lat.toFixed(6);
+                    document.getElementById('gpsDatumLonSetting').value = newPosition.lng.toFixed(6);
+                    
+                    // Also update the regular marker
+                    if (datumMarker) {
+                        datumMarker.setLatLng(newPosition);
+                    }
+                    
+                    updateYAMLFromBasicParams();
+                });
+            }
+            
+            // Fix the map display (needed when a map is initialized inside a hidden element)
+            setTimeout(() => {
+                fullscreenGeofenceMap.invalidateSize();
+                
+                // Zoom to fit markers if we have a geofence
+                if (geofencePoints.length >= 3) {
+                    const polygon = L.polygon(geofencePoints);
+                    fullscreenGeofenceMap.fitBounds(polygon.getBounds());
+                } else if (geofencePoints.length > 0) {
+                    // Otherwise zoom to include all markers
+                    const group = L.featureGroup(fullscreenGeofenceLayer.getLayers());
+                    if (group.getBounds().isValid()) {
+                        fullscreenGeofenceMap.fitBounds(group.getBounds(), {
+                            padding: [50, 50]
+                        });
+                    }
+                }
+            }, 100);
+        });
+        
+        // Handle modal close event
+        document.getElementById('fullscreenMapModal').addEventListener('hidden.bs.modal', function() {
+            // Refresh the regular map view to sync any changes
+            if (geofenceMap) {
+                setTimeout(() => {
+                    geofenceMap.invalidateSize();
+                    drawGeofenceOnMap();
+                }, 100);
+            }
+        });
+    }
+    
+    // Draw the geofence on the fullscreen map
+    function drawGeofenceOnFullscreenMap() {
+        if (!fullscreenGeofenceMap || !fullscreenGeofenceLayer) {
+            return;
+        }
+        
+        // Clear existing geofence
+        fullscreenGeofenceLayer.clearLayers();
+        
+        // Always draw the markers for each point
+        geofencePoints.forEach((point, index) => {
+            L.marker(point, {
+                icon: L.divIcon({
+                    className: 'geofence-vertex', 
+                    html: `<div style="background-color: #FF5722; color: white; border-radius: 50%; width: 20px; height: 20px; text-align: center; line-height: 20px; font-size: 12px;">${index + 1}</div>`,
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                })
+            }).addTo(fullscreenGeofenceLayer);
+        });
+        
+        // If we have at least 2 points, draw lines connecting them
+        if (geofencePoints.length >= 2) {
+            // Create a polyline from the points
+            L.polyline(geofencePoints, {
+                color: '#FF5722',
+                weight: 2,
+                opacity: 0.7,
+                dashArray: '5, 5'
+            }).addTo(fullscreenGeofenceLayer);
+        }
+        
+        // If we have at least 3 points, also draw a polygon
+        if (geofencePoints.length >= 3) {
+            // Create a polygon from the points
+            const polygon = L.polygon(geofencePoints, {
+                color: '#FF5722',
+                weight: 3,
+                opacity: 0.7,
+                fillColor: '#FF8A65',
+                fillOpacity: 0.3
+            }).addTo(fullscreenGeofenceLayer);
+        }
+    }
+    
+    // Draw the geofence on the map
+    function drawGeofenceOnMap() {
+        // Clear existing geofence
+        geofenceLayer.clearLayers();
+        
+        // Always draw the markers for each point
+        geofencePoints.forEach((point, index) => {
+            L.marker(point, {
+                icon: L.divIcon({
+                    className: 'geofence-vertex', 
+                    html: `<div style="background-color: #FF5722; color: white; border-radius: 50%; width: 20px; height: 20px; text-align: center; line-height: 20px; font-size: 12px;">${index + 1}</div>`,
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                })
+            }).addTo(geofenceLayer);
+        });
+        
+        // If we have at least 2 points, draw lines connecting them
+        if (geofencePoints.length >= 2) {
+            // Create a polyline from the points
+            L.polyline(geofencePoints, {
+                color: '#FF5722',
+                weight: 2,
+                opacity: 0.7,
+                dashArray: '5, 5'
+            }).addTo(geofenceLayer);
+        }
+        
+        // If we have at least 3 points, also draw a polygon
+        if (geofencePoints.length >= 3) {
+            // Create a polygon from the points
+            const polygon = L.polygon(geofencePoints, {
+                color: '#FF5722',
+                weight: 3,
+                opacity: 0.7,
+                fillColor: '#FF8A65',
+                fillOpacity: 0.3
+            }).addTo(geofenceLayer);
+            
+            // Fit the map to the geofence bounds
+            geofenceMap.fitBounds(polygon.getBounds());
+        } else if (geofencePoints.length > 0) {
+            // If we don't have enough points for a polygon, but we have some points,
+            // at least zoom to include all points
+            const group = L.featureGroup(geofenceLayer.getLayers());
+            if (group.getBounds().isValid()) {
+                geofenceMap.fitBounds(group.getBounds(), {
+                    padding: [50, 50]
+                });
+            }
+        }
+    }
+    
+    // Update the geofence table from the map points
+    function updateGeofenceTableFromMap() {
+        const geofenceTableBody = document.getElementById('geofenceTableBody');
+        geofenceTableBody.innerHTML = ''; // Clear existing rows
+        
+        // Add each point to the table
+        geofencePoints.forEach((point, index) => {
+            addGeofenceTableRow(point[0], point[1]);
+        });
+        
+        // Make sure we also update the YAML
+        updateGeofenceYaml();
     }
 }); 

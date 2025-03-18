@@ -520,3 +520,53 @@ input, select, button {
     font-weight: 500;
     color: var(--label-color);
 }
+
+/* Geofence Map Styling */
+#geofence-map {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+#geofence-map:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.datum-marker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.geofence-vertex {
+    cursor: pointer;
+}
+
+/* Make the map controls look better on dark theme */
+[data-bs-theme="dark"] .leaflet-bar a {
+    background-color: #333;
+    color: #fff;
+    border-bottom: 1px solid #555;
+}
+
+[data-bs-theme="dark"] .leaflet-bar a:hover {
+    background-color: #444;
+}
+
+[data-bs-theme="dark"] .leaflet-container {
+    background-color: #252525;
+}
+
+[data-bs-theme="dark"] .leaflet-tooltip {
+    background-color: #333;
+    color: #fff;
+    border: 1px solid #555;
+}
+
+[data-bs-theme="dark"] .leaflet-popup-content-wrapper {
+    background-color: #333;
+    color: #fff;
+}
+
+[data-bs-theme="dark"] .leaflet-popup-tip {
+    background-color: #333;
+}
