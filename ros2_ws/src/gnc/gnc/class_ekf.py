@@ -3,7 +3,8 @@ import scipy
 import warnings
 from ros2_ws.src.mav_simulator.mav_simulator.module_kinematics import clip, ssa
 
-class EKF():    
+class EKF():   
+     
     def __init__(
             self, 
             sampling_rate, 
@@ -107,7 +108,6 @@ class EKF():
             jacob[:, i] = (f2 - f1) / (2 * eps)
         
         return jacob
-        
     
     def predict(self, u, A=None, B=None, E=None, plant_model=None, discrete_flag=False, threshold=None):
 
@@ -162,7 +162,6 @@ class EKF():
         self.t = self.t + self.dt
         for i in range(3,6):
             self.x[i] = ssa(self.x[i])
-
 
     def correct(self, y, Cd, R, meas_model=None, threshold=None, filter_flag=None):
         """

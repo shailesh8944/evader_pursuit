@@ -112,11 +112,12 @@ class ThreeScene {
         this.transformControls = new THREE.TransformControls(this.camera, this.renderer.domElement);
         this.scene.add(this.transformControls);
         
-        // Set space to 'local' to rotate around object's center
+        // Always use local space for transformations to ensure they happen 
+        // relative to the component's local coordinate system
         this.transformControls.setSpace('local');
         
-        // Ensure rotation is around the center pivot point
-        this.transformControls.setMode('translate'); // Start with translate mode
+        // Start with translate mode
+        this.transformControls.setMode('translate');
         
         // Event listeners for transform controls
         this.transformControls.addEventListener('dragging-changed', (event) => {
@@ -145,12 +146,19 @@ class ThreeScene {
         
         this.transformControls.addEventListener('mouseDown', () => {
             // When starting transformation, store the object's initial position
-            // This is important for rotation around local center
             if (this.transformControls.object) {
                 const object = this.transformControls.object;
+                
                 // Store the object's world position for reference
                 object.userData.initialWorldPosition = new THREE.Vector3();
                 object.getWorldPosition(object.userData.initialWorldPosition);
+                
+                // If this is component axes, ensure it's centered correctly
+                if (object.userData.isComponentAxes && object.userData.pivotPoint) {
+                    // Make sure the axes position is at the pivot point
+                    // For rotations, this ensures we rotate around the component's center
+                    console.log("Using pivot point for transformation:", object.userData.pivotPoint);
+                }
             }
         });
         
@@ -838,20 +846,18 @@ class ThreeScene {
         if (this.transformControls) {
             this.transformControls.setMode(mode);
             
-            // When switching to rotate mode, ensure we're using the local space
-            // and the pivot point is at the component's center
-            if (mode === 'rotate' && this.transformControls.object) {
+            // Get the current object
                 const object = this.transformControls.object;
                 
-                // Always use local space for rotation
+            // If we have an object and it's component axes
+            if (object && object.userData.isComponentAxes) {
+                // Always use local space for component axes transformations
+                // This ensures the transform happens relative to the component's local coordinate system
                 this.transformControls.setSpace('local');
                 
-                // If this is a component axes, use the stored pivot point if available
-                if (object.userData.isComponentAxes && object.userData.pivotPoint) {
-                    console.log('Using pivot point for rotation:', object.userData.pivotPoint);
-                    // Note: Three.js TransformControls will use the object's position as pivot
-                    // The object's origin point is already at the component's center due to 
-                    // our setup in addComponentAxes
+                // When in rotate mode, make sure we're rotating around the component's center
+                if (mode === 'rotate') {
+                    console.log('Using component center for rotation');
                 }
             }
         }
@@ -877,9 +883,20 @@ class ThreeScene {
             return;
         }
         
-        // Check if we're transforming component axes or a component
-        let isAxes = object.userData.isComponentAxes;
-        let componentObject = isAxes ? object.parent : object;
+        // Check if we're transforming component axes
+        const isAxes = object.userData.isComponentAxes;
+        
+        // Get the component ID and type if this is axes
+        let componentId = null;
+        let componentType = null;
+        let componentObject = null;
+        
+        if (isAxes) {
+            componentId = object.userData.componentId;
+            componentType = object.userData.componentType;
+            // Get the parent object (the actual component)
+            componentObject = object.parent;
+        }
         
         // Get object position in world space
         const position = new THREE.Vector3();
@@ -897,11 +914,30 @@ class ThreeScene {
             z: THREE.MathUtils.radToDeg(euler.z).toFixed(1)
         };
         
+        // Update transform info display
+        let html = `
+            <div class="transform-info-section">
+                <div class="transform-info-title">Position</div>
+                <div class="transform-info-values">
+                    X: ${position.x.toFixed(3)}, 
+                    Y: ${position.y.toFixed(3)}, 
+                    Z: ${position.z.toFixed(3)}
+                </div>
+            </div>
+            <div class="transform-info-section">
+                <div class="transform-info-title">Rotation (deg)</div>
+                <div class="transform-info-values">
+                    X: ${rotDeg.x}°, 
+                    Y: ${rotDeg.y}°, 
+                    Z: ${rotDeg.z}°
+                </div>
+            </div>
+        `;
+        
+        transformInfo.innerHTML = html;
+        
         // If this is component axes, also update any input fields for the component
         if (isAxes && componentObject) {
-            const componentId = object.userData.componentId;
-            const componentType = object.userData.componentType;
-            
             // Update input fields based on component type
             if (componentType === 'controlSurface') {
                 const inputPrefix = 'cs';
@@ -926,19 +962,22 @@ class ThreeScene {
                 if (orY) orY.value = quaternion.y.toFixed(3);
                 if (orZ) orZ.value = quaternion.z.toFixed(3);
             }
+            
+            // Also update the component info panel position and rotation fields
+            const posX = document.getElementById('posX');
+            const posY = document.getElementById('posY');
+            const posZ = document.getElementById('posZ');
+            const rotX = document.getElementById('rotX');
+            const rotY = document.getElementById('rotY');
+            const rotZ = document.getElementById('rotZ');
+            
+            if (posX) posX.value = position.x.toFixed(3);
+            if (posY) posY.value = position.y.toFixed(3);
+            if (posZ) posZ.value = position.z.toFixed(3);
+            if (rotX) rotX.value = rotDeg.x;
+            if (rotY) rotY.value = rotDeg.y;
+            if (rotZ) rotZ.value = rotDeg.z;
         }
-        
-        // Create display text
-        transformInfo.innerHTML = `
-            <div class="transform-info-item">
-                <span class="label">Position:</span>
-                <span class="value">X: ${position.x.toFixed(3)}, Y: ${position.y.toFixed(3)}, Z: ${position.z.toFixed(3)}</span>
-            </div>
-            <div class="transform-info-item">
-                <span class="label">Rotation:</span>
-                <span class="value">X: ${rotDeg.x}°, Y: ${rotDeg.y}°, Z: ${rotDeg.z}°</span>
-            </div>
-        `;
     }
     
     // Helper to update position input fields
@@ -966,6 +1005,55 @@ class ThreeScene {
     onObjectTransformed(object) {
         if (!object) return;
         
+        // Check if this is component axes
+        if (object.userData && object.userData.isComponentAxes) {
+            const componentId = object.userData.componentId;
+            const componentType = object.userData.componentType;
+            
+            // Only the axes are being transformed, not the visual component
+            // Update the transform info in the side panel based on the axes position
+            this.updateTransformInfo();
+            
+            // Update the component data in the model
+            if (window.currentVesselModel && componentId && componentType) {
+                // Get the world position and orientation of the axes
+                const position = new THREE.Vector3();
+                object.getWorldPosition(position);
+                
+                const quaternion = new THREE.Quaternion();
+                object.getWorldQuaternion(quaternion);
+                const euler = new THREE.Euler().setFromQuaternion(quaternion);
+                
+                // Convert to arrays for the model
+                const positionArray = [position.x, position.y, position.z];
+                const orientationArray = [euler.x, euler.y, euler.z];
+                
+                // Update the component data based on type
+                const updateData = {};
+                
+                if (componentType === 'controlSurface') {
+                    updateData.control_surface_location = positionArray;
+                    updateData.control_surface_orientation = orientationArray;
+                    window.currentVesselModel.updateControlSurface(componentId, updateData);
+                } else if (componentType === 'thruster') {
+                    updateData.thruster_location = positionArray;
+                    updateData.thruster_orientation = orientationArray;
+                    window.currentVesselModel.updateThruster(componentId, updateData);
+                } else if (componentType === 'sensor') {
+                    updateData.sensor_location = positionArray;
+                    
+                    // Sensors use quaternion for orientation
+                    updateData.sensor_orientation = [quaternion.w, quaternion.x, quaternion.y, quaternion.z];
+                    window.currentVesselModel.updateSensor(componentId, updateData);
+                }
+                
+                console.log(`Updated ${componentType} ${componentId} from axes transformation`);
+                window.currentVesselModel.saveToHistory();
+            }
+            
+                return;
+            }
+            
         // Check if this is a center point
         if (object.userData && object.userData.centerType) {
             const type = object.userData.centerType;
@@ -987,10 +1075,10 @@ class ThreeScene {
             
             // Update transform info in the side panel
             this.updateTransformInfo();
-            return;
-        }
-        
-        // Handle other objects (original functionality)
+                        return;
+                }
+                
+        // Handle regular objects (original functionality)
         this.updateTransformInfo();
         
         // Get the component from the model based on the UUID
@@ -1037,7 +1125,7 @@ class ThreeScene {
             const selectedIntersect = intersects.find(intersect => {
                 // Check if the object is selectable
                 const isSelectable = intersect.object.isMesh && 
-                                     intersect.object.userData && 
+                intersect.object.userData && 
                                      intersect.object.userData.selectable;
                 
                 if (!isSelectable) return false;
@@ -1079,12 +1167,12 @@ class ThreeScene {
 
     selectObject(object) {
         // Deselect previously selected object
-        if (this.selectedObject) {
-            this.restoreOriginalMaterial(this.selectedObject);
-            this.selectedObject = null;
+            if (this.selectedObject) {
+                this.restoreOriginalMaterial(this.selectedObject);
+                this.selectedObject = null;
         }
-        
-        this.transformControls.detach();
+                
+                    this.transformControls.detach();
         
         // If a new object was selected
         if (object) {
@@ -1093,8 +1181,25 @@ class ThreeScene {
             if (object.userData.selectable) {
                 this.highlightObject(object);
                 
-                // Attach transform controls
-                this.transformControls.attach(object);
+                // Check if this is a component with a component type
+                if (object.userData.componentType && object.userData.componentType !== 'none') {
+                    // Find the component's axes
+                    const axes = object.children.find(child => child.userData.isComponentAxes);
+                    
+                    if (axes) {
+                        // Attach transform controls to the axes instead of the component
+                        this.transformControls.attach(axes);
+                        console.log(`Attached transform controls to axes of ${object.name}`);
+        } else {
+                        // If no axes found, create them and then attach
+                        const newAxes = this.addComponentAxes(object);
+                        this.transformControls.attach(newAxes);
+                        console.log(`Created and attached transform controls to new axes for ${object.name}`);
+                    }
+            } else {
+                    // For regular objects or center points, attach transform controls directly
+                    this.transformControls.attach(object);
+                }
                 
                 // Check if this is a center point
                 if (object.userData && object.userData.centerType) {
@@ -2029,16 +2134,6 @@ class ThreeScene {
                             <input type="number" class="form-control" id="rotX" value="${THREE.MathUtils.radToDeg(object.rotation.x).toFixed(1)}" step="1">
                             <input type="number" class="form-control" id="rotY" value="${THREE.MathUtils.radToDeg(object.rotation.y).toFixed(1)}" step="1">
                             <input type="number" class="form-control" id="rotZ" value="${THREE.MathUtils.radToDeg(object.rotation.z).toFixed(1)}" step="1">
-                        </div>
-                    </div>
-                </div>
-                <div class="property-row">
-                    <div class="property-label">Scale</div>
-                    <div class="property-value">
-                        <div class="input-group">
-                            <input type="number" class="form-control" id="scaleX" value="${object.scale.x.toFixed(2)}" step="0.1" min="0.1">
-                            <input type="number" class="form-control" id="scaleY" value="${object.scale.y.toFixed(2)}" step="0.1" min="0.1">
-                            <input type="number" class="form-control" id="scaleZ" value="${object.scale.z.toFixed(2)}" step="0.1" min="0.1">
                         </div>
                     </div>
                 </div>

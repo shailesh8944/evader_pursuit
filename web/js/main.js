@@ -1753,7 +1753,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 'geometry.yml': 'geometry-yaml-content',
                 'inertia.yml': 'inertia-yaml-content',
                 'hydrodynamics.yml': 'hydrodynamics-yaml-content',
-                'propulsion.yml': 'thrusters-yaml-content',  // Map to thrusters-yaml-content
+                'thrusters.yml': 'thrusters-yaml-content',  // Correct mapping for thrusters.yml
                 'control_surfaces.yml': 'control-surfaces-yaml-content',
                 'sensors.yml': 'sensors-yaml-content',
                 'initial_conditions.yml': 'initial-conditions-yaml-content',
@@ -1814,8 +1814,22 @@ document.addEventListener('DOMContentLoaded', function() {
             filesList += `<li><i class="bi bi-folder"></i> <strong>HydRA/</strong> - Empty HydRA folder</li>`;
         }
         
+        // Check if we have thrusters configured
+        const hasThruster = window.currentVesselModel.config.thrusters && 
+                           window.currentVesselModel.config.thrusters.thrusters && 
+                           window.currentVesselModel.config.thrusters.thrusters.length > 0;
+        
         // Add all the YAML files
-        filesList += `<li><i class="bi bi-file-earmark-code"></i> <strong>*.yml</strong> - All configuration YAML files</li>`;
+        filesList += `<li><i class="bi bi-file-earmark-code"></i> <strong>simulation_input.yml</strong> - Main simulation configuration</li>`;
+        filesList += `<li><i class="bi bi-file-earmark-code"></i> <strong>geometry.yml</strong> - Vessel geometry parameters</li>`;
+        filesList += `<li><i class="bi bi-file-earmark-code"></i> <strong>inertia.yml</strong> - Mass and inertia properties</li>`;
+        filesList += `<li><i class="bi bi-file-earmark-code"></i> <strong>hydrodynamics.yml</strong> - Hydrodynamic coefficients</li>`;
+        filesList += `<li><i class="bi bi-file-earmark-code"></i> <strong>control_surfaces.yml</strong> - Control surfaces configuration</li>`;
+        filesList += `<li><i class="bi bi-file-earmark-code"></i> <strong>thrusters.yml</strong> - ${hasThruster ? 'Thrusters configuration' : 'Empty thrusters configuration'}</li>`;
+        filesList += `<li><i class="bi bi-file-earmark-code"></i> <strong>sensors.yml</strong> - Sensors configuration</li>`;
+        filesList += `<li><i class="bi bi-file-earmark-code"></i> <strong>initial_conditions.yml</strong> - Initial vessel state</li>`;
+        filesList += `<li><i class="bi bi-file-earmark-code"></i> <strong>guidance.yml</strong> - Guidance settings</li>`;
+        filesList += `<li><i class="bi bi-file-earmark-code"></i> <strong>control.yml</strong> - Control system settings</li>`;
         
         filesList += '</ul>';
         
