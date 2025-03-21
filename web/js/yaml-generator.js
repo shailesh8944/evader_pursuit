@@ -368,7 +368,6 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
         const simulationInput = this.generateSimulationInputYAML(vessel);
         const hydrodynamicsYaml = this.generateHydrodynamicsYAML(vessel.hydrodynamics, vessel.name);
         
-        // Initialize files with all standard YAML files
         const files = {
             'simulation_input.yml': simulationInput,
             'geometry.yml': this.toYAML(this.generateGeometryYAML(vessel.geometry, vessel.name)),
@@ -378,9 +377,12 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
             'initial_conditions.yml': this.toYAML(this.generateInitialConditionsYAML(vessel.initial_conditions)),
             'sensors.yml': this.toYAML(this.generateSensorsYAML(vessel.sensors)),
             'guidance.yml': this.toYAML(this.generateGuidanceYAML(vessel.guidance)),
-            'control.yml': this.toYAML(this.generateControlYAML(vessel.control)),
-            'thrusters.yml': this.toYAML(this.generateThrustersYAML(vessel.thrusters || { thrusters: [] }, vessel.name))
+            'control.yml': this.toYAML(this.generateControlYAML(vessel.control))
         };
+        
+        if (vessel.thrusters && vessel.thrusters.thrusters && vessel.thrusters.thrusters.length > 0) {
+            files['thrusters.yml'] = this.toYAML(this.generateThrustersYAML(vessel.thrusters, vessel.name));
+        }
         
         return files;
     }
