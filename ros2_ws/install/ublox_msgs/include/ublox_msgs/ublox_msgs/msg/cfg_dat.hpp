@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/cfg_dat__struct.hpp"
 #include "ublox_msgs/msg/detail/cfg_dat__builder.hpp"
 #include "ublox_msgs/msg/detail/cfg_dat__traits.hpp"
+#include "ublox_msgs/msg/detail/cfg_dat__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__CFG_DAT_HPP_

@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/ack__struct.hpp"
 #include "ublox_msgs/msg/detail/ack__builder.hpp"
 #include "ublox_msgs/msg/detail/ack__traits.hpp"
+#include "ublox_msgs/msg/detail/ack__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__ACK_HPP_

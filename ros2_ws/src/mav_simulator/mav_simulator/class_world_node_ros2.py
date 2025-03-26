@@ -16,7 +16,7 @@ Author: MAV Simulator Team
 """
 
 from rclpy.node import Node
-from class_world import World
+from mav_simulator.class_world import World
 
 class World_Node(Node):
     rate = None

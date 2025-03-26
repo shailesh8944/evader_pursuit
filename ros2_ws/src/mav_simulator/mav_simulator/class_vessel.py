@@ -23,10 +23,9 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import pandas as pd
 import sys
-sys.path.append('/workspaces/mavlab/')
-from module_kinematics import Smat, eul_to_rotm, eul_rate_matrix, eul_to_quat
-import module_control as con
-from calculate_hydrodynamics import CalculateHydrodynamics
+from mav_simulator.module_kinematics import Smat, eul_to_rotm, eul_rate_matrix, eul_to_quat
+import mav_simulator.module_control as con
+from mav_simulator.calculate_hydrodynamics import CalculateHydrodynamics
 
 class Vessel:
     """A class representing a marine vessel with its dynamics.

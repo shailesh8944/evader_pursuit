@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/mon_ver__struct.hpp"
 #include "ublox_msgs/msg/detail/mon_ver__builder.hpp"
 #include "ublox_msgs/msg/detail/mon_ver__traits.hpp"
+#include "ublox_msgs/msg/detail/mon_ver__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__MON_VER_HPP_

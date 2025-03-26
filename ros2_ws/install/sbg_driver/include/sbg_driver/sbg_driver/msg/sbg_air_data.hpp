@@ -7,5 +7,6 @@
 #include "sbg_driver/msg/detail/sbg_air_data__struct.hpp"
 #include "sbg_driver/msg/detail/sbg_air_data__builder.hpp"
 #include "sbg_driver/msg/detail/sbg_air_data__traits.hpp"
+#include "sbg_driver/msg/detail/sbg_air_data__type_support.hpp"
 
 #endif  // SBG_DRIVER__MSG__SBG_AIR_DATA_HPP_

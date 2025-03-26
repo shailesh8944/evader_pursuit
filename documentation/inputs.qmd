@@ -1,0 +1,598 @@
+# Input Configuration Files
+
+## Overview
+
+The MAV Simulator uses YAML configuration files to define vessel properties, simulation parameters, and control settings. These files are organized in the `inputs` directory, with subdirectories for different vessel types.
+
+## Directory Structure
+
+```
+inputs/
+└── mavymini/              # MAVY Mini vessel configuration
+    ├── simulation_input.yml    # Main simulation configuration
+    ├── geometry.yml           # Vessel geometry parameters
+    ├── inertia.yml           # Mass and inertia properties
+    ├── hydrodynamics.yml     # Hydrodynamic coefficients
+    ├── control.yml          # Control system parameters
+    ├── control_surfaces.yml # Control surface properties
+    ├── thrusters.yml       # Thruster configurations
+    ├── sensors.yml         # Sensor specifications
+    ├── initial_conditions.yml # Initial state
+    ├── waypoints.yml      # Navigation waypoints
+    ├── guidance.yml       # Guidance system settings
+    ├── NACA0015.csv       # Airfoil data for control surfaces
+    └── HydRA/             # Hydrodynamic analysis data
+```
+
+## Configuration Files Reference
+
+### Simulation Input (`simulation_input.yml`)
+
+Main configuration file that references other parameter files and defines simulation settings.
+
+#### Parameters
+
+`simulation.name` (string)  
+Name identifier for the simulation.
+
+`simulation.time_step` (float)  
+Time step size in seconds for the simulation solver.
+
+`simulation.duration` (float)  
+Total duration of the simulation in seconds.
+
+`simulation.environment.water_density` (float)  
+Water density in kg/m³ (default: 1025.0 for seawater).
+
+`simulation.environment.gravity` (float)  
+Gravitational acceleration in m/s² (default: 9.81).
+
+`vessel.name` (string)  
+Name identifier for the vessel.
+
+`vessel.geometry_file` (string)  
+Path to the geometry configuration file.
+
+`vessel.inertia_file` (string)  
+Path to the inertia configuration file.
+
+`vessel.hydrodynamics_file` (string)  
+Path to the hydrodynamics configuration file.
+
+`vessel.control_file` (string)  
+Path to the control system configuration file.
+
+`vessel.control_surfaces_file` (string)  
+Path to the control surfaces configuration file.
+
+`vessel.thrusters_file` (string)  
+Path to the thrusters configuration file.
+
+`vessel.sensors_file` (string)  
+Path to the sensors configuration file.
+
+`vessel.initial_conditions_file` (string)  
+Path to the initial conditions configuration file.
+
+#### Example
+
+```yaml
+simulation:
+  name: "MAVY Mini Simulation"
+  time_step: 0.01
+  duration: 100.0
+  environment:
+    water_density: 1025.0
+    gravity: 9.81
+
+vessel:
+  name: "MAVY Mini"
+  geometry_file: "geometry.yml"
+  inertia_file: "inertia.yml"
+  hydrodynamics_file: "hydrodynamics.yml"
+  control_file: "control.yml"
+  control_surfaces_file: "control_surfaces.yml"
+  thrusters_file: "thrusters.yml"
+  sensors_file: "sensors.yml"
+  initial_conditions_file: "initial_conditions.yml"
+```
+
+### Geometry (`geometry.yml`)
+
+Defines vessel dimensions, shape, and key points.
+
+#### Parameters
+
+`geometry.length` (float)  
+Overall length of the vessel in meters.
+
+`geometry.breadth` (float)  
+Overall breadth (width) of the vessel in meters.
+
+`geometry.depth` (float)  
+Overall depth (height) of the vessel in meters.
+
+`geometry.draft` (float)  
+Draft of the vessel (depth below waterline) in meters.
+
+`geometry.CG` (array[3])  
+Center of gravity coordinates [x, y, z] in meters.
+
+`geometry.CB` (array[3])  
+Center of buoyancy coordinates [x, y, z] in meters.
+
+`geometry.gyration` (array[3])  
+Gyration radii [x, y, z] in meters.
+
+#### Example
+
+```yaml
+geometry:
+  length: 5.0      # Overall length [m]
+  breadth: 2.0     # Overall breadth [m]
+  depth: 1.0       # Overall depth [m]
+  draft: 0.5       # Draft [m]
+  CG: [0.0, 0.0, 0.0]  # Center of gravity [m]
+  CB: [0.0, 0.0, 0.1]  # Center of buoyancy [m]
+  gyration: [0.4, 0.4, 0.2]  # Gyration radii [m]
+```
+
+### Inertia (`inertia.yml`)
+
+Defines mass and inertia properties of the vessel.
+
+#### Parameters
+
+`inertia.mass` (float)  
+Total mass of the vessel in kilograms.
+
+`inertia.buoyancy_mass` (float)  
+Buoyancy mass, determining buoyancy force, in kilograms.
+
+`inertia.Ixx` (float)  
+Moment of inertia around the x-axis in kg⋅m².
+
+`inertia.Iyy` (float)  
+Moment of inertia around the y-axis in kg⋅m².
+
+`inertia.Izz` (float)  
+Moment of inertia around the z-axis in kg⋅m².
+
+`inertia.Ixy` (float, optional)  
+Product of inertia for xy plane in kg⋅m².
+
+`inertia.Ixz` (float, optional)  
+Product of inertia for xz plane in kg⋅m².
+
+`inertia.Iyz` (float, optional)  
+Product of inertia for yz plane in kg⋅m².
+
+#### Example
+
+```yaml
+inertia:
+  mass: 1000.0     # Total mass [kg]
+  buoyancy_mass: 1000.0  # Buoyancy mass [kg]
+  Ixx: 100.0       # Roll inertia [kg⋅m²]
+  Iyy: 200.0       # Pitch inertia [kg⋅m²]
+  Izz: 150.0       # Yaw inertia [kg⋅m²]
+  Ixy: 0.0         # Product of inertia [kg⋅m²]
+  Ixz: 0.0         # Product of inertia [kg⋅m²]
+  Iyz: 0.0         # Product of inertia [kg⋅m²]
+```
+
+### Hydrodynamics (`hydrodynamics.yml`)
+
+Defines hydrodynamic coefficients and forces.
+
+#### Parameters
+
+`hydrodynamics.added_mass` (object)  
+Added mass coefficients in various degrees of freedom.
+
+- `Xudot` (float): Added mass coefficient for surge acceleration.
+- `Yvdot` (float): Added mass coefficient for sway acceleration.
+- `Zwdot` (float): Added mass coefficient for heave acceleration.
+- `Kpdot` (float): Added mass coefficient for roll acceleration.
+- `Mqdot` (float): Added mass coefficient for pitch acceleration.
+- `Nrdot` (float): Added mass coefficient for yaw acceleration.
+
+`hydrodynamics.damping` (object)  
+Damping coefficients in various degrees of freedom.
+
+- `Xu` (float): Linear damping coefficient for surge velocity.
+- `Yv` (float): Linear damping coefficient for sway velocity.
+- `Zw` (float): Linear damping coefficient for heave velocity.
+- `Kp` (float): Linear damping coefficient for roll velocity.
+- `Mq` (float): Linear damping coefficient for pitch velocity.
+- `Nr` (float): Linear damping coefficient for yaw velocity.
+
+`hydrodynamics.restoring` (object)  
+Restoring force coefficients.
+
+- `Zz` (float): Heave restoring coefficient.
+- `Kphi` (float): Roll restoring coefficient.
+- `Mtheta` (float): Pitch restoring coefficient.
+
+#### Example
+
+```yaml
+hydrodynamics:
+  added_mass:
+    Xudot: -100.0
+    Yvdot: -200.0
+    Zwdot: -300.0
+    Kpdot: -50.0
+    Mqdot: -100.0
+    Nrdot: -150.0
+  
+  damping:
+    Xu: -50.0
+    Yv: -100.0
+    Zw: -150.0
+    Kp: -25.0
+    Mq: -50.0
+    Nr: -75.0
+  
+  restoring:
+    Zz: 1000.0
+    Kphi: 500.0
+    Mtheta: 1000.0
+```
+
+### Control (`control.yml`)
+
+Defines control system parameters and gains.
+
+#### Parameters
+
+`control.type` (string)  
+Control system type (e.g., "PID", "LQR", "MPC").
+
+`control.gains` (object)  
+Control gains for different degrees of freedom.
+
+- `surge` (object): Surge control gains.
+  - `Kp` (float): Proportional gain.
+  - `Ki` (float): Integral gain.
+  - `Kd` (float): Derivative gain.
+- `heading` (object): Heading control gains.
+  - `Kp` (float): Proportional gain.
+  - `Ki` (float): Integral gain.
+  - `Kd` (float): Derivative gain.
+
+#### Example
+
+```yaml
+control:
+  type: "PID"
+  gains:
+    surge:
+      Kp: 100.0
+      Ki: 10.0
+      Kd: 50.0
+    heading:
+      Kp: 10.0
+      Ki: 1.0
+      Kd: 5.0
+```
+
+### Control Surfaces (`control_surfaces.yml`)
+
+Defines rudder and other control surface properties.
+
+#### Parameters
+
+`control_surfaces.<name>` (object)  
+Configuration for a named control surface.
+
+- `type` (string): Type of control surface (e.g., "rudder", "fin", "elevator").
+- `position` (array[3]): Position relative to CG [x, y, z] in meters.
+- `orientation` (array[3], optional): Orientation [roll, pitch, yaw] in radians.
+- `area` (float): Surface area in square meters.
+- `aspect_ratio` (float): Aspect ratio of the control surface.
+- `stall_angle` (float): Stall angle in radians.
+- `lift_coefficient` (float): Maximum lift coefficient.
+- `drag_coefficient` (float): Drag coefficient.
+- `airfoil` (string, optional): Reference to airfoil data file.
+- `max_deflection` (float): Maximum deflection angle in radians.
+- `min_deflection` (float): Minimum deflection angle in radians.
+
+#### Example
+
+```yaml
+control_surfaces:
+  rudder:
+    type: "rudder"
+    position: [2.5, 0.0, 0.0]  # Position relative to CG [m]
+    orientation: [0.0, 0.0, 0.0]  # Orientation [rad]
+    area: 0.5                  # Surface area [m²]
+    aspect_ratio: 2.0          # Aspect ratio
+    stall_angle: 0.5           # Stall angle [rad]
+    lift_coefficient: 1.5      # Lift coefficient
+    drag_coefficient: 0.1      # Drag coefficient
+    airfoil: "NACA0015.csv"    # Airfoil data file
+    max_deflection: 0.5        # Maximum deflection [rad]
+    min_deflection: -0.5       # Minimum deflection [rad]
+```
+
+### Thrusters (`thrusters.yml`)
+
+Defines propulsion system configuration.
+
+#### Parameters
+
+`thrusters.<name>` (object)  
+Configuration for a named thruster.
+
+- `type` (string): Type of thruster (e.g., "propeller", "jet", "tunnel").
+- `position` (array[3]): Position relative to CG [x, y, z] in meters.
+- `direction` (array[3]): Thrust direction vector [x, y, z].
+- `max_thrust` (float): Maximum thrust in Newtons.
+- `min_thrust` (float, optional): Minimum thrust in Newtons.
+- `efficiency` (float): Propulsion efficiency (0-1).
+- `diameter` (float, optional): Propeller diameter in meters.
+- `max_rpm` (float, optional): Maximum RPM for propeller thrusters.
+
+#### Example
+
+```yaml
+thrusters:
+  main:
+    type: "propeller"
+    position: [2.5, 0.0, 0.0]  # Position relative to CG [m]
+    direction: [1.0, 0.0, 0.0] # Thrust direction vector
+    max_thrust: 1000.0         # Maximum thrust [N]
+    min_thrust: -200.0         # Minimum thrust (reverse) [N]
+    efficiency: 0.8            # Propulsion efficiency
+    diameter: 0.5              # Propeller diameter [m]
+    max_rpm: 3000.0            # Maximum RPM
+```
+
+### Sensors (`sensors.yml`)
+
+Defines sensor specifications and properties.
+
+#### Parameters
+
+`sensors.<name>` (object)  
+Configuration for a named sensor.
+
+- `type` (string): Type of sensor (e.g., "gps", "imu", "dvl", "pressure").
+- `position` (array[3]): Position relative to CG [x, y, z] in meters.
+- `orientation` (array[3], optional): Orientation [roll, pitch, yaw] in radians.
+- `update_rate` (float): Update rate in Hertz.
+- `noise_type` (string, optional): Noise model (e.g., "gaussian", "uniform").
+- `noise_parameters` (object, optional): Noise model parameters.
+  - `mean` (float): Mean value of noise.
+  - `std` (float): Standard deviation of noise.
+  - `bias` (float): Constant bias value.
+
+For specific sensor types:
+
+- `gps`:
+  - `position_noise_std` (float): Standard deviation for position in meters.
+  - `velocity_noise_std` (float): Standard deviation for velocity in m/s.
+
+- `imu`:
+  - `accel_noise_std` (float): Accelerometer noise standard deviation in m/s².
+  - `gyro_noise_std` (float): Gyroscope noise standard deviation in rad/s.
+  - `mag_noise_std` (float): Magnetometer noise standard deviation.
+
+- `dvl`:
+  - `velocity_noise_std` (float): Standard deviation for velocity measurement.
+  - `range` (float): Maximum range in meters.
+
+- `pressure`:
+  - `pressure_noise_std` (float): Standard deviation for pressure measurement.
+  - `range` (float): Maximum range in meters.
+
+#### Example
+
+```yaml
+sensors:
+  gps:
+    type: "gps"
+    position: [0.0, 0.0, 0.0]  # Position relative to CG [m]
+    update_rate: 10.0          # Update rate [Hz]
+    position_noise_std: 1.0     # Position noise [m]
+    velocity_noise_std: 0.1     # Velocity noise [m/s]
+  
+  imu:
+    type: "imu"
+    position: [0.0, 0.0, 0.0]  # Position relative to CG [m]
+    update_rate: 100.0         # Update rate [Hz]
+    accel_noise_std: 0.01      # Acceleration noise [m/s²]
+    gyro_noise_std: 0.001      # Angular rate noise [rad/s]
+    mag_noise_std: 0.1         # Magnetometer noise
+  
+  dvl:
+    type: "dvl"
+    position: [0.0, 0.0, -0.5] # Position relative to CG [m]
+    update_rate: 5.0           # Update rate [Hz]
+    velocity_noise_std: 0.05   # Velocity noise [m/s]
+    range: 100.0               # Maximum range [m]
+```
+
+### Initial Conditions (`initial_conditions.yml`)
+
+Defines the starting state of the vessel.
+
+#### Parameters
+
+`initial_conditions.position` (array[3])  
+Initial position [x, y, z] in meters.
+
+`initial_conditions.orientation` (array[3])  
+Initial orientation [roll, pitch, yaw] in radians.
+
+`initial_conditions.velocity` (array[3])  
+Initial linear velocity [u, v, w] in m/s.
+
+`initial_conditions.angular_velocity` (array[3])  
+Initial angular velocity [p, q, r] in rad/s.
+
+#### Example
+
+```yaml
+initial_conditions:
+  position: [0.0, 0.0, 0.0]    # Initial position [m]
+  orientation: [0.0, 0.0, 0.0]  # Initial orientation [rad]
+  velocity: [0.0, 0.0, 0.0]    # Initial velocity [m/s]
+  angular_velocity: [0.0, 0.0, 0.0]  # Initial angular velocity [rad/s]
+```
+
+### Waypoints (`waypoints.yml`)
+
+Defines navigation waypoints for path following.
+
+#### Parameters
+
+`waypoints` (array)  
+List of waypoints for navigation.
+
+For each waypoint:
+- `position` (array[3]): Position [x, y, z] in meters.
+- `orientation` (array[3], optional): Desired orientation [roll, pitch, yaw] in radians.
+- `velocity` (array[3], optional): Desired velocity [u, v, w] in m/s.
+- `arrival_radius` (float): Arrival radius in meters.
+- `dwell_time` (float, optional): Time to dwell at waypoint in seconds.
+
+#### Example
+
+```yaml
+waypoints:
+  - position: [10.0, 0.0, 0.0]    # Position [m]
+    orientation: [0.0, 0.0, 0.0]   # Desired orientation [rad]
+    velocity: [1.0, 0.0, 0.0]      # Desired velocity [m/s]
+    arrival_radius: 1.0            # Arrival radius [m]
+    dwell_time: 0.0                # Dwell time [s]
+  
+  - position: [20.0, 10.0, 0.0]   # Position [m]
+    orientation: [0.0, 0.0, 0.785] # Desired orientation [rad]
+    velocity: [0.5, 0.5, 0.0]      # Desired velocity [m/s]
+    arrival_radius: 2.0            # Arrival radius [m]
+    dwell_time: 10.0               # Dwell time [s]
+```
+
+### Guidance (`guidance.yml`)
+
+Defines guidance system settings for waypoint following and path planning.
+
+#### Parameters
+
+`guidance.type` (string)  
+Type of guidance system (e.g., "LOS", "Pure Pursuit", "Vector Field").
+
+`guidance.los` (object, conditional)  
+Line of Sight (LOS) guidance parameters.
+
+- `radius` (float): Acceptance radius in meters.
+- `lookahead_distance` (float): Lookahead distance in meters.
+
+`guidance.pure_pursuit` (object, conditional)  
+Pure Pursuit guidance parameters.
+
+- `lookahead_distance` (float): Lookahead distance in meters.
+
+`guidance.vector_field` (object, conditional)  
+Vector Field guidance parameters.
+
+- `field_strength` (float): Field strength parameter.
+- `radius` (float): Influence radius in meters.
+
+#### Example
+
+```yaml
+guidance:
+  type: "LOS"
+  los:
+    radius: 5.0
+    lookahead_distance: 10.0
+  
+  # Alternative configurations
+  # type: "Pure Pursuit"
+  # pure_pursuit:
+  #   lookahead_distance: 15.0
+  
+  # type: "Vector Field"
+  # vector_field:
+  #   field_strength: 1.0
+  #   radius: 8.0
+```
+
+### Airfoil Data (`NACA0015.csv`)
+
+Contains lift and drag coefficient data for the NACA0015 airfoil at different angles of attack.
+
+#### Format
+
+The CSV file contains columns for:
+- `alpha`: Angle of attack in degrees
+- `cl`: Lift coefficient
+- `cd`: Drag coefficient
+- `cm`: Moment coefficient
+
+#### Example
+
+```
+alpha,cl,cd,cm
+-180.0,0.0,0.0209,0.0
+-170.0,0.2309,0.0489,0.0797
+-160.0,0.4507,0.1218,0.1589
+...
+0.0,0.0,0.0082,0.0
+...
+160.0,-0.4507,0.1218,-0.1589
+170.0,-0.2309,0.0489,-0.0797
+180.0,0.0,0.0209,0.0
+```
+
+## Best Practices
+
+### File Organization
+
+1. Keep related parameters together in appropriate files
+2. Use descriptive file names
+3. Maintain consistent formatting
+4. Include units in comments
+
+### Parameter Validation
+
+1. Check units and dimensions
+2. Verify parameter ranges
+3. Ensure required fields are present
+4. Validate dependencies between files
+
+### Version Control
+
+1. Use meaningful commit messages
+2. Keep configuration templates
+3. Document changes in parameters
+4. Maintain backup copies
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Missing Files**
+   - Check file paths in `simulation_input.yml`
+   - Verify file permissions
+   - Ensure all required files exist
+
+2. **Invalid Parameters**
+   - Check parameter ranges
+   - Verify units
+   - Validate dependencies
+
+3. **Simulation Errors**
+   - Review initial conditions
+   - Check control parameters
+   - Verify sensor configurations
+
+### Debugging Tips
+
+1. Use the web configurator to validate parameters
+2. Check parameter consistency across files
+3. Verify file format and syntax
+4. Test with simplified configurations 

@@ -18,15 +18,14 @@ Author: MAV Simulator Team
 """
 
 import numpy as np
-import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, PointCloud2, Image, LaserScan, NavSatFix, NavSatStatus
 from geometry_msgs.msg import Point, Vector3, Pose, Quaternion, Twist, PoseWithCovarianceStamped, TwistWithCovarianceStamped
 from interfaces.msg import Actuator, DVL
-import module_kinematics as kin
-from module_sensors import create_sensor
+import mav_simulator.module_kinematics as kin
+from mav_simulator.module_sensors import create_sensor
 
 class Vessel_Pub_Sub():
     """ROS2 publisher/subscriber interface for a vessel.

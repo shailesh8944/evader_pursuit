@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_timegps__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_timegps__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_timegps__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_timegps__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_TIMEGPS_HPP_

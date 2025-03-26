@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_dgpssv__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_dgpssv__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_dgpssv__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_dgpssv__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_DGPSSV_HPP_

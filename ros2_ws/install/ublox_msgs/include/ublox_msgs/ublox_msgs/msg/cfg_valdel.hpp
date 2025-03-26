@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/cfg_valdel__struct.hpp"
 #include "ublox_msgs/msg/detail/cfg_valdel__builder.hpp"
 #include "ublox_msgs/msg/detail/cfg_valdel__traits.hpp"
+#include "ublox_msgs/msg/detail/cfg_valdel__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__CFG_VALDEL_HPP_

@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_dop__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_dop__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_dop__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_dop__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_DOP_HPP_

@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_pvt__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_pvt__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_pvt__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_pvt__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_PVT_HPP_

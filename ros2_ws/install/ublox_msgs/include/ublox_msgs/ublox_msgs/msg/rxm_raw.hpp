@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/rxm_raw__struct.hpp"
 #include "ublox_msgs/msg/detail/rxm_raw__builder.hpp"
 #include "ublox_msgs/msg/detail/rxm_raw__traits.hpp"
+#include "ublox_msgs/msg/detail/rxm_raw__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__RXM_RAW_HPP_

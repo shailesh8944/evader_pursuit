@@ -7,5 +7,6 @@
 #include "interfaces/msg/detail/actuator__struct.hpp"
 #include "interfaces/msg/detail/actuator__builder.hpp"
 #include "interfaces/msg/detail/actuator__traits.hpp"
+#include "interfaces/msg/detail/actuator__type_support.hpp"
 
 #endif  // INTERFACES__MSG__ACTUATOR_HPP_

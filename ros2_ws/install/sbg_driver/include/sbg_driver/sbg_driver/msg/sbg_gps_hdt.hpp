@@ -7,5 +7,6 @@
 #include "sbg_driver/msg/detail/sbg_gps_hdt__struct.hpp"
 #include "sbg_driver/msg/detail/sbg_gps_hdt__builder.hpp"
 #include "sbg_driver/msg/detail/sbg_gps_hdt__traits.hpp"
+#include "sbg_driver/msg/detail/sbg_gps_hdt__type_support.hpp"
 
 #endif  // SBG_DRIVER__MSG__SBG_GPS_HDT_HPP_

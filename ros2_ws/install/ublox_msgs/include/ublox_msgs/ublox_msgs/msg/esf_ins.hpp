@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/esf_ins__struct.hpp"
 #include "ublox_msgs/msg/detail/esf_ins__builder.hpp"
 #include "ublox_msgs/msg/detail/esf_ins__traits.hpp"
+#include "ublox_msgs/msg/detail/esf_ins__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__ESF_INS_HPP_

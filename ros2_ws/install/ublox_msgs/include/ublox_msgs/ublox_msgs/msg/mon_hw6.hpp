@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/mon_hw6__struct.hpp"
 #include "ublox_msgs/msg/detail/mon_hw6__builder.hpp"
 #include "ublox_msgs/msg/detail/mon_hw6__traits.hpp"
+#include "ublox_msgs/msg/detail/mon_hw6__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__MON_HW6_HPP_

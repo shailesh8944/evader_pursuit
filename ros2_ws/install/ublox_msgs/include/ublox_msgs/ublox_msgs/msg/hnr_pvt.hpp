@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/hnr_pvt__struct.hpp"
 #include "ublox_msgs/msg/detail/hnr_pvt__builder.hpp"
 #include "ublox_msgs/msg/detail/hnr_pvt__traits.hpp"
+#include "ublox_msgs/msg/detail/hnr_pvt__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__HNR_PVT_HPP_

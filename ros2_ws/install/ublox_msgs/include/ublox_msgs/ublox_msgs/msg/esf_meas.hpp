@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/esf_meas__struct.hpp"
 #include "ublox_msgs/msg/detail/esf_meas__builder.hpp"
 #include "ublox_msgs/msg/detail/esf_meas__traits.hpp"
+#include "ublox_msgs/msg/detail/esf_meas__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__ESF_MEAS_HPP_

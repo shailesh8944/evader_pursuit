@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/esf_status__struct.hpp"
 #include "ublox_msgs/msg/detail/esf_status__builder.hpp"
 #include "ublox_msgs/msg/detail/esf_status__traits.hpp"
+#include "ublox_msgs/msg/detail/esf_status__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__ESF_STATUS_HPP_

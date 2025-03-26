@@ -1,4 +1,4 @@
-docker run -it --rm --privileged --name jetson_docker_1 \
+docker run -it --rm --privileged --name panisim \
     --net=host \
     --env="DISPLAY" \
     --env="ROS_DOMAIN_ID=42" \

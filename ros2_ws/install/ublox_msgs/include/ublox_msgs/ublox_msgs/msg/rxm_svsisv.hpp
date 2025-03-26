@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/rxm_svsisv__struct.hpp"
 #include "ublox_msgs/msg/detail/rxm_svsisv__builder.hpp"
 #include "ublox_msgs/msg/detail/rxm_svsisv__traits.hpp"
+#include "ublox_msgs/msg/detail/rxm_svsisv__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__RXM_SVSISV_HPP_

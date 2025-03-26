@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/mon_hw__struct.hpp"
 #include "ublox_msgs/msg/detail/mon_hw__builder.hpp"
 #include "ublox_msgs/msg/detail/mon_hw__traits.hpp"
+#include "ublox_msgs/msg/detail/mon_hw__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__MON_HW_HPP_

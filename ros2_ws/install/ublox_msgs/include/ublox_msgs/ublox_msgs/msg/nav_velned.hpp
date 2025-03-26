@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_velned__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_velned__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_velned__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_velned__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_VELNED_HPP_

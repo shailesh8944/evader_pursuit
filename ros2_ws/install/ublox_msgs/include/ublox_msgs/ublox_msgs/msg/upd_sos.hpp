@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/upd_sos__struct.hpp"
 #include "ublox_msgs/msg/detail/upd_sos__builder.hpp"
 #include "ublox_msgs/msg/detail/upd_sos__traits.hpp"
+#include "ublox_msgs/msg/detail/upd_sos__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__UPD_SOS_HPP_

@@ -1,0 +1,12 @@
+# Dimensions of the box enclosing the vessel
+length: 1
+breadth: 0.5
+depth: 0.5
+gyration: [1.0, 1.0, 1.0]
+CO: [0.0, 0.0, 0.0]
+CG: [0.0, 0.0, 0.0]
+CB: [0.0, 0.0, 0.0]
+
+geometry_file: /workspaces/mavlab/inputs/mavymini/HydRA/input/MavyMini.gdf
+
+

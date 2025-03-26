@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/cfg_nav5__struct.hpp"
 #include "ublox_msgs/msg/detail/cfg_nav5__builder.hpp"
 #include "ublox_msgs/msg/detail/cfg_nav5__traits.hpp"
+#include "ublox_msgs/msg/detail/cfg_nav5__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__CFG_NAV5_HPP_

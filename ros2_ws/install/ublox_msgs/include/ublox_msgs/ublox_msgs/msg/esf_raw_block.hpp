@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/esf_raw_block__struct.hpp"
 #include "ublox_msgs/msg/detail/esf_raw_block__builder.hpp"
 #include "ublox_msgs/msg/detail/esf_raw_block__traits.hpp"
+#include "ublox_msgs/msg/detail/esf_raw_block__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__ESF_RAW_BLOCK_HPP_

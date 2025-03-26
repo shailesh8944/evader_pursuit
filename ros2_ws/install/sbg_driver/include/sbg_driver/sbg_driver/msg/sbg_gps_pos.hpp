@@ -7,5 +7,6 @@
 #include "sbg_driver/msg/detail/sbg_gps_pos__struct.hpp"
 #include "sbg_driver/msg/detail/sbg_gps_pos__builder.hpp"
 #include "sbg_driver/msg/detail/sbg_gps_pos__traits.hpp"
+#include "sbg_driver/msg/detail/sbg_gps_pos__type_support.hpp"
 
 #endif  // SBG_DRIVER__MSG__SBG_GPS_POS_HPP_

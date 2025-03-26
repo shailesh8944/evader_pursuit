@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/cfg_gnss_block__struct.hpp"
 #include "ublox_msgs/msg/detail/cfg_gnss_block__builder.hpp"
 #include "ublox_msgs/msg/detail/cfg_gnss_block__traits.hpp"
+#include "ublox_msgs/msg/detail/cfg_gnss_block__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__CFG_GNSS_BLOCK_HPP_

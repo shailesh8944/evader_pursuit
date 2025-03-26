@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_relposned9__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_relposned9__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_relposned9__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_relposned9__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_RELPOSNED9_HPP_

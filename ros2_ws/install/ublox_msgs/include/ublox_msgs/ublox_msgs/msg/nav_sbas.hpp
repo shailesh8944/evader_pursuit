@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_sbas__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_sbas__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_sbas__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_sbas__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_SBAS_HPP_

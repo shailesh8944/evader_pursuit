@@ -7,5 +7,6 @@
 #include "sbg_driver/msg/detail/sbg_event__struct.hpp"
 #include "sbg_driver/msg/detail/sbg_event__builder.hpp"
 #include "sbg_driver/msg/detail/sbg_event__traits.hpp"
+#include "sbg_driver/msg/detail/sbg_event__type_support.hpp"
 
 #endif  // SBG_DRIVER__MSG__SBG_EVENT_HPP_

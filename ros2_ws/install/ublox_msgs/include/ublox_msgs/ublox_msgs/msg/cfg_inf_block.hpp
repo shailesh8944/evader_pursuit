@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/cfg_inf_block__struct.hpp"
 #include "ublox_msgs/msg/detail/cfg_inf_block__builder.hpp"
 #include "ublox_msgs/msg/detail/cfg_inf_block__traits.hpp"
+#include "ublox_msgs/msg/detail/cfg_inf_block__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__CFG_INF_BLOCK_HPP_

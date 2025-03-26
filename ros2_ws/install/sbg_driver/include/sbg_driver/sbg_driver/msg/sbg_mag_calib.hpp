@@ -7,5 +7,6 @@
 #include "sbg_driver/msg/detail/sbg_mag_calib__struct.hpp"
 #include "sbg_driver/msg/detail/sbg_mag_calib__builder.hpp"
 #include "sbg_driver/msg/detail/sbg_mag_calib__traits.hpp"
+#include "sbg_driver/msg/detail/sbg_mag_calib__type_support.hpp"
 
 #endif  // SBG_DRIVER__MSG__SBG_MAG_CALIB_HPP_

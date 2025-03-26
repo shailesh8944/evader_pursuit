@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_posecef__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_posecef__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_posecef__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_posecef__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_POSECEF_HPP_

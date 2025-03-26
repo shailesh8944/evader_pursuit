@@ -18,11 +18,11 @@ Author: MAV Simulator Team
 
 #!/usr/bin/env python3
 
-from class_world import World
+from mav_simulator.class_world import World
 import threading
 import rclpy
-from class_world_node_ros2 import World_Node
-import module_kinematics as kin
+from mav_simulator.class_world_node_ros2 import World_Node
+import mav_simulator.module_kinematics as kin
 
 def ros_thread(node):
     rclpy.spin(node)
@@ -40,6 +40,29 @@ def main():
     # Run ROS on a separate thread
     ros_thread_instance = threading.Thread(target=ros_thread, args=(world_node,))
     ros_thread_instance.start()
+    
+    # Get list of available ROS2 topics
+    import subprocess
+    topics = subprocess.check_output(['ros2', 'topic', 'list']).decode().strip()
+
+    # Print welcome message and simulation info
+    print("\n" + "="*50)
+    print("🚀 ROS2 Simulation Started Successfully!")
+    print("="*50)
+    
+    print("\n📡 Available ROS2 Topics:")
+    print("-"*30)
+    print(topics)
+    
+    print("\n🔍 View Topic Data:")
+    print("-"*30)
+    print("1. Open a new terminal:")
+    print("   docker exec -it panisim bash")
+    print("\n2. Subscribe to a topic:")
+    print("   ros2 topic echo <topic_name>")
+    print("\n📝 Example:")
+    print("   ros2 topic echo /vessel_0/odometry_sim")
+    print("\n" + "="*50)
 
 if __name__ == '__main__':
     main()

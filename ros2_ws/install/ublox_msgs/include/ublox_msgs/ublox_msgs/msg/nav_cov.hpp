@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_cov__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_cov__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_cov__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_cov__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_COV_HPP_

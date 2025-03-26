@@ -20,9 +20,9 @@ Author: MAV Simulator Team
 
 import numpy as np
 import yaml
-from class_vessel import Vessel
-from class_vessel_pub_sub_ros2 import Vessel_Pub_Sub
-from read_input import read_input
+from mav_simulator.class_vessel import Vessel
+from mav_simulator.class_vessel_pub_sub_ros2 import Vessel_Pub_Sub
+from mav_simulator.read_input import read_input
 
 class World():
     """

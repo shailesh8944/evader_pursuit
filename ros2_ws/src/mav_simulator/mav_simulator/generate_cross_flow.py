@@ -23,8 +23,8 @@ import numpy as np
 import yaml
 import argparse
 from pathlib import Path
-from class_grid import Grid
-from calculate_hydrodynamics import CalculateHydrodynamics
+from mav_simulator.class_grid import Grid
+from mav_simulator.calculate_hydrodynamics import CalculateHydrodynamics
 
 class CrossFlowGenerator:
     def __init__(self, gdf_file, hydra_file, yaml_file, initial_conditions_file, vessel_type='auv'):

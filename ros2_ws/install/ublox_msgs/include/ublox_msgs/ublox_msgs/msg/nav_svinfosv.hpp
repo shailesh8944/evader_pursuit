@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_svinfosv__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_svinfosv__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_svinfosv__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_svinfosv__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_SVINFOSV_HPP_

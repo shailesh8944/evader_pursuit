@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/rxm_rtcm__struct.hpp"
 #include "ublox_msgs/msg/detail/rxm_rtcm__builder.hpp"
 #include "ublox_msgs/msg/detail/rxm_rtcm__traits.hpp"
+#include "ublox_msgs/msg/detail/rxm_rtcm__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__RXM_RTCM_HPP_

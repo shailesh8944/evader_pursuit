@@ -15,10 +15,10 @@ Description: This file contains the CalculateHydrodynamics class which is respon
              
 Author: MAV Simulator Team
 """
-
+import sys
 import numpy as np
 import json
-from module_kinematics import Smat
+from mav_simulator.module_kinematics import Smat
 
 class CalculateHydrodynamics:
     def __init__(self):

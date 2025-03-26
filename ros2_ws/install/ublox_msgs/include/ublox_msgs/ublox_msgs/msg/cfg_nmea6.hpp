@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/cfg_nmea6__struct.hpp"
 #include "ublox_msgs/msg/detail/cfg_nmea6__builder.hpp"
 #include "ublox_msgs/msg/detail/cfg_nmea6__traits.hpp"
+#include "ublox_msgs/msg/detail/cfg_nmea6__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__CFG_NMEA6_HPP_

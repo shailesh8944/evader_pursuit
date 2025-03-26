@@ -7,5 +7,6 @@
 #include "sbg_driver/msg/detail/sbg_gps_vel_status__struct.hpp"
 #include "sbg_driver/msg/detail/sbg_gps_vel_status__builder.hpp"
 #include "sbg_driver/msg/detail/sbg_gps_vel_status__traits.hpp"
+#include "sbg_driver/msg/detail/sbg_gps_vel_status__type_support.hpp"
 
 #endif  // SBG_DRIVER__MSG__SBG_GPS_VEL_STATUS_HPP_

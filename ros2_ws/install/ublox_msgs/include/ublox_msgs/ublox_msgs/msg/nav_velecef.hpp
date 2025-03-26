@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_velecef__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_velecef__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_velecef__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_velecef__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_VELECEF_HPP_

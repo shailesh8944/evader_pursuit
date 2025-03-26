@@ -1,0 +1,138 @@
+# Kinematics Module
+
+## Overview
+
+The Kinematics module (`module_kinematics.py`) provides a comprehensive set of mathematical functions for handling coordinate transformations, rotation representations, and kinematic calculations essential for marine vehicle simulation.
+
+::: {.callout-tip}
+This module serves as the mathematical foundation for all spatial transformations in the simulator.
+:::
+
+## Coordinate Frames
+
+The module supports transformations between multiple coordinate systems:
+
+1. **Earth Centered Inertial (ECI) frame** - {i}
+2. **Earth Centered Earth Fixed (ECEF) frame** - {e}
+3. **North-East-Down (NED) frame** - {n}
+4. **Body frame** - {b}
+5. **Flow frame** - {f}
+
+## Function Categories
+
+### Rotation Representation Conversions
+
+```{mermaid}
+graph TD
+    EA[Euler Angles] -- eul_to_rotm --> RM[Rotation Matrix]
+    RM -- rotm_to_eul --> EA
+    EA -- eul_to_quat --> Q[Quaternion]
+    Q -- quat_to_eul --> EA
+    Q -- quat_to_rotm --> RM
+    RM -- rotm_to_quat --> Q
+```
+
+| Function | Description |
+|----------|-------------|
+| `eul_to_rotm(eul, order='ZYX', deg=False)` | Converts Euler angles to rotation matrix |
+| `rotm_to_eul(rotm, order='ZYX', prev_eul=None, deg=False, silent=True)` | Converts rotation matrix to Euler angles |
+| `eul_to_quat(eul, order='ZYX', deg=False)` | Converts Euler angles to quaternion |
+| `quat_to_eul(quat, order='ZYX', deg=False, prev_quat=None, silent=True)` | Converts quaternion to Euler angles |
+| `quat_to_rotm(quat)` | Converts quaternion to rotation matrix |
+| `rotm_to_quat(rotm)` | Converts rotation matrix to quaternion |
+
+### Quaternion Operations
+
+| Function | Description |
+|----------|-------------|
+| `quat_multiply(q1, q2)` | Multiplies two quaternions |
+| `quat_conjugate(quat)` | Computes the conjugate of a quaternion |
+| `rotate_vec_by_quat(vec_a, q_a_b)` | Rotates a vector using a quaternion |
+
+### Rate Calculations
+
+| Function | Description |
+|----------|-------------|
+| `eul_rate_matrix(eul, order='ZYX', deg=False)` | Computes the Euler rate matrix |
+| `quat_rate_matrix(quat)` | Computes the quaternion rate matrix |
+| `eul_rate(eul, w, order='ZYX')` | Calculates Euler angle rates from angular velocity |
+| `quat_rate(quat, w)` | Calculates quaternion rates from angular velocity |
+| `deul_dquat(quat)` | Computes the Jacobian of Euler angles with respect to quaternion |
+| `dquat_deul(quat)` | Computes the Jacobian of quaternion with respect to Euler angles |
+
+### Navigation Functions
+
+| Function | Description |
+|----------|-------------|
+| `ssa(ang, deg=False)` | Converts angles to smallest signed angle |
+| `clip(value, threshold)` | Clips a value to a specified threshold |
+| `ned_to_llh(ned, llh0)` | Converts NED coordinates to latitude/longitude/height |
+| `llh_to_ned(llh, llh0)` | Converts latitude/longitude/height to NED coordinates |
+| `generate_waypoints()` | Generates waypoints for navigation |
+| `rotm_ned_to_ecef(llh)` | Computes rotation matrix from NED to ECEF frame |
+
+### Utility Functions
+
+| Function | Description |
+|----------|-------------|
+| `Smat(vec)` | Creates a skew-symmetric matrix from a vector |
+
+## Usage Examples
+
+### Coordinate Transformations
+
+```python
+import numpy as np
+from mav_simulator.module_kinematics import eul_to_rotm, llh_to_ned
+
+# Convert Euler angles to rotation matrix
+euler_angles = np.array([0.1, 0.2, 0.3])  # [roll, pitch, yaw] in radians
+R = eul_to_rotm(euler_angles)  # Rotation matrix
+
+# Convert latitude, longitude, height to NED coordinates
+reference_point = np.array([60.0, 10.0, 0.0])  # [lat, lon, height]
+target_point = np.array([60.001, 10.001, 10.0])  # [lat, lon, height]
+ned_coords = llh_to_ned(target_point, reference_point)
+```
+
+### Rotation Representations
+
+```python
+from mav_simulator.module_kinematics import eul_to_quat, quat_to_rotm
+
+# Convert from Euler angles to quaternion
+euler_angles = np.array([0.1, 0.2, 0.3])  # [roll, pitch, yaw] in radians
+quaternion = eul_to_quat(euler_angles)
+
+# Convert from quaternion to rotation matrix
+R = quat_to_rotm(quaternion)
+```
+
+## Mathematical Foundation
+
+The module implements standard kinematic relationships for rigid body motion. Some key equations include:
+
+### Euler Rate Equation
+
+$$\dot{\boldsymbol{\eta}} = \mathbf{T}(\boldsymbol{\eta}) \boldsymbol{\omega}$$
+
+Where:
+- $\dot{\boldsymbol{\eta}}$ is the rate of change of Euler angles
+- $\mathbf{T}(\boldsymbol{\eta})$ is the Euler rate matrix
+- $\boldsymbol{\omega}$ is the angular velocity vector
+
+### Quaternion Rate Equation
+
+$$\dot{\mathbf{q}} = \frac{1}{2} \mathbf{E}(\mathbf{q}) \boldsymbol{\omega}$$
+
+Where:
+- $\dot{\mathbf{q}}$ is the rate of change of the quaternion
+- $\mathbf{E}(\mathbf{q})$ is the quaternion rate matrix
+- $\boldsymbol{\omega}$ is the angular velocity vector
+
+## Best Practices
+
+- Prefer quaternions over Euler angles for attitude integration to avoid gimbal lock
+- Use the `ssa()` function to normalize angles when working with Euler angles
+- Be consistent with the rotation order convention throughout your code (the default is 'ZYX')
+- When transforming between frames, always keep track of the reference frames involved 

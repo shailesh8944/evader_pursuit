@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/cfg_dgnss__struct.hpp"
 #include "ublox_msgs/msg/detail/cfg_dgnss__builder.hpp"
 #include "ublox_msgs/msg/detail/cfg_dgnss__traits.hpp"
+#include "ublox_msgs/msg/detail/cfg_dgnss__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__CFG_DGNSS_HPP_

@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/tim_tm2__struct.hpp"
 #include "ublox_msgs/msg/detail/tim_tm2__builder.hpp"
 #include "ublox_msgs/msg/detail/tim_tm2__traits.hpp"
+#include "ublox_msgs/msg/detail/tim_tm2__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__TIM_TM2_HPP_

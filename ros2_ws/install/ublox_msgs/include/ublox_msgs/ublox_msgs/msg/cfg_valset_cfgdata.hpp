@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/cfg_valset_cfgdata__struct.hpp"
 #include "ublox_msgs/msg/detail/cfg_valset_cfgdata__builder.hpp"
 #include "ublox_msgs/msg/detail/cfg_valset_cfgdata__traits.hpp"
+#include "ublox_msgs/msg/detail/cfg_valset_cfgdata__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__CFG_VALSET_CFGDATA_HPP_

@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_posllh__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_posllh__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_posllh__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_posllh__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_POSLLH_HPP_

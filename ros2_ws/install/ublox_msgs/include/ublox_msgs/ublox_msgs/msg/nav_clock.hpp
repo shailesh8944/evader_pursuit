@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_clock__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_clock__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_clock__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_clock__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_CLOCK_HPP_

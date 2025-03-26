@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/rxm_eph__struct.hpp"
 #include "ublox_msgs/msg/detail/rxm_eph__builder.hpp"
 #include "ublox_msgs/msg/detail/rxm_eph__traits.hpp"
+#include "ublox_msgs/msg/detail/rxm_eph__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__RXM_EPH_HPP_

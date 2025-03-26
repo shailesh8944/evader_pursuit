@@ -21,10 +21,9 @@ Author: MAV Simulator Team
 from typing import NoReturn
 import numpy as np
 import sys
-sys.path.append('/workspaces/mavlab/')
-
-from read_input import read_input
-from ros2_ws.src.mav_simulator.mav_simulator.class_vessel import Vessel
+sys.path.append('/workspaces/mavlab/ros2_ws/src/mav_simulator')
+from mav_simulator.read_input import read_input
+from mav_simulator.class_vessel import Vessel
 
 def simulate() -> NoReturn:
     """Run vessel simulation using parameters from input files."""

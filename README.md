@@ -1,39 +1,64 @@
-# MAKARA simulator + GNC modules
+# Setup
 
-## Hardware interface
+## Prerequisites
 
-For interfacing with the hardware we need to map the `/dev/ttyUSB` and `/dev/ttyACM` devices correctly. This can be acieved by running `udev.sh` in the jeston base environment (NOT inside the docker container). This will remap the host device ports to now enable `/dev/sbg`, `/dev/ardusimple`, `/dev/bldc`, `/dev/stepper`.
+- Git installed on your system
+- Docker installed on your system
+- Basic understanding of terminal commands
+- Python version 3.10 or higher
 
-```
-./udev.sh
-```
+## Cloning the Repository
 
-## Starting the simulator
+1. Open a terminal window
+2. Clone the repository using the following command:
+   ```bash
+   git clone https://github.com/MarineAutonomy/makara.git
+   ```
+3. Navigate to the cloned repository:
+   ```bash
+   cd makara
+   ```
+4. Switch to the mavymini branch:
+   ```bash
+   git checkout mavymini
+   ```
 
-It is presumed that you have docker on your desktop and hence the instructions to install docker are omitted here. Before you can begin, we need to build the docker image needed for the simulator to run. The docker image can be build with the following command executed at the root of the repository that you have cloned.
+## Building the Docker Image
 
-```
-$ ./ros2_devdocker.sh
-```
-Once the build is complete, you can invoke the simulator with the command (again to be run at the root folder of the repository)
+Before running the simulator, you need to build the Docker image:
 
-```
-$ ./ros2_simulator.sh
-```
-You will see that this starts the simulator and it continuously prints out the states of the vehicle to the terminal. At the start you should see that the propeller and rudder commands must be zero and the vehicle will be at rest. However, you should see the time get incremented. 
+1. Ensure you're in the root directory of the cloned repository
+2. Build the Docker image by executing:
+   ```bash
+   ./ros2_devdocker.sh
+   ```
+3. Wait for the build process to complete (this may take several minutes depending on your internet connection and system performance)
 
-## Starting your GNC package
+## Running the Simulator (Quickstart)
 
-Once the simulator is up and running, open another terminal and navigate to the root folder of the repository. Now execute the following command to start your GNC block to interact with the simulator.
+After building the Docker image, you can start the simulator:
 
-```
-$ ./ros2_gnc.sh
-```
+1. From the root directory of the repository, run:
+   ```bash
+   ./ros2_simulator.sh
+   ```
+2. The simulator will start and the ROS2 topics will be printed in the terminal
 
-## Visualizing the data
+3. To view topic data, open a new terminal and run:
+   ```bash
+   docker exec -it panisim bash
+   ```
+4. Subscribe to a topic using:
+   ```bash
+   ros2 topic echo <topic_name>
+   ```
+   For example:
+   ```bash
+   ros2 topic echo /mavymini_00/odometry_sim
+   ```
 
-Once the simulator is up and running, open another terminal and navigate to the root folder of the repository. Now execute the following command to start a Flask with url http://localhost:8500 where the odometry data from the EKF can be visualized.
 
-```
-$ ./ros2_odom.sh
-```
+## Troubleshooting
+
+- **Docker issues**: Ensure Docker is installed and running on your system
+- **Permission issues**: If you encounter permission errors when running scripts, try prefixing the commands with `sudo`

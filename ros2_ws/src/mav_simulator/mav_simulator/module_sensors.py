@@ -31,7 +31,7 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, PointCloud2, Image, LaserScan, NavSatFix, NavSatStatus
 from geometry_msgs.msg import Point, Vector3, Pose, Quaternion, Twist, PoseWithCovarianceStamped
 # from interfaces.msg import Actuator
-import module_kinematics as kin
+import mav_simulator.module_kinematics as kin
 
 class BaseSensor:
     def __init__(self, sensor_config, vessel_id, topic_prefix, vessel_node):

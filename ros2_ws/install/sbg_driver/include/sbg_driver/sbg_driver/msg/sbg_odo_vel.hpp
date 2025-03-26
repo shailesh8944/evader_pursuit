@@ -7,5 +7,6 @@
 #include "sbg_driver/msg/detail/sbg_odo_vel__struct.hpp"
 #include "sbg_driver/msg/detail/sbg_odo_vel__builder.hpp"
 #include "sbg_driver/msg/detail/sbg_odo_vel__traits.hpp"
+#include "sbg_driver/msg/detail/sbg_odo_vel__type_support.hpp"
 
 #endif  // SBG_DRIVER__MSG__SBG_ODO_VEL_HPP_

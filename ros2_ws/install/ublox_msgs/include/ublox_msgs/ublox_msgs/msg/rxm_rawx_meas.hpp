@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/rxm_rawx_meas__struct.hpp"
 #include "ublox_msgs/msg/detail/rxm_rawx_meas__builder.hpp"
 #include "ublox_msgs/msg/detail/rxm_rawx_meas__traits.hpp"
+#include "ublox_msgs/msg/detail/rxm_rawx_meas__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__RXM_RAWX_MEAS_HPP_

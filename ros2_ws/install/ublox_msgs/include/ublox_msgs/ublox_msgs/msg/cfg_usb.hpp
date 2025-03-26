@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/cfg_usb__struct.hpp"
 #include "ublox_msgs/msg/detail/cfg_usb__builder.hpp"
 #include "ublox_msgs/msg/detail/cfg_usb__traits.hpp"
+#include "ublox_msgs/msg/detail/cfg_usb__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__CFG_USB_HPP_

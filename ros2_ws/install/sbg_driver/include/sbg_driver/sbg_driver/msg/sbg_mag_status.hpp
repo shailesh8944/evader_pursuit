@@ -7,5 +7,6 @@
 #include "sbg_driver/msg/detail/sbg_mag_status__struct.hpp"
 #include "sbg_driver/msg/detail/sbg_mag_status__builder.hpp"
 #include "sbg_driver/msg/detail/sbg_mag_status__traits.hpp"
+#include "sbg_driver/msg/detail/sbg_mag_status__type_support.hpp"
 
 #endif  // SBG_DRIVER__MSG__SBG_MAG_STATUS_HPP_

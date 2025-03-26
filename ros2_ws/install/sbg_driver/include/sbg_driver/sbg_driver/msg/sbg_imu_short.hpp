@@ -7,5 +7,6 @@
 #include "sbg_driver/msg/detail/sbg_imu_short__struct.hpp"
 #include "sbg_driver/msg/detail/sbg_imu_short__builder.hpp"
 #include "sbg_driver/msg/detail/sbg_imu_short__traits.hpp"
+#include "sbg_driver/msg/detail/sbg_imu_short__type_support.hpp"
 
 #endif  // SBG_DRIVER__MSG__SBG_IMU_SHORT_HPP_

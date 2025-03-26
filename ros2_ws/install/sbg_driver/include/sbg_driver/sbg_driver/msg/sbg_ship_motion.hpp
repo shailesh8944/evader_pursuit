@@ -7,5 +7,6 @@
 #include "sbg_driver/msg/detail/sbg_ship_motion__struct.hpp"
 #include "sbg_driver/msg/detail/sbg_ship_motion__builder.hpp"
 #include "sbg_driver/msg/detail/sbg_ship_motion__traits.hpp"
+#include "sbg_driver/msg/detail/sbg_ship_motion__type_support.hpp"
 
 #endif  // SBG_DRIVER__MSG__SBG_SHIP_MOTION_HPP_

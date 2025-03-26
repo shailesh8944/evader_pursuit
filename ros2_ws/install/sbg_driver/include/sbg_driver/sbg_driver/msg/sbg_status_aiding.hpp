@@ -7,5 +7,6 @@
 #include "sbg_driver/msg/detail/sbg_status_aiding__struct.hpp"
 #include "sbg_driver/msg/detail/sbg_status_aiding__builder.hpp"
 #include "sbg_driver/msg/detail/sbg_status_aiding__traits.hpp"
+#include "sbg_driver/msg/detail/sbg_status_aiding__type_support.hpp"
 
 #endif  // SBG_DRIVER__MSG__SBG_STATUS_AIDING_HPP_

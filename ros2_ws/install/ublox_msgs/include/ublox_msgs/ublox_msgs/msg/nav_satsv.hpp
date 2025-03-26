@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/nav_satsv__struct.hpp"
 #include "ublox_msgs/msg/detail/nav_satsv__builder.hpp"
 #include "ublox_msgs/msg/detail/nav_satsv__traits.hpp"
+#include "ublox_msgs/msg/detail/nav_satsv__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__NAV_SATSV_HPP_

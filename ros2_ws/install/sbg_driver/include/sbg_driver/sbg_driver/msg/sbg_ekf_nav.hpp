@@ -7,5 +7,6 @@
 #include "sbg_driver/msg/detail/sbg_ekf_nav__struct.hpp"
 #include "sbg_driver/msg/detail/sbg_ekf_nav__builder.hpp"
 #include "sbg_driver/msg/detail/sbg_ekf_nav__traits.hpp"
+#include "sbg_driver/msg/detail/sbg_ekf_nav__type_support.hpp"
 
 #endif  // SBG_DRIVER__MSG__SBG_EKF_NAV_HPP_

@@ -7,5 +7,6 @@
 #include "sbg_driver/msg/detail/sbg_utc_time__struct.hpp"
 #include "sbg_driver/msg/detail/sbg_utc_time__builder.hpp"
 #include "sbg_driver/msg/detail/sbg_utc_time__traits.hpp"
+#include "sbg_driver/msg/detail/sbg_utc_time__type_support.hpp"
 
 #endif  // SBG_DRIVER__MSG__SBG_UTC_TIME_HPP_

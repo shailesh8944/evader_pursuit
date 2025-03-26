@@ -1,0 +1,65 @@
+# Introduction
+
+## About MAV Simulator
+
+MAV Simulator (Marine Autonomous Vehicle Simulator) is a Python-based simulation framework designed for testing and developing control algorithms, sensors, and navigation systems for marine autonomous vehicles. The simulator provides a realistic environment for simulating various types of marine vessels in different sea conditions.
+
+## Key Features
+
+- **Realistic Physics**: Advanced hydrodynamic modeling based on vessel hull forms
+- **Modular Architecture**: Easy integration of custom vessel models, sensors, and controllers
+- **ROS2 Integration**: Native support for Robot Operating System 2 (ROS2) for distributed robotics applications
+- **Configurable Environments**: Simulate different sea states, current patterns, and environmental conditions
+- **Visualization Tools**: Built-in plotting capabilities for analyzing simulation results
+
+## System Architecture
+
+The simulator consists of several interconnected modules:
+
+```{mermaid}
+flowchart TB
+    classDef core fill:#f9f,stroke:#333,stroke-width:2px
+    classDef utils fill:#bbf,stroke:#333,stroke-width:1px
+    classDef ros fill:#bfb,stroke:#333,stroke-width:1px
+    
+    Vessel[class_vessel.py]:::core
+    Kinematics[module_kinematics.py]:::core
+    Control[module_control.py]:::core
+    Sensors[module_sensors.py]:::core
+    World[class_world.py]:::core
+    
+    Hydro[calculate_hydrodynamics.py]:::utils
+    Grid[class_grid.py]:::utils
+    Sim[simulate.py/simulate_noros.py]:::utils
+    Plot[plot_results.py]:::utils
+    CrossFlow[generate_cross_flow.py]:::utils
+    
+    ROS[class_vessel_pub_sub_ros2.py]:::ros
+    ROSWorld[class_world_node_ros2.py]:::ros
+    
+    Vessel --> Kinematics
+    Vessel --> Control
+    Vessel --> Sensors
+    Vessel <--> World
+    Vessel <--> Hydro
+    
+    Vessel --> ROS
+    World --> ROSWorld
+    
+    Grid --> World
+    Sim --> Vessel
+    Sim --> World
+    Plot --> Sim
+    CrossFlow --> Hydro
+```
+
+## Getting Started
+
+To use the MAV Simulator, you need to:
+
+1. Install the required dependencies
+2. Configure vessel parameters
+3. Set up environment conditions
+4. Run simulations with or without ROS2 integration
+
+The following sections provide detailed information about each component of the simulator and how to utilize them for your specific marine autonomous vehicle simulation needs.

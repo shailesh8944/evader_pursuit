@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/aid_hui__struct.hpp"
 #include "ublox_msgs/msg/detail/aid_hui__builder.hpp"
 #include "ublox_msgs/msg/detail/aid_hui__traits.hpp"
+#include "ublox_msgs/msg/detail/aid_hui__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__AID_HUI_HPP_

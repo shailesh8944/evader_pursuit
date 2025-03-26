@@ -7,5 +7,6 @@
 #include "interfaces/msg/detail/dvl__struct.hpp"
 #include "interfaces/msg/detail/dvl__builder.hpp"
 #include "interfaces/msg/detail/dvl__traits.hpp"
+#include "interfaces/msg/detail/dvl__type_support.hpp"
 
 #endif  // INTERFACES__MSG__DVL_HPP_

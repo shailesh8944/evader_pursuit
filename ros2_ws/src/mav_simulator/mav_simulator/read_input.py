@@ -22,7 +22,8 @@ import numpy as np
 import yaml
 import os
 from pathlib import Path
-from generate_cross_flow import CrossFlowGenerator
+import sys
+from mav_simulator.generate_cross_flow import CrossFlowGenerator
 
 def load_yaml(file_path: str) -> Dict:
     """Load a YAML file and return its contents.

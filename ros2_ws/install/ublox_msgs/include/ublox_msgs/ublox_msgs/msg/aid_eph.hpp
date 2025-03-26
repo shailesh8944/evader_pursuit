@@ -7,5 +7,6 @@
 #include "ublox_msgs/msg/detail/aid_eph__struct.hpp"
 #include "ublox_msgs/msg/detail/aid_eph__builder.hpp"
 #include "ublox_msgs/msg/detail/aid_eph__traits.hpp"
+#include "ublox_msgs/msg/detail/aid_eph__type_support.hpp"
 
 #endif  // UBLOX_MSGS__MSG__AID_EPH_HPP_
