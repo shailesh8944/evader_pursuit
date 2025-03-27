@@ -469,5 +469,15 @@
       "ROS2 Integration",
       "<span class='chapter-number'>6</span>  <span class='chapter-title'>ROS2 Integration</span>"
     ]
+  },
+  {
+    "objectID": "rawFiles/setup.html#running-the-simulator-quickstart",
+    "href": "rawFiles/setup.html#running-the-simulator-quickstart",
+    "title": "Setup",
+    "section": "Running the Simulator (Quickstart)",
+    "text": "Running the Simulator (Quickstart)\nAfter building the Docker image, you can start the simulator:\n\nFrom the root directory of the repository, run:\n./ros2_simulator.sh\nThe simulator will start and the ROS2 topics will be printed in the terminal\nTo view topic data, open a new terminal and run:\ndocker exec -it panisim bash\nSubscribe to a topic using:\nros2 topic echo &lt;topic_name&gt;\nFor example:\nros2 topic echo /mavymini_00/odometry_sim",
+    "crumbs": [
+      "Setup"
+    ]
   }
 ]

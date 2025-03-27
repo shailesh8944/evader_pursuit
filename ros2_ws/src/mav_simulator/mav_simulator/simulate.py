@@ -31,7 +31,7 @@ def ros_thread(node):
 def main():
     # Creates an object of class 'World'
     rclpy.init()
-    world = World('/workspaces/mavlab/inputs/mavymini/simulation_input.yml')
+    world = World('/workspaces/mavlab/inputs/simulation_input.yml')
     world_node = World_Node(world_rate=1/world.dt)
   
     world.node = world_node

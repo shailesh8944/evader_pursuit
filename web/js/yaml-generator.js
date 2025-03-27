@@ -290,6 +290,23 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
                 control: `/workspaces/mavlab/inputs/${vesselName}/control.yml`,
                 thrusters: `/workspaces/mavlab/inputs/${vesselName}/thrusters.yml`
             }];
+        } else {
+            // Make sure all paths have the correct vessel name instead of {name} placeholder
+            simConfig.agents = simConfig.agents.map(agent => {
+                const agentName = agent.name || vesselName;
+                
+                // Clone the agent object to avoid modifying the original
+                const updatedAgent = { ...agent };
+                
+                // Replace {name} with the agent name in all file paths
+                for (const [key, value] of Object.entries(updatedAgent)) {
+                    if (typeof value === 'string' && value.includes('{name}')) {
+                        updatedAgent[key] = value.replace(/{name}/g, agentName);
+                    }
+                }
+                
+                return updatedAgent;
+            });
         }
 
         // Use the formatted YAML generator for consistent output
@@ -393,11 +410,21 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
         const vesselName = vesselModel.config.name;
         
         const zip = new JSZip();
-        const folder = zip.folder(vesselName);
+        // Create an 'inputs' folder at the root level
+        const inputsFolder = zip.folder('inputs');
+        // Create vessel-specific subfolder
+        const vesselFolder = inputsFolder.folder(vesselName);
         
-        // Add each YAML file to the zip
+        // Add simulation_input.yml to the root of inputs folder
+        if (files['simulation_input.yml']) {
+            inputsFolder.file('simulation_input.yml', files['simulation_input.yml']);
+        }
+        
+        // Add all other YAML files to the vessel folder
         for (const [filename, content] of Object.entries(files)) {
-            folder.file(filename, content);
+            if (filename !== 'simulation_input.yml') {
+                vesselFolder.file(filename, content);
+            }
         }
         
         // Handle HydRA files
@@ -407,7 +434,7 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
                 
                 // Load the HydRA zip file
                 const hydraZip = await JSZip.loadAsync(vesselModel.modelData.hydraZipFile);
-                const hydraFolder = folder.folder('HydRA');
+                const hydraFolder = vesselFolder.folder('HydRA');
                 
                 // Process all files in the HydRA zip, preserving internal structure
                 const promises = [];
@@ -444,11 +471,11 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
             } catch (error) {
                 console.error("Error processing HydRA zip:", error);
                 // Create an empty HydRA folder as fallback
-                folder.folder('HydRA');
+                vesselFolder.folder('HydRA');
             }
         } else {
             // No HydRA zip, just create an empty folder
-            folder.folder('HydRA');
+            vesselFolder.folder('HydRA');
         }
         
         // Include NACA file - always try to add it if available
@@ -463,11 +490,11 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
                 if (nacaContent instanceof Promise) {
                     // Handle promise-based content
                     const resolvedContent = await nacaContent;
-                    folder.file(`NACA${nacaNumber}.csv`, resolvedContent);
+                    vesselFolder.file(`NACA${nacaNumber}.csv`, resolvedContent);
                     console.log(`Added NACA${nacaNumber}.csv file to zip (from uploaded file)`);
                 } else {
                     // Handle direct string content
-                    folder.file(`NACA${nacaNumber}.csv`, nacaContent);
+                    vesselFolder.file(`NACA${nacaNumber}.csv`, nacaContent);
                     console.log(`Added NACA${nacaNumber}.csv file to zip (from default data)`);
                 }
             }
@@ -475,7 +502,7 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
             console.error("Error adding NACA file:", error);
             // Use a default NACA file as fallback
             const nacaNumber = vesselModel.config.control_surfaces?.naca_number || '0015';
-            folder.file(`NACA${nacaNumber}.csv`, 
+            vesselFolder.file(`NACA${nacaNumber}.csv`, 
                 `Alpha,CL,CD
 -15.0,-1.45,0.0528
 -10.0,-1.10,0.0233
@@ -534,18 +561,19 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
         // Format agents
         let agentsYaml = '';
         agents.forEach(agent => {
-            agentsYaml += `  -\n    name: ${agent.name || 'vessel'}\n    type: ${agent.type || 'auv'}\n`;
+            const agentName = agent.name || 'vessel';
+            agentsYaml += `  -\n    name: ${agentName}\n    type: ${agent.type || 'auv'}\n`;
             
-            // Add standard file paths with {name} placeholder
-            agentsYaml += `    geometry: /workspaces/mavlab/inputs/{name}/geometry.yml\n`;
-            agentsYaml += `    inertia: /workspaces/mavlab/inputs/{name}/inertia.yml\n`;
-            agentsYaml += `    hydrodynamics: /workspaces/mavlab/inputs/{name}/hydrodynamics.yml\n`;
-            agentsYaml += `    control_surfaces: /workspaces/mavlab/inputs/{name}/control_surfaces.yml\n`;
-            agentsYaml += `    initial_conditions: /workspaces/mavlab/inputs/{name}/initial_conditions.yml\n`;
-            agentsYaml += `    sensors: /workspaces/mavlab/inputs/{name}/sensors.yml\n`;
-            agentsYaml += `    guidance: /workspaces/mavlab/inputs/{name}/guidance.yml\n`;
-            agentsYaml += `    control: /workspaces/mavlab/inputs/{name}/control.yml\n`;
-            agentsYaml += `    thrusters: /workspaces/mavlab/inputs/{name}/thrusters.yml\n`;
+            // Add file paths that include the vessel name directly (not using {name} placeholder)
+            agentsYaml += `    geometry: /workspaces/mavlab/inputs/${agentName}/geometry.yml\n`;
+            agentsYaml += `    inertia: /workspaces/mavlab/inputs/${agentName}/inertia.yml\n`;
+            agentsYaml += `    hydrodynamics: /workspaces/mavlab/inputs/${agentName}/hydrodynamics.yml\n`;
+            agentsYaml += `    control_surfaces: /workspaces/mavlab/inputs/${agentName}/control_surfaces.yml\n`;
+            agentsYaml += `    initial_conditions: /workspaces/mavlab/inputs/${agentName}/initial_conditions.yml\n`;
+            agentsYaml += `    sensors: /workspaces/mavlab/inputs/${agentName}/sensors.yml\n`;
+            agentsYaml += `    guidance: /workspaces/mavlab/inputs/${agentName}/guidance.yml\n`;
+            agentsYaml += `    control: /workspaces/mavlab/inputs/${agentName}/control.yml\n`;
+            agentsYaml += `    thrusters: /workspaces/mavlab/inputs/${agentName}/thrusters.yml\n`;
         });
         
         // Build the YAML content directly as a string to match the exact format

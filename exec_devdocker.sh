@@ -1,1 +1,1 @@
-docker exec -it mav_simulator bash
+docker exec -it panisim bash

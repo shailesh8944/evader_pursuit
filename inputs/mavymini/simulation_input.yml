@@ -38,6 +38,7 @@ agents:
     guidance: /workspaces/mavlab/inputs/{name}/guidance.yml
     control: /workspaces/mavlab/inputs/{name}/control.yml
     thrusters: /workspaces/mavlab/inputs/{name}/thrusters.yml
+  # This is an example of multiple agents
   -
     name: mavymini2
     type: auv

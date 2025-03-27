@@ -1,9 +1,0 @@
-pynput
-numpy
-scipy
-websockets
-serial
-pyserial
-setuptools==58.2.0
-websocket-client
-flask
