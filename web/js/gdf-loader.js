@@ -1,9 +1,38 @@
+/**
+ * GDFLoader.js - Geometric Data File Loader for Marine Vessel Simulation
+ * 
+ * This class provides functionality to load and parse GDF (Geometric Data File) files,
+ * which are commonly used in marine engineering to define vessel hull geometry.
+ * GDF is a format used by hydrodynamic analysis tools like WAMIT and HYDRA.
+ * 
+ * The loader:
+ * - Parses GDF file content containing vertex and panel data
+ * - Converts the data into Three.js compatible geometry
+ * - Optimizes the geometry by reusing vertices and calculating normals
+ * - Creates Three.js BufferGeometry that can be used with meshes
+ * 
+ * GDF File Format:
+ * - Header line with vessel name
+ * - ULEN GRAV line (unit length and gravity)
+ * - ISX ISY line (symmetry flags)
+ * - Number of panels
+ * - Vertex coordinates (x,y,z) for each panel (4 vertices per panel)
+ */
+
 class GDFLoader {
+    /**
+     * Initialize the GDF loader
+     */
     constructor() {
-        this.vertices = [];
-        this.panels = [];
+        this.vertices = [];  // Array of unique vertices
+        this.panels = [];    // Array of panel definitions referencing vertex indices
     }
 
+    /**
+     * Parse GDF file content and extract geometry data
+     * @param {string} content - The text content of the GDF file
+     * @returns {GDFLoader} - Returns this loader instance for chaining
+     */
     parse(content) {
         try {
             // Clean up the content - remove empty lines and trim whitespace
@@ -82,6 +111,11 @@ class GDFLoader {
         }
     }
 
+    /**
+     * Create a Three.js BufferGeometry from the parsed GDF data
+     * Triangulates the quad panels and calculates normals
+     * @returns {THREE.BufferGeometry} - Three.js geometry ready for rendering
+     */
     createGeometry() {
         try {
             console.log('Creating geometry from GDF data');
@@ -145,6 +179,7 @@ class GDFLoader {
                 '\nNormals:', normals.length / 3,
                 '\nIndices:', indices.length);
 
+            // Set attributes on the buffer geometry
             geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
             geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
             geometry.setIndex(indices);
@@ -157,6 +192,11 @@ class GDFLoader {
         }
     }
 
+    /**
+     * Load a GDF file from a File object and create a Three.js geometry
+     * @param {File} file - The GDF file to load
+     * @returns {Promise<THREE.BufferGeometry>} - Promise resolving to the created geometry
+     */
     load(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -190,5 +230,5 @@ class GDFLoader {
     }
 }
 
-// Export the class
+// Export the class to the global scope for use in the application
 window.GDFLoader = GDFLoader; 

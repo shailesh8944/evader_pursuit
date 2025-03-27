@@ -1,3 +1,22 @@
+/**
+ * ThreeScene.js - 3D Visualization Engine for Marine Vessel Simulator
+ * 
+ * This class provides the 3D visualization capabilities for the Marine Vessel Simulator.
+ * It handles all Three.js setup and rendering, including:
+ * - Scene, camera, and renderer initialization
+ * - Lighting and environment setup
+ * - Object creation and transformation
+ * - Interactive controls (orbit controls, transform controls)
+ * - Object selection and property editing
+ * - Visual feedback and highlighting
+ * - Component visualization (vessels, thrusters, control surfaces, sensors)
+ * - Performance optimization for real-time 3D rendering
+ * 
+ * The class integrates with the VesselModel to synchronize the 3D representation
+ * with the underlying data model, allowing bidirectional updates between the
+ * visual components and their configuration parameters.
+ */
+
 class ThreeScene {
     constructor() {
         // Initialize properties
@@ -1041,24 +1060,43 @@ class ThreeScene {
                         
                         const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
                         
+                        // Ensure values are numbers, not strings
+                        const position = [
+                            parseFloat(worldPosition.x),
+                            parseFloat(worldPosition.y),
+                            parseFloat(worldPosition.z)
+                        ];
+                        
+                        const orientation = [
+                            parseFloat(worldEuler.x),
+                            parseFloat(worldEuler.y),
+                            parseFloat(worldEuler.z)
+                        ];
+                        
+                        // Debug log
+                        console.log(`Updating ${componentType} ${componentId} from axes transformation:`, {
+                            position,
+                            orientation
+                        });
+                        
                         // Update model data based on the component type
                         switch (componentType) {
                             case 'controlSurface':
                                 vesselModel.updateControlSurface(componentId, {
-                                    control_surface_location: [worldPosition.x, worldPosition.y, worldPosition.z],
-                                    control_surface_orientation: [worldEuler.x, worldEuler.y, worldEuler.z]
+                                    control_surface_location: position,
+                                    control_surface_orientation: orientation
                                 });
                                 break;
                             case 'thruster':
                                 vesselModel.updateThruster(componentId, {
-                                    thruster_location: [worldPosition.x, worldPosition.y, worldPosition.z],
-                                    thruster_orientation: [worldEuler.x, worldEuler.y, worldEuler.z]
+                                    thruster_location: position,
+                                    thruster_orientation: orientation
                                 });
                                 break;
                             case 'sensor':
                                 vesselModel.updateSensor(componentId, {
-                                    sensor_location: [worldPosition.x, worldPosition.y, worldPosition.z],
-                                    sensor_orientation: [worldEuler.x, worldEuler.y, worldEuler.z]
+                                    sensor_location: position,
+                                    sensor_orientation: orientation
                                 });
                                 break;
                         }
@@ -1190,27 +1228,38 @@ class ThreeScene {
                         }
                     });
                     
+                    // Store component data
+                    const componentId = object.userData.componentId;
+                    const componentType = object.userData.componentType;
+                    
                     // If axes exist, attach transform controls to the axes
                     if (axes) {
+                        // Don't recreate axes, just use the existing ones with their current orientation
                         // Store a reference to the component in axes.userData
-                        axes.userData.componentType = object.userData.componentType;
-                        axes.userData.componentId = object.userData.componentId;
+                        axes.userData.componentType = componentType;
+                        axes.userData.componentId = componentId;
                         axes.userData.isComponentAxes = true;
                         
                         // Attach transform controls to axes
                         this.transformControls.attach(axes);
+                        
+                        // Show component info
+                        this.showComponentInfo(object);
                     } else {
                         // If no axes found, create them and attach
                         axes = this.addComponentAxes(object);
                         
                         // Store component info in axes.userData
-                        axes.userData.componentType = object.userData.componentType;
-                        axes.userData.componentId = object.userData.componentId;
+                        axes.userData.componentType = componentType;
+                        axes.userData.componentId = componentId;
                         axes.userData.isComponentAxes = true;
                         
                         this.transformControls.attach(axes);
+                        
+                        // Show component info
+                        this.showComponentInfo(object);
                     }
-                } else if (object.userData && object.userData.centerType) {
+                } else if (object.userData.centerType) {
                     // Center points can be transformed directly
                     this.transformControls.attach(object);
                     this.showCenterPointInfo(object);
@@ -1488,10 +1537,13 @@ class ThreeScene {
             html += `</div>`;
         }
         
-        // Add configure button
+        // Add configure button with dynamic text based on component status
+        const isConfigured = object.children.some(child => child.userData.isComponentAxes);
+        const buttonText = isConfigured ? 'Reconfigure Component' : 'Configure Component';
+        
         html += `
             <div class="mt-3">
-                <button id="btnConfigureComponent" class="btn btn-primary">Configure Component</button>
+                <button id="btnConfigureComponent" class="btn btn-primary">${buttonText}</button>
             </div>
         `;
         
@@ -1561,6 +1613,9 @@ class ThreeScene {
 
     // Show modal to configure component based on selected type
     showComponentConfigModal(object, type) {
+        // Check if this is a reconfiguration of an existing component
+        const isReconfiguring = object.children.some(child => child.userData.isComponentAxes);
+        
         // Get relevant modal based on component type
         let modalId;
         if (type === 'controlSurface') {
@@ -1577,7 +1632,7 @@ class ThreeScene {
             document.getElementById('fbxSensorSettings').style.display = 'none';
         } else if (type === 'sensor') {
             modalId = 'fbxComponentModal';
-            // Show sensor settings
+            // Show control surface settings
             document.getElementById('fbxControlSurfaceSettings').style.display = 'none';
             document.getElementById('fbxThrusterSettings').style.display = 'none';
             document.getElementById('fbxSensorSettings').style.display = 'block';
@@ -1598,6 +1653,7 @@ class ThreeScene {
         const modal = document.getElementById(modalId);
         if (modal) {
             modal.dataset.objectUuid = object.uuid;
+            modal.dataset.isReconfiguring = isReconfiguring;
             
             // Show the modal
             const bsModal = new bootstrap.Modal(modal);
@@ -2996,10 +3052,11 @@ class ThreeScene {
             }
         }
         
-        // Remove existing axes if any
+        // Check for existing axes
         const existingAxes = component.children.find(child => child.userData.isComponentAxes);
         if (existingAxes) {
-            component.remove(existingAxes);
+            console.log('Component already has axes, returning existing axes');
+            return existingAxes;
         }
         
         // Create axes group
@@ -3344,7 +3401,7 @@ class ThreeScene {
             }
         }
     }
-
+    
     // Add method to show center point info
     showCenterPointInfo(object) {
         if (!object || !object.userData || !object.userData.centerType) return;

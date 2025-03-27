@@ -1,4 +1,22 @@
-/* Modern CAD-like UI Styles */
+/**
+ * Marine Vessel CAD Configurator - Core Styles
+ * 
+ * This stylesheet defines the layout, structure, and component styles for the Marine Vessel
+ * CAD Configurator application. It implements a professional CAD-like interface with
+ * responsive sidebars, toolbars, panels, and a 3D viewport.
+ * 
+ * The CSS uses a modular approach with specific sections for:
+ * - Base layout (container, toolbars, sidebars)
+ * - Content panels and property editors
+ * - 3D viewport styling
+ * - Form controls
+ * - Component library
+ * - Responsive adjustments
+ *
+ * Note: Theme-specific colors and visual styles are defined in themes.css
+ */
+
+/* Base layout variables for consistent sizing and spacing */
 :root {
     /* Layout variables */
     --border-radius: 4px;
@@ -6,19 +24,23 @@
     --toolbar-height: 40px;
 }
 
+/* Reset default browser styling */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
 
+/* Base body styling */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     height: 100vh;
     overflow: hidden;
 }
 
-/* CAD Container Layout */
+/* ====== MAIN LAYOUT COMPONENTS ====== */
+
+/* Main container - holds entire application */
 .cad-container {
     display: flex;
     flex-direction: column;
@@ -27,7 +49,7 @@ body {
     overflow: hidden;
 }
 
-/* Top Toolbar */
+/* Top toolbar - contains app controls and actions */
 .toolbar {
     height: var(--toolbar-height);
     display: flex;
@@ -37,6 +59,7 @@ body {
     z-index: 10;
 }
 
+/* Application title in toolbar */
 .app-title {
     font-size: 16px;
     font-weight: 500;
@@ -45,12 +68,14 @@ body {
     gap: 8px;
 }
 
+/* Toolbar buttons container */
 .toolbar-items {
     display: flex;
     align-items: center;
     gap: 4px;
 }
 
+/* Individual toolbar button styling */
 .toolbar-btn {
     background-color: transparent;
     border: none;
@@ -63,13 +88,14 @@ body {
     gap: 4px;
 }
 
+/* Divider between toolbar button groups */
 .toolbar-divider {
     width: 1px;
     height: 24px;
     margin: 0 8px;
 }
 
-/* Main Content Layout */
+/* Main content area - contains sidebars and viewport */
 .main-content {
     flex: 1;
     display: flex;
@@ -77,7 +103,9 @@ body {
     position: relative;
 }
 
-/* Left Sidebar */
+/* ====== SIDEBARS ====== */
+
+/* Left sidebar - contains project explorer and properties */
 .left-sidebar {
     width: 320px;
     height: 100%;
@@ -90,7 +118,7 @@ body {
     position: relative;
 }
 
-/* Right Sidebar */
+/* Right sidebar - contains component library and simulation settings */
 .right-sidebar {
     width: 320px;
     height: 100%;
@@ -104,12 +132,13 @@ body {
     position: relative;
 }
 
-/* Sidebar Tabs */
+/* Sidebar tabs navigation */
 .sidebar-tabs {
     display: flex;
     height: 40px;
 }
 
+/* Individual sidebar tab */
 .sidebar-tab {
     padding: 0 15px;
     height: 40px;
@@ -119,9 +148,9 @@ body {
     gap: 8px;
 }
 
-/* Sidebar Content */
+/* Sidebar content container */
 .sidebar-content {
-    display: none;
+    display: none; /* Hidden by default, shown when active */
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
@@ -130,12 +159,15 @@ body {
     padding-bottom: 16px;
 }
 
+/* Active sidebar content */
 .sidebar-content.active {
     display: flex;
     flex-direction: column;
 }
 
-/* Style scrollbars for better UI */
+/* ====== SCROLLBAR STYLING ====== */
+
+/* Webkit scrollbar styling for sidebar content */
 .sidebar-content::-webkit-scrollbar {
     width: 8px;
 }
@@ -150,7 +182,9 @@ body {
     border-radius: 4px;
 }
 
-/* Panels */
+/* ====== PANELS ====== */
+
+/* Content panels for grouping related controls */
 .panel {
     margin-bottom: 16px;
     border: 1px solid var(--border-color);
@@ -161,6 +195,7 @@ body {
     flex-shrink: 0;
 }
 
+/* Panel header with title and actions */
 .panel-header {
     padding: 12px 16px;
     background-color: var(--panel-header-bg);
@@ -170,19 +205,22 @@ body {
     align-items: center;
 }
 
+/* Panel header title */
 .panel-header h5 {
     margin: 0;
     font-size: 14px;
     font-weight: 500;
 }
 
+/* Panel content area */
 .panel-body {
     padding: 16px;
     overflow-y: auto;
-    max-height: 500px;
+    max-height: 500px; /* Prevent extremely tall panels */
     scrollbar-width: thin;
 }
 
+/* Webkit scrollbar styling for panel content */
 .panel-body::-webkit-scrollbar {
     width: 6px;
 }
@@ -195,11 +233,13 @@ body {
     background-color: var(--scrollbar-thumb);
 }
 
+/* Container for panel action buttons */
 .panel-actions {
     display: flex;
     gap: 4px;
 }
 
+/* Icon buttons in panel headers */
 .btn-icon {
     background-color: transparent;
     border: none;
@@ -209,19 +249,23 @@ body {
     border-radius: var(--border-radius);
 }
 
-/* 3D Viewport */
+/* ====== 3D VIEWPORT ====== */
+
+/* Main 3D viewport container */
 .viewport {
     flex: 1;
     position: relative;
     overflow: hidden;
 }
 
+/* Canvas within viewport */
 .viewport canvas {
     width: 100%;
     height: 100%;
     display: block;
 }
 
+/* Overlay for viewport controls */
 .viewport-overlay {
     position: absolute;
     top: 10px;
@@ -229,6 +273,7 @@ body {
     z-index: 5;
 }
 
+/* Viewport tools container */
 .viewport-tools {
     display: flex;
     flex-direction: column;
@@ -237,6 +282,7 @@ body {
     border-radius: var(--border-radius);
 }
 
+/* Individual viewport tool button */
 .viewport-btn {
     width: 32px;
     height: 32px;
@@ -248,11 +294,6 @@ body {
     font-size: 14px;
     border-radius: var(--border-radius);
     cursor: pointer;
-}
-
-.viewport-tools-divider {
-    height: 1px;
-    margin: 5px 0;
 }
 
 /* Forms and inputs */

@@ -1,85 +1,113 @@
+/**
+ * VesselModel.js - Core Data Model for Marine Vessel Simulation
+ * 
+ * This class represents the central data model for a marine vessel in the simulation.
+ * It maintains all configuration parameters, physical properties, components, and 
+ * simulation settings needed to define a complete vessel for hydrodynamic simulation.
+ * 
+ * The model supports various vessel types (AUV, USV, Ship, ROV) and manages:
+ * - Vessel geometry and dimensions
+ * - Inertia and mass properties
+ * - Hydrodynamic coefficients
+ * - Control surfaces (fins, rudders, etc.)
+ * - Thrusters and propulsion
+ * - Sensors and instrumentation
+ * - Initial conditions and simulation parameters
+ * - 3D model associations
+ * 
+ * The class includes methods for adding, updating, and removing components, 
+ * as well as importing/exporting the configuration to JSON and generating
+ * YAML files for simulation.
+ */
+
 class VesselModel {
+    /**
+     * Create a new vessel model with default parameters
+     * @param {string} name - Vessel name
+     * @param {string} type - Vessel type (auv, usv, ship, rov)
+     */
     constructor(name = 'New Vessel', type = 'auv') {
+        // Main configuration object containing all vessel parameters
         this.config = {
             name: name,
             type: type,
             geometry: {
-                length: 1.0,
-                breadth: 0.5,
-                depth: 0.5,
-                CO: [0, 0, 0],       // Center of origin
-                CG: [0, 0, 0],       // Center of gravity
-                CB: [0, 0, 0],       // Center of buoyancy
-                gyration: [0.5, 0.8, 0.8], // Radii of gyration [kxx, kyy, kzz]
-                scale: [1, 1, 1],    // Scale factors for visualization
-                geometry_file: ''    // Path to GDF file
+                length: 1.0,                // Hull length (m)
+                breadth: 0.5,               // Hull breadth/width (m)
+                depth: 0.5,                 // Hull depth/height (m)
+                CO: [0, 0, 0],              // Center of origin (x, y, z)
+                CG: [0, 0, 0],              // Center of gravity (x, y, z)
+                CB: [0, 0, 0],              // Center of buoyancy (x, y, z)
+                gyration: [0.5, 0.8, 0.8],  // Radii of gyration [kxx, kyy, kzz]
+                scale: [1, 1, 1],           // Scale factors for visualization
+                geometry_file: ''           // Path to GDF file
             },
             inertia: {
-                mass: 50.0,
-                buoyancy_mass: 50.0,
-                inertia_matrix: [
+                mass: 50.0,                 // Mass in kg
+                buoyancy_mass: 50.0,        // Buoyancy in kg (= mass for neutral buoyancy)
+                inertia_matrix: [           // Inertia matrix (kg*m^2)
                     [5, 0, 0],
                     [0, 10, 0],
                     [0, 0, 10]
                 ],
-                added_mass_matrix: null
+                added_mass_matrix: null     // Added mass matrix (calculated from hydrodynamics)
             },
             hydrodynamics: {
-                hydra_file: '',
-                dim_flag: false,
-                cross_flow_drag: false,
-                X_u_u: -0.01,
-                Y_v_v: -0.01,
-                Y_r_r: 0.001,
-                N_v_v: -0.001,
-                N_r_r: -0.001,
-                Z_w_w: -0.01
+                hydra_file: '',             // Path to hydrodynamic analysis output
+                dim_flag: false,            // Dimensional flag
+                cross_flow_drag: false,     // Use cross-flow drag calculation
+                X_u_u: -0.01,               // Surge quadratic drag coefficient
+                Y_v_v: -0.01,               // Sway quadratic drag coefficient
+                Y_r_r: 0.001,               // Yaw drag coefficient
+                N_v_v: -0.001,              // Sway-yaw coupling coefficient
+                N_r_r: -0.001,              // Yaw rate damping coefficient
+                Z_w_w: -0.01                // Heave quadratic drag coefficient
             },
             control_surfaces: {
-                naca_number: '0015',
-                naca_file: '',
-                delta_max: 35.0,
-                deltad_max: 1.0,
-                area: 0.1,
-                control_surfaces: []
+                naca_number: '0015',        // Default NACA airfoil profile
+                naca_file: '',              // Path to NACA data file
+                delta_max: 35.0,            // Maximum deflection angle (degrees)
+                deltad_max: 1.0,            // Maximum deflection rate (degrees/s)
+                area: 0.1,                  // Default control surface area (m²)
+                control_surfaces: []        // Array of control surface objects
             },
             thrusters: {
-                thrusters: []
+                thrusters: []               // Array of thruster objects
             },
             initial_conditions: {
-                start_velocity: [0, 0, 0, 0, 0, 0], // [u, v, w, p, q, r]
-                start_location: [0, 0, 0],          // [x, y, z]
-                start_orientation: [0, 0, 0],          // [roll, pitch, yaw]
-                use_quaternion: false
+                start_velocity: [0, 0, 0, 0, 0, 0], // Initial [u, v, w, p, q, r]
+                start_location: [0, 0, 0],          // Initial position [x, y, z]
+                start_orientation: [0, 0, 0],       // Initial orientation [roll, pitch, yaw]
+                use_quaternion: false               // Whether to use quaternions for orientation
             },
             sensors: {
-                sensors: []
+                sensors: []                 // Array of sensor objects
             },
             guidance: {
-                guidance_type: 'waypoint',
-                waypoints: []
+                guidance_type: 'waypoint',  // Guidance system type
+                waypoints: []               // Array of waypoint objects
             },
             control: {
-                control_surface_control_type: 'fixed_rudder',
-                thruster_control_type: 'fixed_rpm'
+                control_surface_control_type: 'fixed_rudder', // Control surface controller type
+                thruster_control_type: 'fixed_rpm'            // Thruster controller type
             },
             simulation: {
-                sim_time: 100,
-                time_step: 0.01,
-                density: 1025,
-                gravity: 9.80665,
-                world_size: [1000, 1000, 100],
-                gps_datum: [12.99300425860631, 80.23913114094384, -87.0]
+                sim_time: 100,              // Simulation time (s)
+                time_step: 0.01,            // Simulation time step (s)
+                density: 1025,              // Water density (kg/m³)
+                gravity: 9.80665,           // Gravity acceleration (m/s²)
+                world_size: [1000, 1000, 100], // World dimensions [x, y, z] (m)
+                gps_datum: [12.99300425860631, 80.23913114094384, -87.0] // Reference GPS [lat, lon, alt]
             }
         };
 
-        // Track component IDs
+        // Track component IDs for auto-incrementing IDs
         this.nextControlSurfaceId = 1;
         this.nextThrusterId = 1;
         this.nextSensorId = 1;
         this.nextWaypointId = 1;
         
-        // Track 3D model data
+        // Track 3D model data for visualization
         this.modelData = {
             name: name,
             type: type,
@@ -91,16 +119,19 @@ class VesselModel {
             thrusters: [],
             sensors: [],
             stlModel: null,
-            componentMap: new Map()  // For mapping 3D object UUIDs to components
+            componentMap: new Map()  // Maps 3D object UUIDs to component data
         };
         
-        // Track changes for undo/redo
+        // Track changes for undo/redo functionality
         this.history = [];
         this.historyIndex = -1;
         this.maxHistorySize = 50;
     }
     
-    // Save current state to history
+    /**
+     * Save current state to history for undo/redo
+     * Creates a deep copy of the current configuration
+     */
     saveToHistory() {
         // Remove any future states if we're in the middle of the history
         if (this.historyIndex < this.history.length - 1) {
@@ -119,7 +150,10 @@ class VesselModel {
         }
     }
     
-    // Undo last change
+    /**
+     * Undo the last change by restoring the previous state
+     * @returns {boolean} - True if undo was successful, false if no history exists
+     */
     undo() {
         if (this.historyIndex > 0) {
             this.historyIndex--;
@@ -129,7 +163,10 @@ class VesselModel {
         return false;
     }
     
-    // Redo last undone change
+    /**
+     * Redo a previously undone change
+     * @returns {boolean} - True if redo was successful, false if at the end of history
+     */
     redo() {
         if (this.historyIndex < this.history.length - 1) {
             this.historyIndex++;
@@ -139,7 +176,11 @@ class VesselModel {
         return false;
     }
 
-    // Set vessel name and type
+    /**
+     * Set basic vessel information
+     * @param {string} name - Vessel name
+     * @param {string} type - Vessel type (auv, usv, ship, rov)
+     */
     setBasicInfo(name, type) {
         if (!name || name.trim() === '') {
             throw new Error('Vessel name cannot be empty');
@@ -154,7 +195,13 @@ class VesselModel {
         this.saveToHistory();
     }
 
-    // Update vessel dimensions and recalculate dependent values
+    /**
+     * Update vessel dimensions and recalculate dependent values
+     * @param {number} length - Hull length (m)
+     * @param {number} breadth - Hull breadth/width (m)
+     * @param {number} depth - Hull depth/height (m)
+     * @returns {VesselModel} - Returns this model instance for chaining
+     */
     updateDimensions(length, breadth, depth) {
         if (!this.config || !this.config.geometry) {
             console.error("Vessel model configuration is not properly initialized");
@@ -508,7 +555,8 @@ class VesselModel {
         
         const validKeys = [
             'control_surface_type', 'control_surface_location', 'control_surface_orientation',
-            'control_surface_area', 'control_surface_T'
+            'control_surface_area', 'control_surface_T', 'control_surface_delta_max', 
+            'control_surface_deltad_max', 'control_surface_NACA'
         ];
         
         console.log(`Updating control surface ${id} with:`, properties);
@@ -524,6 +572,11 @@ class VesselModel {
                     const parsedValues = value.map(val => parseFloat(val));
                     console.log(`Setting ${key} to:`, parsedValues);
                     surface[key] = parsedValues;
+                    
+                    // Log for debugging
+                    if (key === 'control_surface_orientation') {
+                        console.log(`Updated orientation for control surface ${id}:`, parsedValues);
+                    }
                 } else if (key === 'control_surface_area' || key === 'control_surface_T') {
                     surface[key] = parseFloat(value);
                 } else {
@@ -947,5 +1000,5 @@ class VesselModel {
     }
 }
 
-// Export the class
+// Export the class to global scope
 window.VesselModel = VesselModel; 

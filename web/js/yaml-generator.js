@@ -1,5 +1,31 @@
+/**
+ * YAMLGenerator.js - Configuration Generator for Marine Vessel Simulation
+ * 
+ * This class generates YAML configuration files required for running marine vessel simulations.
+ * It takes the vessel model data and transforms it into properly formatted YAML files
+ * following the required schema for the simulation engine.
+ * 
+ * The generator creates separate YAML files for:
+ * - Vessel geometry and physical properties
+ * - Hydrodynamic coefficients
+ * - Control surfaces configuration
+ * - Thruster configuration
+ * - Initial conditions
+ * - Guidance and navigation settings
+ * - Sensor configuration
+ * - Simulation parameters
+ * 
+ * It handles proper formatting of numbers, arrays, and specialized comments
+ * required by the simulation engine, and packages all files into a zip archive
+ * for easy deployment.
+ */
+
 class YAMLGenerator {
+    /**
+     * Initialize the YAML generator with default simulation parameters
+     */
     constructor() {
+        // Default simulation parameters used as fallbacks
         this.defaultSimParams = {
             sim_time: 100,  // seconds
             time_step: 0.01,  // seconds
@@ -11,7 +37,14 @@ class YAMLGenerator {
         };
     }
 
-    // Helper function to format array inline without quotes
+    /**
+     * Format an array as an inline string with specified precision
+     * Example: [1.0000, 2.0000, 3.0000]
+     * 
+     * @param {Array} arr - Array of numbers to format
+     * @param {number} precision - Number of decimal places
+     * @returns {string} - Formatted array string
+     */
     formatInlineArray(arr, precision = 4) {
         if (!Array.isArray(arr)) {
             console.warn('Invalid array input:', arr);
@@ -20,7 +53,14 @@ class YAMLGenerator {
         return '[' + arr.map(val => Number(parseFloat(val).toFixed(precision))).join(', ') + ']';
     }
 
-    // Helper function to format 2D array inline without quotes
+    /**
+     * Format a 2D array as an inline string with specified precision
+     * Example: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+     * 
+     * @param {Array} arr - 2D array of numbers
+     * @param {number} precision - Number of decimal places
+     * @returns {string} - Formatted 2D array string
+     */
     format2DInlineArray(arr, precision = 6) {
         if (!arr || !Array.isArray(arr)) return '[[0, 0, 0], [0, 0, 0], [0, 0, 0]]';
         
@@ -33,16 +73,37 @@ class YAMLGenerator {
         return result;
     }
 
-    // Helper to create Docker-compatible file paths
+    /**
+     * Create a Docker-compatible file path for simulation inputs
+     * 
+     * @param {string} vesselName - Name of the vessel
+     * @param {string} fileName - Name of the file
+     * @returns {string} - Docker-compatible path
+     */
     formatFilePath(vesselName, fileName) {
         return `/workspaces/mavlab/inputs/${vesselName}/${fileName}`;
     }
 
-    // Formats a numerical value with a comment
+    /**
+     * Format a numerical value with a comment
+     * Example: 1025 # kg/m³
+     * 
+     * @param {number|string} value - The value to format
+     * @param {string} comment - Comment to add after the value
+     * @returns {string} - Formatted value with comment
+     */
     formatWithComment(value, comment) {
         return `${value} # ${comment}`;
     }
 
+    /**
+     * Generate the hydrodynamics configuration YAML
+     * Contains drag coefficients and other hydrodynamic parameters
+     * 
+     * @param {Object} hydrodynamics - Hydrodynamic parameters object
+     * @param {string} vesselName - Name of the vessel
+     * @returns {string} - Formatted YAML content
+     */
     generateHydrodynamicsYAML(hydrodynamics, vesselName) {
         console.log("Generating hydrodynamics YAML with data:", hydrodynamics);
         
@@ -100,6 +161,14 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
         return yamlContent;
     }
 
+    /**
+     * Generate the vessel geometry configuration YAML
+     * Contains dimensions, centers, and geometry file references
+     * 
+     * @param {Object} geometry - Geometry parameters object
+     * @param {string} vesselName - Name of the vessel
+     * @returns {Object} - Object with formatted geometry parameters
+     */
     generateGeometryYAML(geometry, vesselName) {
         // Apply scale to dimensions if present
         const scale = geometry.scale || [1, 1, 1];
@@ -130,6 +199,13 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
         };
     }
 
+    /**
+     * Generate the inertia configuration YAML
+     * Contains mass, buoyancy, and inertia matrices
+     * 
+     * @param {Object} inertia - Inertia parameters object
+     * @returns {Object} - Object with formatted inertia parameters
+     */
     generateInertiaYAML(inertia) {
         const mass = Number(parseFloat(inertia.mass || 1).toFixed(4));
         const buoyancy_mass = Number(parseFloat(inertia.buoyancy_mass || mass).toFixed(4));
@@ -142,6 +218,14 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
         };
     }
 
+    /**
+     * Generate the control surfaces configuration YAML
+     * Contains rudders, fins, and other control surfaces
+     * 
+     * @param {Object} controlSurfaces - Control surfaces parameters object
+     * @param {string} vesselName - Name of the vessel
+     * @returns {Object} - Object with formatted control surfaces parameters
+     */
     generateControlSurfacesYAML(controlSurfaces, vesselName) {
         // First, log what we received to help debug
         console.log('Generating control surfaces YAML with:', controlSurfaces);
@@ -158,6 +242,7 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
         const nacaNumber = controlSurfaces.naca_number || '0015';
         const nacaFile = this.formatFilePath(vesselName, `NACA${nacaNumber}.csv`);
         
+        // Use YAML anchors (&) for common values to enable reuse
         const yaml = {
             naca_number: `&naca ${nacaNumber}`,
             naca_file: nacaFile,
@@ -172,27 +257,50 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
             // Log the count for debugging
             console.log(`Processing ${controlSurfaces.control_surfaces.length} control surfaces`);
             
+            // Check for duplicate IDs before processing
+            const uniqueIds = new Set();
+            const validSurfaces = [];
+            
+            // Filter out duplicates based on control_surface_id
+            controlSurfaces.control_surfaces.forEach(surface => {
+                const id = surface.control_surface_id;
+                if (!uniqueIds.has(id)) {
+                    uniqueIds.add(id);
+                    validSurfaces.push(surface);
+                } else {
+                    console.warn(`Duplicate control surface ID found: ${id}, skipping duplicate`);
+                }
+            });
+            
+            console.log(`After filtering, processing ${validSurfaces.length} unique control surfaces`);
+            
             // Map each control surface to the YAML format
-            yaml.control_surfaces = controlSurfaces.control_surfaces.map(surface => {
+            yaml.control_surfaces = validSurfaces.map(surface => {
+                // Log each control surface for debugging
                 console.log('Processing control surface:', surface);
+                
+                // Ensure orientation values are converted to numbers to avoid string formatting issues
+                const orientation = Array.isArray(surface.control_surface_orientation) ? 
+                    surface.control_surface_orientation.map(val => parseFloat(val)) : 
+                    [0, 0, 0];
+                    
+                const location = Array.isArray(surface.control_surface_location) ?
+                    surface.control_surface_location.map(val => parseFloat(val)) :
+                    [0, 0, 0];
+                    
                 return {
                     control_surface_type: surface.control_surface_type || 'Rudder',
                     control_surface_id: surface.control_surface_id,
-                    control_surface_location: this.formatInlineArray(surface.control_surface_location, 4) + '    # With respect to BODY frame',
-                    control_surface_orientation: this.formatInlineArray(surface.control_surface_orientation, 4) + '  # With respect to BODY frame',
-                    control_surface_area: '*area',
-                    control_surface_NACA: '*naca',
+                    control_surface_location: this.formatInlineArray(location, 4) + '    # With respect to BODY frame',
+                    control_surface_orientation: this.formatInlineArray(orientation, 4) + '  # With respect to BODY frame',
+                    control_surface_area: '*area',  // Use YAML anchor reference
+                    control_surface_NACA: '*naca',  // Use YAML anchor reference
                     control_surface_T: surface.control_surface_T || 0.1,
-                    control_surface_delta_max: '*dmax',
-                    control_surface_deltad_max: '*ddmax'
+                    control_surface_delta_max: '*dmax',  // Use YAML anchor reference
+                    control_surface_deltad_max: '*ddmax'  // Use YAML anchor reference
                 };
             });
-        } else {
-            console.warn('control_surfaces array is not properly initialized');
         }
-        
-        // Log the final YAML structure
-        console.log('Generated control surfaces YAML:', yaml);
         
         return yaml;
     }
@@ -335,27 +443,33 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
                     // Handle arrays
                     yaml += `${spaces}${key}:\n`;
                     
-                    // Check if array contains primitive values or objects
+                    // Check if array contains objects
                     if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
                         // Array of objects
                         for (const item of value) {
-                            yaml += `${spaces}  -\n`;
-                            yaml += this.toYAML(item, indent + 4).split('\n').map(line => line.trim() ? line : '').join('\n');
+                            yaml += `${spaces}  - \n`;
+                            // Process each property of the object with proper indentation
+                            for (const [itemKey, itemValue] of Object.entries(item)) {
+                                if (typeof itemValue === 'object' && itemValue !== null && !Array.isArray(itemValue)) {
+                                    // Nested object
+                                    yaml += `${spaces}    ${itemKey}:\n`;
+                                    yaml += this.toYAML(itemValue, indent + 6);
+                                } else if (Array.isArray(itemValue)) {
+                                    // Nested array
+                                    yaml += `${spaces}    ${itemKey}:\n`;
+                                    for (const nestedItem of itemValue) {
+                                        yaml += `${spaces}      - ${nestedItem}\n`;
+                                    }
+                                } else {
+                                    // Simple value
+                                    yaml += `${spaces}    ${itemKey}: ${itemValue}\n`;
+                                }
+                            }
                         }
                     } else {
                         // Array of primitives
                         for (const item of value) {
-                            if (typeof item === 'string' && (item.startsWith('[') || item.includes('#'))) {
-                                // Pre-formatted string
-                                yaml += `${spaces}  - ${item}\n`;
-                            } else if (typeof item === 'object' && item !== null) {
-                                // Object within array
-                                yaml += `${spaces}  -\n`;
-                                yaml += this.toYAML(item, indent + 4);
-                            } else {
-                                // Simple value
-                                yaml += `${spaces}  - ${item}\n`;
-                            }
+                            yaml += `${spaces}  - ${item}\n`;
                         }
                     }
                 } else {
@@ -596,5 +710,5 @@ ${agentsYaml}`;
     }
 }
 
-// Export the class
+// Export the class to global scope
 window.YAMLGenerator = YAMLGenerator; 

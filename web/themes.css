@@ -1,6 +1,18 @@
 /**
  * Marine Vessel CAD Configurator - Theming System
- * Comprehensive theme support for light and dark modes
+ * 
+ * This stylesheet implements a comprehensive theming system for the Marine Vessel CAD Configurator.
+ * It provides complete light and dark mode themes using CSS variables and the data-bs-theme attribute.
+ * 
+ * Features:
+ * - Complete light and dark mode color schemes
+ * - Consistent color variables for all UI components
+ * - Theme-specific adjustments for contrast and readability
+ * - Support for Bootstrap components with theme integration
+ * - Custom styling for specialized components (3D viewport, code editors, etc.)
+ * 
+ * The theme system is designed to be easily extensible with additional themes
+ * and provides smooth transitions between themes.
  */
 
 /* ====== BASE THEME SYSTEM ====== */
@@ -70,9 +82,9 @@
     
     /* Viewport colors */
     --grid-color: #cccccc;
-    --grid-axis-x: #ff5555;
-    --grid-axis-y: #55ff55;
-    --grid-axis-z: #5555ff;
+    --grid-axis-x: #ff5555;  /* Red for X axis */
+    --grid-axis-y: #55ff55;  /* Green for Y axis */
+    --grid-axis-z: #5555ff;  /* Blue for Z axis */
     
     /* Other UI elements */
     --border-radius: 4px;
@@ -155,9 +167,9 @@
     
     /* Viewport colors */
     --grid-color: #495057;
-    --grid-axis-x: #ff7777;
-    --grid-axis-y: #77ff77;
-    --grid-axis-z: #7777ff;
+    --grid-axis-x: #ff7777;  /* Brighter red for X axis in dark mode */
+    --grid-axis-y: #77ff77;  /* Brighter green for Y axis in dark mode */
+    --grid-axis-z: #7777ff;  /* Brighter blue for Z axis in dark mode */
     
     /* Syntax highlighting */
     --code-comment: #adb5bd;

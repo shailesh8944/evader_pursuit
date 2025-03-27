@@ -1,3 +1,20 @@
+/**
+ * Main.js - Core Application Logic for Marine Vessel CAD Configurator
+ * 
+ * This file serves as the main entry point and orchestrator for the Marine Vessel CAD Configurator.
+ * It initializes the application, manages UI interactions, handles events, and coordinates
+ * between the data model (VesselModel) and visualization (ThreeScene).
+ * 
+ * Key responsibilities:
+ * - Application initialization and component wiring
+ * - UI event handling and user interaction processing
+ * - Management of toolbars, panels, and sidebars
+ * - File import/export and YAML generation
+ * - Modal dialogs and component configuration
+ * - Theme management and responsive adjustments
+ * - Notification system
+ */
+
 // Main application logic for the Marine Vessel CAD Configurator
 document.addEventListener('DOMContentLoaded', function() {
     console.log("Initializing Marine Vessel CAD Configurator...");
@@ -610,24 +627,78 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Get orientation in radians
                 const orientation = [0, 0, 0]; // Default orientation, should be updated based on object
-                if (object.rotation) {
-                    orientation[0] = object.rotation.x;
-                    orientation[1] = object.rotation.y;
-                    orientation[2] = object.rotation.z;
+                
+                // Get the actual world position and orientation of the object
+                const worldPosition = new THREE.Vector3();
+                const worldQuaternion = new THREE.Quaternion();
+                
+                // If the object has axes (for transformed components), use those
+                const axes = object.children.find(child => child.userData.isComponentAxes);
+                if (axes) {
+                    axes.getWorldPosition(worldPosition);
+                    axes.getWorldQuaternion(worldQuaternion);
+                } else {
+                    // Otherwise use the object itself
+                    object.getWorldPosition(worldPosition);
+                    object.getWorldQuaternion(worldQuaternion);
                 }
                 
-                // Add to vessel model
-                const id = window.currentVesselModel.addControlSurface(
-                    surfaceType, 
-                    position, 
-                    orientation, 
-                    area, 
-                    surfaceId, 
-                    naca, 
-                    timeConstant, 
-                    deltaMax, 
-                    deltadMax
-                );
+                // Convert to Euler angles for orientation
+                const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
+                
+                // Use the transformed position and orientation
+                position[0] = worldPosition.x;
+                position[1] = worldPosition.y;
+                position[2] = worldPosition.z;
+                
+                orientation[0] = worldEuler.x;
+                orientation[1] = worldEuler.y;
+                orientation[2] = worldEuler.z;
+                
+                console.log("Using transformed position:", position);
+                console.log("Using transformed orientation:", orientation);
+                
+                let id = surfaceId;
+                // Check if this control surface already exists
+                const existingSurface = window.currentVesselModel.getControlSurface(surfaceId);
+                
+                // Get the original component ID from the userData if it exists
+                const originalComponentId = object.userData.componentId;
+                
+                // If the component existed but with a different ID, remove the old one first
+                if (originalComponentId && originalComponentId !== surfaceId) {
+                    console.log(`ID changed from ${originalComponentId} to ${surfaceId}, removing old component`);
+                    window.currentVesselModel.removeControlSurface(originalComponentId);
+                }
+                
+                if (existingSurface) {
+                    // Update existing control surface
+                    window.currentVesselModel.updateControlSurface(surfaceId, {
+                        control_surface_type: surfaceType,
+                        control_surface_location: position,
+                        control_surface_orientation: orientation,
+                        control_surface_area: area,
+                        control_surface_T: timeConstant,
+                        control_surface_delta_max: deltaMax,
+                        control_surface_deltad_max: deltadMax,
+                        control_surface_NACA: naca
+                    });
+                    console.log(`Updated existing control surface with ID ${surfaceId}`);
+                } else {
+                    // Add new control surface
+                    id = window.currentVesselModel.addControlSurface(
+                        surfaceType, 
+                        position, 
+                        orientation, 
+                        area, 
+                        surfaceId, 
+                        naca, 
+                        timeConstant, 
+                        deltaMax, 
+                        deltadMax
+                    );
+                    console.log(`Added new control surface with ID ${id}`);
+                }
                 
                 componentData = {
                     ...componentData,
@@ -657,23 +728,75 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Get orientation in radians
                 const orientation = [0, 0, 0]; // Default orientation, should be updated based on object
-                if (object.rotation) {
-                    orientation[0] = object.rotation.x;
-                    orientation[1] = object.rotation.y;
-                    orientation[2] = object.rotation.z;
+                
+                // Get the actual world position and orientation of the object
+                const worldPosition = new THREE.Vector3();
+                const worldQuaternion = new THREE.Quaternion();
+                
+                // If the object has axes (for transformed components), use those
+                const axes = object.children.find(child => child.userData.isComponentAxes);
+                if (axes) {
+                    axes.getWorldPosition(worldPosition);
+                    axes.getWorldQuaternion(worldQuaternion);
+                } else {
+                    // Otherwise use the object itself
+                    object.getWorldPosition(worldPosition);
+                    object.getWorldQuaternion(worldQuaternion);
                 }
                 
-                // Add to vessel model
-                const id = window.currentVesselModel.addThruster(
-                    thrusterName, 
-                    position, 
-                    orientation, 
-                    thrusterId, 
-                    diameter, 
-                    tProp, 
-                    tp, 
-                    jvsKTFile
-                );
+                // Convert to Euler angles for orientation
+                const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
+                
+                // Use the transformed position and orientation
+                position[0] = worldPosition.x;
+                position[1] = worldPosition.y;
+                position[2] = worldPosition.z;
+                
+                orientation[0] = worldEuler.x;
+                orientation[1] = worldEuler.y;
+                orientation[2] = worldEuler.z;
+                
+                console.log("Using transformed position:", position);
+                console.log("Using transformed orientation:", orientation);
+                
+                let id = thrusterId;
+                // Check if this thruster already exists
+                const existingThruster = window.currentVesselModel.getThruster(thrusterId);
+                
+                // Get the original component ID from the userData if it exists
+                const originalThrusterId = object.userData.componentId;
+                
+                // If the component existed but with a different ID, remove the old one first
+                if (originalThrusterId && originalThrusterId !== thrusterId) {
+                    console.log(`Thruster ID changed from ${originalThrusterId} to ${thrusterId}, removing old component`);
+                    window.currentVesselModel.removeThruster(originalThrusterId);
+                }
+                
+                if (existingThruster) {
+                    // Update existing thruster
+                    window.currentVesselModel.updateThruster(thrusterId, {
+                        thruster_name: thrusterName,
+                        thruster_location: position,
+                        thruster_orientation: orientation,
+                        D_prop: diameter,
+                        T_prop: tProp,
+                        tp: tp
+                    });
+                    console.log(`Updated existing thruster with ID ${thrusterId}`);
+                } else {
+                    // Add new thruster
+                    id = window.currentVesselModel.addThruster(
+                        thrusterName, 
+                        position, 
+                        orientation, 
+                        thrusterId, 
+                        diameter, 
+                        tProp, 
+                        tp, 
+                        jvsKTFile
+                    );
+                    console.log(`Added new thruster with ID ${id}`);
+                }
                 
                 componentData = {
                     ...componentData,
@@ -698,32 +821,76 @@ document.addEventListener('DOMContentLoaded', function() {
                 const useNoneLocation = document.getElementById('fbxSensorNoneLocation').checked;
                 const useNoneOrientation = document.getElementById('fbxSensorNoneOrientation').checked;
                 
-                let orientation = [1.0, 0.0, 0.0, 0.0]; // Quaternion [w, x, y, z]
-                if (!useNoneOrientation && object.quaternion) {
-                    orientation = [
-                        object.quaternion.w,
-                        object.quaternion.x,
-                        object.quaternion.y,
-                        object.quaternion.z
-                    ];
-                } else if (!useNoneOrientation) {
-                    orientation = [
-                        parseFloat(document.getElementById('fbxSensorOrientationW').value),
-                        parseFloat(document.getElementById('fbxSensorOrientationX').value),
-                        parseFloat(document.getElementById('fbxSensorOrientationY').value),
-                        parseFloat(document.getElementById('fbxSensorOrientationZ').value)
-                    ];
+                // Get current sensor ID if any is stored in the component data
+                const sensorId = componentData?.id || null;
+                
+                // Get orientation in radians
+                const orientation = [0, 0, 0]; // Default orientation, should be updated based on object
+                
+                // Get the actual world position and orientation of the object
+                const worldPosition = new THREE.Vector3();
+                const worldQuaternion = new THREE.Quaternion();
+                
+                // If the object has axes (for transformed components), use those
+                const axes = object.children.find(child => child.userData.isComponentAxes);
+                if (axes) {
+                    axes.getWorldPosition(worldPosition);
+                    axes.getWorldQuaternion(worldQuaternion);
+                } else {
+                    // Otherwise use the object itself
+                    object.getWorldPosition(worldPosition);
+                    object.getWorldQuaternion(worldQuaternion);
                 }
                 
-                // Add to vessel model
-                const id = window.currentVesselModel.addSensor(
-                    sensorType,
-                    useNoneLocation ? null : position,
-                    orientation,
-                    publishRate,
-                    useNoneLocation,
-                    useNoneOrientation
-                );
+                // Convert to Euler angles for orientation
+                const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
+                
+                // Use the transformed position and orientation
+                position[0] = worldPosition.x;
+                position[1] = worldPosition.y;
+                position[2] = worldPosition.z;
+                
+                orientation[0] = worldEuler.x;
+                orientation[1] = worldEuler.y;
+                orientation[2] = worldEuler.z;
+                
+                console.log("Using transformed position:", position);
+                console.log("Using transformed orientation:", orientation);
+                
+                let id = sensorId;
+                // Check if this sensor already exists
+                const existingSensor = sensorId ? window.currentVesselModel.getSensor(sensorId) : null;
+                
+                // Get the original component ID from the userData if it exists
+                const originalSensorId = object.userData.componentId;
+                
+                // If the component existed but with a different ID, remove the old one first
+                if (originalSensorId && originalSensorId !== sensorId) {
+                    console.log(`Sensor ID changed from ${originalSensorId} to ${sensorId}, removing old component`);
+                    window.currentVesselModel.removeSensor(originalSensorId);
+                }
+                
+                if (existingSensor) {
+                    // Update existing sensor
+                    window.currentVesselModel.updateSensor(sensorId, {
+                        sensor_type: sensorType,
+                        sensor_location: useNoneLocation ? null : position,
+                        sensor_orientation: useNoneOrientation ? null : orientation,
+                        publish_rate: publishRate
+                    });
+                    console.log(`Updated existing sensor with ID ${sensorId}`);
+                } else {
+                    // Add new sensor
+                    id = window.currentVesselModel.addSensor(
+                        sensorType,
+                        useNoneLocation ? null : position,
+                        useNoneOrientation ? null : orientation,
+                        publishRate,
+                        useNoneLocation,
+                        useNoneOrientation
+                    );
+                    console.log(`Added new sensor with ID ${id}`);
+                }
                 
                 componentData = {
                     ...componentData,
@@ -733,7 +900,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     publishRate,
                     useNoneLocation,
                     useNoneOrientation,
-                    position: useNoneLocation ? null : position
+                    position: useNoneLocation ? null : position,
+                    orientation: useNoneOrientation ? null : orientation
                 };
                 
                 object.name = sensorName;
@@ -1753,7 +1921,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 'geometry.yml': 'geometry-yaml-content',
                 'inertia.yml': 'inertia-yaml-content',
                 'hydrodynamics.yml': 'hydrodynamics-yaml-content',
-                'propulsion.yml': 'thrusters-yaml-content',  // Map to thrusters-yaml-content
+                'thrusters.yml': 'thrusters-yaml-content',  // Map to thrusters-yaml-content
                 'control_surfaces.yml': 'control-surfaces-yaml-content',
                 'sensors.yml': 'sensors-yaml-content',
                 'initial_conditions.yml': 'initial-conditions-yaml-content',
