@@ -34,30 +34,6 @@ Before running the simulator, you need to build the Docker image:
    ```
 3. Wait for the build process to complete (this may take several minutes depending on your internet connection and system performance)
 
-## Running the Simulator (Quickstart)
-
-After building the Docker image, you can start the simulator:
-
-1. From the root directory of the repository, run:
-   ```bash
-   ./ros2_simulator.sh
-   ```
-2. The simulator will start and the ROS2 topics will be printed in the terminal
-
-3. To view topic data, open a new terminal and run:
-   ```bash
-   docker exec -it panisim bash
-   ```
-4. Subscribe to a topic using:
-   ```bash
-   ros2 topic echo <topic_name>
-   ```
-   For example:
-   ```bash
-   ros2 topic echo /mavymini_00/odometry_sim
-   ```
-
-
 ## Troubleshooting
 
 - **Docker issues**: Ensure Docker is installed and running on your system

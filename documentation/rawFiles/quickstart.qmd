@@ -1,0 +1,58 @@
+# Quickstart {.unnumbered}
+
+After building the Docker image, you can start the simulator:
+
+1. From the root directory of the repository, run:
+   ```bash
+   ./ros2_simulator.sh
+   ```
+2. The simulator will start and the ROS2 topics will be printed in the terminal such as:
+
+   ```bash
+==================================================
+🚀 ROS2 Simulation Started Successfully!
+==================================================
+
+📡 Available ROS2 Topics:
+------------------------------
+/mavymini2_01/actuator_cmd
+/mavymini2_01/dvl
+/mavymini2_01/encoders
+/mavymini2_01/gps
+/mavymini2_01/imu
+/mavymini2_01/odometry_sim
+/mavymini_00/actuator_cmd
+/mavymini_00/dvl
+/mavymini_00/encoders
+/mavymini_00/gps
+/mavymini_00/imu
+/mavymini_00/odometry_sim
+/parameter_events
+/rosout
+
+🔍 View Topic Data:
+------------------------------
+1. Open a new terminal:
+   docker exec -it panisim bash
+
+2. Subscribe to a topic:
+   ros2 topic echo <topic_name>
+
+📝 Example:
+   ros2 topic echo /vessel_0/odometry_sim
+
+==================================================
+```
+
+3. To view topic data, open a new terminal and run:
+   ```bash
+   docker exec -it panisim bash
+   ```
+4. Subscribe to a topic using:
+   ```bash
+   ros2 topic echo <topic_name>
+   ```
+   For example:
+   ```bash
+   ros2 topic echo /mavymini_00/odometry_sim
+   ```

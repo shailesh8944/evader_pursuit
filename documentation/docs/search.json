@@ -4,7 +4,7 @@
     "href": "index.html",
     "title": "Pani Simulator",
     "section": "",
-    "text": "Pani Simulator\nPani (which means \\(\\textit{water}\\) in Hindi) is a high fidelity marine vessel simulator. It is built in a manner such that minimum backend edits are required by the user and the simulator can be both configured and run in an intuitive lightweight GUI application which runs on the web. An attempt to make it as “Microsoft’s Flight Simualtor” but for marine vessels has been made.\nThe simulator can be used to configure a new marine vessel, simulate sensors such as DVL, IMU, LiDAR and Camera, and control the vessel either via remote input or custom files for autonomous tasks. The simulator supports multiple agents which is useful for swarm autonomy tasks or to develop better collision avoidance algorithms.\nThe project has been made opne source to allow for further development of this simulator and add additional features to make it more versatile.",
+    "text": "Pani Simulator\nPani (which means \\(\\textit{water}\\) in Hindi) is a high fidelity marine vessel simulator. It is built in a manner such that minimum backend edits are required by the user and the simulator can be both configured and run in an intuitive lightweight GUI application which runs on the web. An attempt to make it as “Microsoft’s Flight Simualtor” but for marine vessels has been made.\nThe simulator can be used to configure a new marine vessel, simulate sensors such as DVL, IMU, LiDAR and Camera, and control the vessel either via remote input or custom files for autonomous tasks. The simulator supports multiple agents which is useful for swarm autonomy tasks or to develop better collision avoidance algorithms.\nThe project has been made open source to allow for further development of this simulator and add additional features to make it more versatile.",
     "crumbs": [
       "Pani Simulator"
     ]
@@ -70,11 +70,11 @@
     ]
   },
   {
-    "objectID": "rawFiles/setup.html#running-the-simulator",
-    "href": "rawFiles/setup.html#running-the-simulator",
+    "objectID": "rawFiles/setup.html#running-the-simulator-quickstart",
+    "href": "rawFiles/setup.html#running-the-simulator-quickstart",
     "title": "Setup",
-    "section": "Running the Simulator",
-    "text": "Running the Simulator\nAfter building the Docker image, you can start the simulator:\n\nFrom the root directory of the repository, run:\n./ros2_simulator.sh\nThe simulator will start and continuously print the vehicle states to the terminal\nAt startup, you should see that propeller and rudder commands are zero and the vehicle is at rest\nThe simulation time should increment, indicating that the simulator is working correctly",
+    "section": "Running the Simulator (Quickstart)",
+    "text": "Running the Simulator (Quickstart)\nAfter building the Docker image, you can start the simulator:\n\nFrom the root directory of the repository, run:\n./ros2_simulator.sh\nThe simulator will start and the ROS2 topics will be printed in the terminal\nTo view topic data, open a new terminal and run:\ndocker exec -it panisim bash\nSubscribe to a topic using:\nros2 topic echo &lt;topic_name&gt;\nFor example:\nros2 topic echo /mavymini_00/odometry_sim",
     "crumbs": [
       "Setup"
     ]
@@ -471,13 +471,23 @@
     ]
   },
   {
-    "objectID": "rawFiles/setup.html#running-the-simulator-quickstart",
-    "href": "rawFiles/setup.html#running-the-simulator-quickstart",
-    "title": "Setup",
-    "section": "Running the Simulator (Quickstart)",
-    "text": "Running the Simulator (Quickstart)\nAfter building the Docker image, you can start the simulator:\n\nFrom the root directory of the repository, run:\n./ros2_simulator.sh\nThe simulator will start and the ROS2 topics will be printed in the terminal\nTo view topic data, open a new terminal and run:\ndocker exec -it panisim bash\nSubscribe to a topic using:\nros2 topic echo &lt;topic_name&gt;\nFor example:\nros2 topic echo /mavymini_00/odometry_sim",
+    "objectID": "rawFiles/quickstart.html",
+    "href": "rawFiles/quickstart.html",
+    "title": "Quickstart",
+    "section": "",
+    "text": "📡 Available ROS2 Topics:\nAfter building the Docker image, you can start the simulator:\n/mavymini2_01/actuator_cmd /mavymini2_01/dvl /mavymini2_01/encoders /mavymini2_01/gps /mavymini2_01/imu /mavymini2_01/odometry_sim /mavymini_00/actuator_cmd /mavymini_00/dvl /mavymini_00/encoders /mavymini_00/gps /mavymini_00/imu /mavymini_00/odometry_sim /parameter_events /rosout",
     "crumbs": [
-      "Setup"
+      "Quickstart"
+    ]
+  },
+  {
+    "objectID": "rawFiles/quickstart.html#view-topic-data",
+    "href": "rawFiles/quickstart.html#view-topic-data",
+    "title": "Quickstart",
+    "section": "🔍 View Topic Data:",
+    "text": "🔍 View Topic Data:\n\nOpen a new terminal: docker exec -it panisim bash\nSubscribe to a topic: ros2 topic echo \n\n📝 Example: ros2 topic echo /vessel_0/odometry_sim\n==================================================\n\n3. To view topic data, open a new terminal and run:\n   ```bash\n   docker exec -it panisim bash\n\nSubscribe to a topic using:\nros2 topic echo &lt;topic_name&gt;\nFor example:\nros2 topic echo /mavymini_00/odometry_sim",
+    "crumbs": [
+      "Quickstart"
     ]
   }
 ]

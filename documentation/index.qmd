@@ -4,7 +4,7 @@ Pani (which means $\textit{water}$ in Hindi) is a high fidelity marine vessel si
 
 The simulator can be used to configure a new marine vessel, simulate sensors such as DVL, IMU, LiDAR and Camera, and control the vessel either via remote input or custom files for autonomous tasks. The simulator supports multiple agents which is useful for swarm autonomy tasks or to develop better collision avoidance algorithms.
 
-The project has been made opne source to allow for further development of this simulator and add additional features to make it more versatile. 
+The project has been made open source to allow for further development of this simulator and add additional features to make it more versatile. 
 
 ## Overview
 

@@ -1044,19 +1044,19 @@ class ThreeScene {
                         // Update model data based on the component type
                         switch (componentType) {
                             case 'controlSurface':
-                                vesselModel.updateComponentData(componentId, 'controlSurface', {
+                                vesselModel.updateControlSurface(componentId, {
                                     control_surface_location: [worldPosition.x, worldPosition.y, worldPosition.z],
                                     control_surface_orientation: [worldEuler.x, worldEuler.y, worldEuler.z]
                                 });
                                 break;
                             case 'thruster':
-                                vesselModel.updateComponentData(componentId, 'thruster', {
+                                vesselModel.updateThruster(componentId, {
                                     thruster_location: [worldPosition.x, worldPosition.y, worldPosition.z],
                                     thruster_orientation: [worldEuler.x, worldEuler.y, worldEuler.z]
                                 });
                                 break;
                             case 'sensor':
-                                vesselModel.updateComponentData(componentId, 'sensor', {
+                                vesselModel.updateSensor(componentId, {
                                     sensor_location: [worldPosition.x, worldPosition.y, worldPosition.z],
                                     sensor_orientation: [worldEuler.x, worldEuler.y, worldEuler.z]
                                 });
