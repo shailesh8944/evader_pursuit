@@ -539,45 +539,83 @@ class Vessel:
         # Initialize thruster forces vector
         tau = np.zeros(6)
 
-        # Extract forward velocity from current state
+        # Extract velocities from current state
         u = self.current_state[0]
+        v = self.current_state[1] 
+        w = self.current_state[2]
+        p = self.current_state[3]
+        q = self.current_state[4]
+        r = self.current_state[5]
 
-        # Maximum RPM from T200 thruster specs
-        n_max = 2668/60  # Convert to RPS
-        
         # Convert input RPM to RPS
         n_prop = n_prop/60
 
-        # Calculate thrust coefficient at zero advance ratio (J=0)
-        # 28.73 N thrust at 2668 RPM at 12V (from T200 datasheet)
-        KT_at_J0 = 28.73/(1024 * self.thrusters['thrusters'][0]['D_prop']**4 * n_max**2)
-
         # For each thruster in the configuration
         for i, thruster in enumerate(self.thrusters['thrusters']):
+
+            n_max = thruster['n_max']/60  # Convert to RPS
+                 
+            # Calculate thrust coefficient at zero advance ratio (J=0)
+            KT_at_J0 = thruster['KT_at_J0']
+
+            # Get thruster location and orientation
+            td = thruster['thruster_location']  # [x,y,z] coordinates in body frame
+            
+            # Create rotation matrix from Euler angles
+            phi, theta, psi = thruster['thruster_orientation']
+            cphi = np.cos(phi)
+            sphi = np.sin(phi)
+            cth = np.cos(theta)
+            sth = np.sin(theta)
+            cpsi = np.cos(psi)
+            spsi = np.sin(psi)
+            
+            # Rotation matrix from thruster frame to body frame
+            R = np.array([
+                [cth*cpsi, -cth*spsi, sth],
+                [sphi*sth*cpsi + cphi*spsi, -sphi*sth*spsi + cphi*cpsi, -sphi*cth],
+                [-cphi*sth*cpsi + sphi*spsi, cphi*sth*spsi + sphi*cpsi, cphi*cth]
+            ])
+            
+            # Calculate local velocities at thruster
+            netU = u
+            netV = v + r*td[0] + p*td[2]  # yaw and roll effects on sway
+            netW = w + p*td[1] - q*td[0]  # roll and pitch effects on heave
+            
+            # Transform velocities to thruster frame
+            V_thruster = R.T @ np.array([netU, netV, netW])
+            
+            # Use the axial velocity component for advance ratio calculation
+            u_thruster = V_thruster[0]
+            
             # Calculate advance ratio J with protection against division by zero
             denominator = n_prop[i] * thruster['D_prop']
             if abs(denominator) > 1e-6:  # Check if denominator is not too close to zero
-                J = u / denominator
+                J = u_thruster / denominator
             else:
                 J = 0.0  # Set a default value when propeller is not rotating
                 
             # Linear approximation of thrust coefficient
             KT = KT_at_J0 * (1 - J)
+            
             # Calculate propeller thrust
-            X_prop = KT * 1024 * thruster['D_prop']**4 * np.abs(n_prop[i]) * n_prop[i]
+            X_prop = KT * self.rho * thruster['D_prop']**4 * np.abs(n_prop[i]) * n_prop[i]
+            
             # Apply thrust deduction if available
             if hasattr(self, 'tp'):
                 X_prop *= (1 - self.tp)
 
-            # Add thrust force to surge direction
-            tau[0] += X_prop
+            # Force vector in thruster frame (thrust acts along x-axis of thruster)
+            F_thruster = np.array([X_prop, 0.0, 0.0])
             
+            # Transform forces to body frame
+            F_body = R @ F_thruster
             
-            # Get thruster location relative to body frame
-            pos = thruster['thruster_location']
-            # Calculate moments due to thrust
-            # Only X-direction force is considered as per the mavymini implementation
-            tau[3:6] += np.cross(pos, np.array([X_prop, 0, 0]))
+            # Add forces
+            tau[0:3] += F_body
+            
+            # Calculate and add moments
+            tau[3:6] += np.cross(td, F_body)
 
         return tau
     

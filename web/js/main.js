@@ -246,32 +246,6 @@ document.addEventListener('DOMContentLoaded', function() {
             input.click();
         });
         
-        // Undo
-        document.getElementById('btn-undo')?.addEventListener('click', function() {
-            if (window.currentVesselModel.undo()) {
-                showNotification('Undo successful', 'success');
-                
-                // Update UI if needed
-                document.getElementById('vesselName').value = window.currentVesselModel.config.name;
-                document.getElementById('vesselType').value = window.currentVesselModel.config.type;
-            } else {
-                showNotification('Nothing to undo', 'info');
-            }
-        });
-        
-        // Redo
-        document.getElementById('btn-redo')?.addEventListener('click', function() {
-            if (window.currentVesselModel.redo()) {
-                showNotification('Redo successful', 'success');
-                
-                // Update UI if needed
-                document.getElementById('vesselName').value = window.currentVesselModel.config.name;
-                document.getElementById('vesselType').value = window.currentVesselModel.config.type;
-            } else {
-                showNotification('Nothing to redo', 'info');
-            }
-        });
-        
         // Generate YAML
         document.getElementById('btn-generate-yaml')?.addEventListener('click', function() {
             // Create bootstrap modal and show it
@@ -484,10 +458,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const diameter = parseFloat(document.getElementById('thrusterDiameter').value);
             const tp = parseFloat(document.getElementById('thrusterTp').value);
             const jvsKTFile = document.getElementById('thrusterJvsKTFile').value;
+            const ktAtJ0 = parseFloat(document.getElementById('thrusterKTatJ0').value);
+            const nMax = parseFloat(document.getElementById('thrusterNMax').value);
             
             // Add thruster
             const id = window.currentVesselModel.addThruster(
-                name, position, orientation, thrusterId, diameter, tProp, tp, jvsKTFile
+                name, position, orientation, thrusterId, diameter, tProp, tp, jvsKTFile, ktAtJ0, nMax
             );
             
             // Add visual representation if threeScene has a method for it
@@ -575,6 +551,26 @@ document.addEventListener('DOMContentLoaded', function() {
         // FBX Component modal event handler
         document.getElementById('btnApplyFbxComponent')?.addEventListener('click', () => {
             const modal = document.getElementById('fbxComponentModal');
+            
+            // Verify IDs are valid before proceeding
+            if (document.getElementById('fbxControlSurfaceSettings').style.display === 'block' && 
+                document.getElementById('fbxSurfaceId').classList.contains('is-invalid')) {
+                showNotification('Control surface ID is already in use. Please use a different ID.', 'error');
+                return;
+            }
+            
+            if (document.getElementById('fbxThrusterSettings').style.display === 'block' && 
+                document.getElementById('fbxThrusterId').classList.contains('is-invalid')) {
+                showNotification('Thruster ID is already in use. Please use a different ID.', 'error');
+                return;
+            }
+            
+            if (document.getElementById('fbxSensorSettings').style.display === 'block' && 
+                document.getElementById('fbxSensorId').classList.contains('is-invalid')) {
+                showNotification('Sensor ID is already in use. Please use a different ID.', 'error');
+                return;
+            }
+            
             const objectUuid = modal?.dataset.objectUuid;
             
             if (!objectUuid) {
@@ -632,15 +628,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 const worldPosition = new THREE.Vector3();
                 const worldQuaternion = new THREE.Quaternion();
                 
-                // If the object has axes (for transformed components), use those
-                const axes = object.children.find(child => child.userData.isComponentAxes);
+                // FIXED: Always prioritize using axes for position and orientation
+                // First, try to get existing axes
+                let axes = object.children.find(child => child.userData.isComponentAxes);
+                
+                // If axes don't exist yet, create them first
+                if (!axes) {
+                    axes = threeScene.addComponentAxes(object);
+                    console.log("Created new axes for component position/orientation");
+                }
+                
+                // Now use the axes for position and orientation
                 if (axes) {
                     axes.getWorldPosition(worldPosition);
                     axes.getWorldQuaternion(worldQuaternion);
+                    console.log("Using axes for position and orientation");
                 } else {
-                    // Otherwise use the object itself
+                    // Fallback only if axes creation failed for some reason
                     object.getWorldPosition(worldPosition);
                     object.getWorldQuaternion(worldQuaternion);
+                    console.log("Fallback: Using object position and orientation");
                 }
                 
                 // Convert to Euler angles for orientation
@@ -725,6 +732,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const diameter = parseFloat(document.getElementById('fbxThrusterDiameter').value);
                 const tp = parseFloat(document.getElementById('fbxThrusterTp').value);
                 const jvsKTFile = document.getElementById('fbxThrusterJvsKTFile').value;
+                const ktAtJ0 = parseFloat(document.getElementById('fbxThrusterKTatJ0').value);
+                const nMax = parseFloat(document.getElementById('fbxThrusterNMax').value);
                 
                 // Get orientation in radians
                 const orientation = [0, 0, 0]; // Default orientation, should be updated based on object
@@ -733,15 +742,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 const worldPosition = new THREE.Vector3();
                 const worldQuaternion = new THREE.Quaternion();
                 
-                // If the object has axes (for transformed components), use those
-                const axes = object.children.find(child => child.userData.isComponentAxes);
+                // FIXED: Always prioritize using axes for position and orientation
+                // First, try to get existing axes
+                let axes = object.children.find(child => child.userData.isComponentAxes);
+                
+                // If axes don't exist yet, create them first
+                if (!axes) {
+                    axes = threeScene.addComponentAxes(object);
+                    console.log("Created new axes for component position/orientation");
+                }
+                
+                // Now use the axes for position and orientation
                 if (axes) {
                     axes.getWorldPosition(worldPosition);
                     axes.getWorldQuaternion(worldQuaternion);
+                    console.log("Using axes for position and orientation");
                 } else {
-                    // Otherwise use the object itself
+                    // Fallback only if axes creation failed for some reason
                     object.getWorldPosition(worldPosition);
                     object.getWorldQuaternion(worldQuaternion);
+                    console.log("Fallback: Using object position and orientation");
                 }
                 
                 // Convert to Euler angles for orientation
@@ -780,7 +800,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         thruster_orientation: orientation,
                         D_prop: diameter,
                         T_prop: tProp,
-                        tp: tp
+                        tp: tp,
+                        KT_at_J0: ktAtJ0,
+                        n_max: nMax
                     });
                     console.log(`Updated existing thruster with ID ${thrusterId}`);
                 } else {
@@ -793,7 +815,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         diameter, 
                         tProp, 
                         tp, 
-                        jvsKTFile
+                        jvsKTFile,
+                        ktAtJ0,
+                        nMax
                     );
                     console.log(`Added new thruster with ID ${id}`);
                 }
@@ -806,6 +830,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     diameter,
                     tp,
                     jvsKTFile,
+                    ktAtJ0,
+                    nMax,
                     position
                 };
                 
@@ -817,12 +843,12 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (componentType === 'sensor') {
                 const sensorType = document.getElementById('fbxSensorType').value;
                 const sensorName = document.getElementById('fbxSensorName').value || `${sensorType} Sensor`;
-                const publishRate = parseFloat(document.getElementById('fbxSensorRate').value);
+                const sensorRate = parseFloat(document.getElementById('fbxSensorRate').value);
                 const useNoneLocation = document.getElementById('fbxSensorNoneLocation').checked;
                 const useNoneOrientation = document.getElementById('fbxSensorNoneOrientation').checked;
                 
-                // Get current sensor ID if any is stored in the component data
-                const sensorId = componentData?.id || null;
+                // Get the sensor ID from the input field
+                const sensorId = parseInt(document.getElementById('fbxSensorId').value);
                 
                 // Get orientation in radians
                 const orientation = [0, 0, 0]; // Default orientation, should be updated based on object
@@ -831,15 +857,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 const worldPosition = new THREE.Vector3();
                 const worldQuaternion = new THREE.Quaternion();
                 
-                // If the object has axes (for transformed components), use those
-                const axes = object.children.find(child => child.userData.isComponentAxes);
+                // FIXED: Always prioritize using axes for position and orientation
+                // First, try to get existing axes
+                let axes = object.children.find(child => child.userData.isComponentAxes);
+                
+                // If axes don't exist yet, create them first
+                if (!axes) {
+                    axes = threeScene.addComponentAxes(object);
+                    console.log("Created new axes for component position/orientation");
+                }
+                
+                // Now use the axes for position and orientation
                 if (axes) {
                     axes.getWorldPosition(worldPosition);
                     axes.getWorldQuaternion(worldQuaternion);
+                    console.log("Using axes for position and orientation");
                 } else {
-                    // Otherwise use the object itself
+                    // Fallback only if axes creation failed for some reason
                     object.getWorldPosition(worldPosition);
                     object.getWorldQuaternion(worldQuaternion);
+                    console.log("Fallback: Using object position and orientation");
                 }
                 
                 // Convert to Euler angles for orientation
@@ -876,7 +913,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         sensor_type: sensorType,
                         sensor_location: useNoneLocation ? null : position,
                         sensor_orientation: useNoneOrientation ? null : orientation,
-                        publish_rate: publishRate
+                        publish_rate: sensorRate
                     });
                     console.log(`Updated existing sensor with ID ${sensorId}`);
                 } else {
@@ -885,7 +922,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         sensorType,
                         useNoneLocation ? null : position,
                         useNoneOrientation ? null : orientation,
-                        publishRate,
+                        sensorRate,
                         useNoneLocation,
                         useNoneOrientation
                     );
@@ -897,7 +934,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     sensorType,
                     id,
                     name: sensorName,
-                    publishRate,
+                    publishRate: sensorRate,
                     useNoneLocation,
                     useNoneOrientation,
                     position: useNoneLocation ? null : position,
@@ -1003,6 +1040,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (componentData) {
                     document.getElementById('fbxSensorType').value = componentData.sensorType || 'IMU';
+                    document.getElementById('fbxSensorId').value = componentData.id || 1;
                     document.getElementById('fbxSensorRate').value = componentData.publishRate || 10;
                     
                     // Handle None values for location and orientation
@@ -1548,6 +1586,119 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateYAMLIncludedFilesInfo();
             });
         }
+        
+        // Add validation and automatic ID management for component IDs
+        function setupComponentIdValidation() {
+            // Input elements
+            const surfaceIdInput = document.getElementById('fbxSurfaceId');
+            const thrusterIdInput = document.getElementById('fbxThrusterId');
+            const sensorIdInput = document.getElementById('fbxSensorId');
+            
+            // Error message elements
+            const surfaceIdError = document.createElement('div');
+            surfaceIdError.className = 'invalid-feedback';
+            surfaceIdInput.after(surfaceIdError);
+            
+            const thrusterIdError = document.createElement('div');
+            thrusterIdError.className = 'invalid-feedback';
+            thrusterIdInput.after(thrusterIdError);
+            
+            const sensorIdError = document.createElement('div');
+            sensorIdError.className = 'invalid-feedback';
+            sensorIdInput.after(sensorIdError);
+            
+            // Validate control surface ID
+            surfaceIdInput.addEventListener('input', function() {
+                const id = parseInt(this.value);
+                if (!id || isNaN(id)) return;
+                
+                const vesselModel = window.currentVesselModel;
+                if (!vesselModel) return;
+                
+                const existingSurface = vesselModel.getControlSurface(id);
+                if (existingSurface) {
+                    // ID conflict found
+                    this.classList.add('is-invalid');
+                    surfaceIdError.textContent = `ID ${id} is already used by ${existingSurface.control_surface_name || 'another control surface'}`;
+                } else {
+                    this.classList.remove('is-invalid');
+                }
+            });
+            
+            // Validate thruster ID
+            thrusterIdInput.addEventListener('input', function() {
+                const id = parseInt(this.value);
+                if (!id || isNaN(id)) return;
+                
+                const vesselModel = window.currentVesselModel;
+                if (!vesselModel) return;
+                
+                const existingThruster = vesselModel.getThruster(id);
+                if (existingThruster) {
+                    // ID conflict found
+                    this.classList.add('is-invalid');
+                    thrusterIdError.textContent = `ID ${id} is already used by ${existingThruster.thruster_name || 'another thruster'}`;
+                } else {
+                    this.classList.remove('is-invalid');
+                }
+            });
+            
+            // Validate sensor ID
+            sensorIdInput.addEventListener('input', function() {
+                const id = parseInt(this.value);
+                if (!id || isNaN(id)) return;
+                
+                const vesselModel = window.currentVesselModel;
+                if (!vesselModel) return;
+                
+                const existingSensor = vesselModel.getSensor(id);
+                if (existingSensor) {
+                    // ID conflict found
+                    this.classList.add('is-invalid');
+                    sensorIdError.textContent = `ID ${id} is already used by ${existingSensor.sensor_name || 'another sensor'}`;
+                } else {
+                    this.classList.remove('is-invalid');
+                }
+            });
+            
+            // Function to suggest next available ID when opening the component modal
+            function setNextAvailableComponentId(componentType) {
+                const vesselModel = window.currentVesselModel;
+                if (!vesselModel) return;
+                
+                if (componentType === 'controlSurface') {
+                    // For new components, use the next available ID from vessel model
+                    surfaceIdInput.value = vesselModel.nextControlSurfaceId || 1;
+                } else if (componentType === 'thruster') {
+                    thrusterIdInput.value = vesselModel.nextThrusterId || 1;
+                } else if (componentType === 'sensor') {
+                    sensorIdInput.value = vesselModel.nextSensorId || 1;
+                }
+            }
+            
+            // When component modal shows, set the next available ID if this is a new component
+            document.getElementById('fbxComponentModal').addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                const object = button ? threeScene.getSelectedObject() : null;
+                
+                // Get component type being configured
+                const componentType = document.getElementById('fbxComponentType').value;
+                
+                // Only suggest IDs for new components, not existing ones
+                const isReconfiguring = object && object.children.some(child => child.userData.isComponentAxes);
+                
+                if (!isReconfiguring) {
+                    setNextAvailableComponentId(componentType);
+                }
+                
+                // Trigger validation for any preset values
+                surfaceIdInput.dispatchEvent(new Event('input'));
+                thrusterIdInput.dispatchEvent(new Event('input'));
+                sensorIdInput.dispatchEvent(new Event('input'));
+            });
+        }
+        
+        setupComponentIdValidation();
     }
     
     // Initialize file handlers
@@ -2744,6 +2895,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const cbX = document.getElementById('cbX');
     const cbY = document.getElementById('cbY');
     const cbZ = document.getElementById('cbZ');
+    
+    // Center point orientation inputs
+    const coRoll = document.getElementById('coRoll');
+    const coPitch = document.getElementById('coPitch');
+    const coYaw = document.getElementById('coYaw');
+    const cgRoll = document.getElementById('cgRoll');
+    const cgPitch = document.getElementById('cgPitch');
+    const cgYaw = document.getElementById('cgYaw');
+    const cbRoll = document.getElementById('cbRoll');
+    const cbPitch = document.getElementById('cbPitch');
+    const cbYaw = document.getElementById('cbYaw');
 
     // Geometry file path
     const geometryFilePath = document.getElementById('geometryFilePath');
@@ -2763,18 +2925,37 @@ document.addEventListener('DOMContentLoaded', function() {
             gyrationY.value = geometry.gyration[1].toFixed(2);
             gyrationZ.value = geometry.gyration[2].toFixed(2);
             
-            // Set center coordinates
-            coX.value = geometry.CO[0].toFixed(2);
-            coY.value = geometry.CO[1].toFixed(2);
-            coZ.value = geometry.CO[2].toFixed(2);
+            // Set center coordinates (position)
+            const coPos = geometry.CO_position || geometry.CO || [0, 0, 0];
+            coX.value = coPos[0].toFixed(2);
+            coY.value = coPos[1].toFixed(2);
+            coZ.value = coPos[2].toFixed(2);
             
-            cgX.value = geometry.CG[0].toFixed(2);
-            cgY.value = geometry.CG[1].toFixed(2);
-            cgZ.value = geometry.CG[2].toFixed(2);
+            const cgPos = geometry.CG_position || geometry.CG || [0, 0, 0];
+            cgX.value = cgPos[0].toFixed(2);
+            cgY.value = cgPos[1].toFixed(2);
+            cgZ.value = cgPos[2].toFixed(2);
             
-            cbX.value = geometry.CB[0].toFixed(2);
-            cbY.value = geometry.CB[1].toFixed(2);
-            cbZ.value = geometry.CB[2].toFixed(2);
+            const cbPos = geometry.CB_position || geometry.CB || [0, 0, 0];
+            cbX.value = cbPos[0].toFixed(2);
+            cbY.value = cbPos[1].toFixed(2);
+            cbZ.value = cbPos[2].toFixed(2);
+            
+            // Set center orientations
+            const coOri = geometry.CO_orientation || [0, 0, 0];
+            coRoll.value = coOri[0].toFixed(2);
+            coPitch.value = coOri[1].toFixed(2);
+            coYaw.value = coOri[2].toFixed(2);
+            
+            const cgOri = geometry.CG_orientation || [0, 0, 0];
+            cgRoll.value = cgOri[0].toFixed(2);
+            cgPitch.value = cgOri[1].toFixed(2);
+            cgYaw.value = cgOri[2].toFixed(2);
+            
+            const cbOri = geometry.CB_orientation || [0, 0, 0];
+            cbRoll.value = cbOri[0].toFixed(2);
+            cbPitch.value = cbOri[1].toFixed(2);
+            cbYaw.value = cbOri[2].toFixed(2);
             
             // Set geometry file path
             geometryFilePath.value = geometry.geometry_file || '';
@@ -2848,30 +3029,93 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             }
                             
+                            // Handle CO (Center of Origin)
                             if (geometryData.CO) {
-                                const co = parseArrayFromString(geometryData.CO);
-                                if (co.length >= 3) {
-                                    coX.value = parseFloat(co[0]).toFixed(2);
-                                    coY.value = parseFloat(co[1]).toFixed(2);
-                                    coZ.value = parseFloat(co[2]).toFixed(2);
+                                if (typeof geometryData.CO === 'object' && geometryData.CO.position) {
+                                    // New format with position and orientation
+                                    const position = parseArrayFromString(geometryData.CO.position);
+                                    if (position.length >= 3) {
+                                        coX.value = parseFloat(position[0]).toFixed(2);
+                                        coY.value = parseFloat(position[1]).toFixed(2);
+                                        coZ.value = parseFloat(position[2]).toFixed(2);
+                                    }
+                                    
+                                    if (geometryData.CO.orientation) {
+                                        const orientation = parseArrayFromString(geometryData.CO.orientation);
+                                        if (orientation.length >= 3) {
+                                            coRoll.value = parseFloat(orientation[0]).toFixed(2);
+                                            coPitch.value = parseFloat(orientation[1]).toFixed(2);
+                                            coYaw.value = parseFloat(orientation[2]).toFixed(2);
+                                        }
+                                    }
+                                } else {
+                                    // Legacy format with just position array
+                                    const co = parseArrayFromString(geometryData.CO);
+                                    if (co.length >= 3) {
+                                        coX.value = parseFloat(co[0]).toFixed(2);
+                                        coY.value = parseFloat(co[1]).toFixed(2);
+                                        coZ.value = parseFloat(co[2]).toFixed(2);
+                                    }
                                 }
                             }
                             
+                            // Handle CG (Center of Gravity)
                             if (geometryData.CG) {
-                                const cg = parseArrayFromString(geometryData.CG);
-                                if (cg.length >= 3) {
-                                    cgX.value = parseFloat(cg[0]).toFixed(2);
-                                    cgY.value = parseFloat(cg[1]).toFixed(2);
-                                    cgZ.value = parseFloat(cg[2]).toFixed(2);
+                                if (typeof geometryData.CG === 'object' && geometryData.CG.position) {
+                                    // New format with position and orientation
+                                    const position = parseArrayFromString(geometryData.CG.position);
+                                    if (position.length >= 3) {
+                                        cgX.value = parseFloat(position[0]).toFixed(2);
+                                        cgY.value = parseFloat(position[1]).toFixed(2);
+                                        cgZ.value = parseFloat(position[2]).toFixed(2);
+                                    }
+                                    
+                                    if (geometryData.CG.orientation) {
+                                        const orientation = parseArrayFromString(geometryData.CG.orientation);
+                                        if (orientation.length >= 3) {
+                                            cgRoll.value = parseFloat(orientation[0]).toFixed(2);
+                                            cgPitch.value = parseFloat(orientation[1]).toFixed(2);
+                                            cgYaw.value = parseFloat(orientation[2]).toFixed(2);
+                                        }
+                                    }
+                                } else {
+                                    // Legacy format with just position array
+                                    const cg = parseArrayFromString(geometryData.CG);
+                                    if (cg.length >= 3) {
+                                        cgX.value = parseFloat(cg[0]).toFixed(2);
+                                        cgY.value = parseFloat(cg[1]).toFixed(2);
+                                        cgZ.value = parseFloat(cg[2]).toFixed(2);
+                                    }
                                 }
                             }
                             
+                            // Handle CB (Center of Buoyancy)
                             if (geometryData.CB) {
-                                const cb = parseArrayFromString(geometryData.CB);
-                                if (cb.length >= 3) {
-                                    cbX.value = parseFloat(cb[0]).toFixed(2);
-                                    cbY.value = parseFloat(cb[1]).toFixed(2);
-                                    cbZ.value = parseFloat(cb[2]).toFixed(2);
+                                if (typeof geometryData.CB === 'object' && geometryData.CB.position) {
+                                    // New format with position and orientation
+                                    const position = parseArrayFromString(geometryData.CB.position);
+                                    if (position.length >= 3) {
+                                        cbX.value = parseFloat(position[0]).toFixed(2);
+                                        cbY.value = parseFloat(position[1]).toFixed(2);
+                                        cbZ.value = parseFloat(position[2]).toFixed(2);
+                                    }
+                                    
+                                    if (geometryData.CB.orientation) {
+                                        const orientation = parseArrayFromString(geometryData.CB.orientation);
+                                        if (orientation.length >= 3) {
+                                            cbRoll.value = parseFloat(orientation[0]).toFixed(2);
+                                            cbPitch.value = parseFloat(orientation[1]).toFixed(2);
+                                            cbYaw.value = parseFloat(orientation[2]).toFixed(2);
+                                        }
+                                    }
+                                } else {
+                                    // Legacy format with just position array
+                                    const cb = parseArrayFromString(geometryData.CB);
+                                    if (cb.length >= 3) {
+                                        cbX.value = parseFloat(cb[0]).toFixed(2);
+                                        cbY.value = parseFloat(cb[1]).toFixed(2);
+                                        cbZ.value = parseFloat(cb[2]).toFixed(2);
+                                    }
                                 }
                             }
                             
@@ -3771,15 +4015,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (btnSaveGeometry) {
         btnSaveGeometry.addEventListener('click', function() {
             try {
-                // Get values from form
+                // Validate dimensions
                 const length = parseFloat(vesselLength.value);
                 const breadth = parseFloat(vesselBreadth.value);
                 const depth = parseFloat(vesselDepth.value);
                 
-                // Validate dimensions
-                if (isNaN(length) || isNaN(breadth) || isNaN(depth) || 
-                    length <= 0 || breadth <= 0 || depth <= 0) {
-                    throw new Error('Dimensions must be positive numbers');
+                if (isNaN(length) || length <= 0 || isNaN(breadth) || breadth <= 0 || isNaN(depth) || depth <= 0) {
+                    throw new Error('Dimensions must be positive values');
                 }
                 
                 // Get gyration values
@@ -3789,10 +4031,43 @@ document.addEventListener('DOMContentLoaded', function() {
                     parseFloat(gyrationZ.value)
                 ];
                 
-                // Get center points
-                const CO = [parseFloat(coX.value), parseFloat(coY.value), parseFloat(coZ.value)];
-                const CG = [parseFloat(cgX.value), parseFloat(cgY.value), parseFloat(cgZ.value)];
-                const CB = [parseFloat(cbX.value), parseFloat(cbY.value), parseFloat(cbZ.value)];
+                // Get center positions
+                const CO = [
+                    parseFloat(coX.value),
+                    parseFloat(coY.value),
+                    parseFloat(coZ.value)
+                ];
+                
+                const CG = [
+                    parseFloat(cgX.value),
+                    parseFloat(cgY.value),
+                    parseFloat(cgZ.value)
+                ];
+                
+                const CB = [
+                    parseFloat(cbX.value),
+                    parseFloat(cbY.value),
+                    parseFloat(cbZ.value)
+                ];
+                
+                // Get center orientations
+                const CO_orientation = [
+                    parseFloat(coRoll.value),
+                    parseFloat(coPitch.value),
+                    parseFloat(coYaw.value)
+                ];
+                
+                const CG_orientation = [
+                    parseFloat(cgRoll.value),
+                    parseFloat(cgPitch.value),
+                    parseFloat(cgYaw.value)
+                ];
+                
+                const CB_orientation = [
+                    parseFloat(cbRoll.value),
+                    parseFloat(cbPitch.value),
+                    parseFloat(cbYaw.value)
+                ];
                 
                 // Get axis configuration
                 const axisConfig = {
@@ -3801,28 +4076,40 @@ document.addEventListener('DOMContentLoaded', function() {
                     depth: depthAxis.value
                 };
                 
-                // Validate that axis values are unique
-                if (axisConfig.length === axisConfig.breadth || 
-                    axisConfig.length === axisConfig.depth || 
-                    axisConfig.breadth === axisConfig.depth) {
-                    throw new Error('Each axis (length, breadth, depth) must be assigned to a different coordinate axis (x, y, z)');
-                }
-                
                 // Update vessel model with new geometry data
                 window.currentVesselModel.config.geometry.length = length;
                 window.currentVesselModel.config.geometry.breadth = breadth;
                 window.currentVesselModel.config.geometry.depth = depth;
                 window.currentVesselModel.config.geometry.gyration = gyration;
+                
+                // Update both legacy and new format
                 window.currentVesselModel.config.geometry.CO = CO;
                 window.currentVesselModel.config.geometry.CG = CG;
                 window.currentVesselModel.config.geometry.CB = CB;
+                
+                window.currentVesselModel.config.geometry.CO_position = CO;
+                window.currentVesselModel.config.geometry.CG_position = CG;
+                window.currentVesselModel.config.geometry.CB_position = CB;
+                
+                window.currentVesselModel.config.geometry.CO_orientation = CO_orientation;
+                window.currentVesselModel.config.geometry.CG_orientation = CG_orientation;
+                window.currentVesselModel.config.geometry.CB_orientation = CB_orientation;
+                
                 window.currentVesselModel.config.geometry.geometry_file = geometryFilePath.value;
                 
                 // Store axis direction configuration in the model
                 window.currentVesselModel.config.geometry.axisConfig = axisConfig;
                 
-                // Save to history
-                window.currentVesselModel.saveToHistory();
+                // Update 3D visualization with new center point positions and orientations
+                if (window.threeScene) {
+                    // Update the ThreeScene center points
+                    window.threeScene.updateCenterPoint('CO', CO, CO_orientation);
+                    window.threeScene.updateCenterPoint('CG', CG, CG_orientation);
+                    window.threeScene.updateCenterPoint('CB', CB, CB_orientation);
+                    
+                    // Force a rendering update
+                    window.threeScene.render();
+                }
                 
                 // Close the modal
                 geometryModal.hide();

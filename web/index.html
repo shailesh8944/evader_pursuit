@@ -64,7 +64,7 @@
         <!-- Top toolbar section with application controls -->
         <div class="toolbar" id="main-toolbar">
             <div class="app-title">
-                <i class="bi bi-water"></i> Ganga Putra: Vessel Configurator
+                <i class="bi bi-water"></i> Panisim: Vessel Configurator
             </div>
             <div class="toolbar-items">
                 <button class="toolbar-btn" id="btn-new-vessel" title="New vessel">
@@ -314,19 +314,31 @@
                         <div class="panel-body">
                             <div class="form-group">
                                 <label for="simTime">Simulation Time (s)</label>
-                                <input type="number" class="form-control" id="simTime" value="100" min="0">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="simTime" value="100" min="0">
+                                    <span class="input-group-text">s</span>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label for="timeStep">Time Step (s)</label>
-                                <input type="number" class="form-control" id="timeStep" value="0.01" min="0.001" step="0.001">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="timeStep" value="0.01" min="0.001" step="0.001">
+                                    <span class="input-group-text">s</span>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label for="density">Water Density (kg/m³)</label>
-                                <input type="number" class="form-control" id="density" value="1025" min="0">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="density" value="1025" min="0">
+                                    <span class="input-group-text">kg/m³</span>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label for="gravity">Gravity (m/s²)</label>
-                                <input type="number" class="form-control" id="gravity" value="9.80665" step="0.00001">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="gravity" value="9.80665" step="0.00001">
+                                    <span class="input-group-text">m/s²</span>
+                                </div>
                             </div>
                             <div class="form-group mt-3">
                                 <button class="btn btn-outline-primary w-100" id="btnAdvancedSimParams">
@@ -348,14 +360,18 @@
                                     <input type="number" class="form-control" id="worldSizeX" placeholder="X" value="1000">
                                     <input type="number" class="form-control" id="worldSizeY" placeholder="Y" value="1000">
                                     <input type="number" class="form-control" id="worldSizeZ" placeholder="Z" value="100">
+                                    <span class="input-group-text">m</span>
                                 </div>
                             </div>
                             <div class="form-group">
                                 <label>GPS Datum [lat, lon, alt]</label>
                                 <div class="input-group">
                                     <input type="number" class="form-control" id="gpsDatumLat" placeholder="Lat" value="12.99300">
+                                    <span class="input-group-text">°</span>
                                     <input type="number" class="form-control" id="gpsDatumLon" placeholder="Lon" value="80.23913">
+                                    <span class="input-group-text">°</span>
                                     <input type="number" class="form-control" id="gpsDatumAlt" placeholder="Alt" value="-87.0">
+                                    <span class="input-group-text">m</span>
                                 </div>
                             </div>
                         </div>
@@ -413,6 +429,7 @@
                             <input type="number" class="form-control" id="csPositionX" value="0" step="0.1">
                             <input type="number" class="form-control" id="csPositionY" value="0" step="0.1">
                             <input type="number" class="form-control" id="csPositionZ" value="0" step="0.1">
+                            <span class="input-group-text">m</span>
                         </div>
                     </div>
                     <div class="form-group">
@@ -421,11 +438,15 @@
                             <input type="number" class="form-control" id="csOrientationX" value="0" step="1">
                             <input type="number" class="form-control" id="csOrientationY" value="0" step="1">
                             <input type="number" class="form-control" id="csOrientationZ" value="0" step="1">
+                            <span class="input-group-text">°</span>
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="csArea">Area (m²)</label>
-                        <input type="number" class="form-control" id="csArea" value="0.1" min="0.01" step="0.01">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="csArea" value="0.1" min="0.01" step="0.01">
+                            <span class="input-group-text">m²</span>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="csNACA">NACA Profile</label>
@@ -433,15 +454,24 @@
                     </div>
                     <div class="form-group">
                         <label for="csTimeConstant">Time Constant (T)</label>
-                        <input type="number" class="form-control" id="csTimeConstant" value="0.1" min="0.01" step="0.01">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="csTimeConstant" value="0.1" min="0.01" step="0.01">
+                            <span class="input-group-text">s</span>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="csDeltaMax">Max Deflection Angle (deg)</label>
-                        <input type="number" class="form-control" id="csDeltaMax" value="35.0" min="1" step="1">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="csDeltaMax" value="35.0" min="1" step="1">
+                            <span class="input-group-text">°</span>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="csDeltadMax">Max Deflection Rate (deg/s)</label>
-                        <input type="number" class="form-control" id="csDeltadMax" value="1.0" min="0.1" step="0.1">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="csDeltadMax" value="1.0" min="0.1" step="0.1">
+                            <span class="input-group-text">°/s</span>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -475,6 +505,7 @@
                             <input type="number" class="form-control" id="thrusterPositionX" value="0" step="0.1">
                             <input type="number" class="form-control" id="thrusterPositionY" value="0" step="0.1">
                             <input type="number" class="form-control" id="thrusterPositionZ" value="0" step="0.1">
+                            <span class="input-group-text">m</span>
                         </div>
                     </div>
                     <div class="form-group">
@@ -483,24 +514,45 @@
                             <input type="number" class="form-control" id="thrusterOrientationX" value="0" step="1">
                             <input type="number" class="form-control" id="thrusterOrientationY" value="0" step="1">
                             <input type="number" class="form-control" id="thrusterOrientationZ" value="0" step="1">
+                            <span class="input-group-text">°</span>
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="thrusterTProp">Thrust Coefficient (T_prop)</label>
-                        <input type="number" class="form-control" id="thrusterTProp" value="1.0" min="0.1" step="0.1">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="thrusterTProp" value="1.0" min="0.1" step="0.1">
+                            <span class="input-group-text">N</span>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="thrusterDiameter">Propeller Diameter (D_prop) (m)</label>
-                        <input type="number" class="form-control" id="thrusterDiameter" value="0.1" min="0.01" step="0.01">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="thrusterDiameter" value="0.1" min="0.01" step="0.01">
+                            <span class="input-group-text">m</span>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="thrusterTp">Time Constant (tp)</label>
-                        <input type="number" class="form-control" id="thrusterTp" value="0.1" min="0.01" step="0.01">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="thrusterTp" value="0.1" min="0.01" step="0.01">
+                            <span class="input-group-text">s</span>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="thrusterJvsKTFile">J vs KT File Path</label>
                         <input type="text" class="form-control" id="thrusterJvsKTFile" value="J_vs_KT.csv">
                         <small class="text-muted">Will be placed in vessel directory</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="thrusterKTatJ0">KT at J0</label>
+                        <input type="number" class="form-control" id="thrusterKTatJ0" value="0.0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="thrusterNMax">Maximum RPM (n_max)</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="thrusterNMax" value="2668" min="1" step="1">
+                            <span class="input-group-text">RPM</span>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -538,6 +590,7 @@
                             <input type="number" class="form-control" id="sensorPositionX" value="0" step="0.1">
                             <input type="number" class="form-control" id="sensorPositionY" value="0" step="0.1">
                             <input type="number" class="form-control" id="sensorPositionZ" value="0" step="0.1">
+                            <span class="input-group-text">m</span>
                         </div>
                     </div>
                     <div class="form-group" id="sensorOrientationGroup">
@@ -551,7 +604,10 @@
                     </div>
                     <div class="form-group">
                         <label for="sensorPublishRate">Publish Rate (Hz)</label>
-                        <input type="number" class="form-control" id="sensorPublishRate" value="10" min="0.1" step="0.1">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="sensorPublishRate" value="10" min="0.1" step="0.1">
+                            <span class="input-group-text">Hz</span>
+                        </div>
                     </div>
                     <div class="form-check mt-3">
                         <input class="form-check-input" type="checkbox" value="" id="sensorNoneLocation">
@@ -598,7 +654,7 @@
                         </div>
                         <div class="mb-3">
                             <label for="fbxSurfaceId" class="form-label">ID</label>
-                            <input type="number" class="form-control" id="fbxSurfaceId" value="1" min="1" step="1">
+                            <input type="number" class="form-control" id="fbxSurfaceId" value="" min="1" step="1">
                         </div>
                         <div class="mb-3">
                             <label for="fbxSurfaceName" class="form-label">Name</label>
@@ -606,7 +662,10 @@
                         </div>
                         <div class="mb-3">
                             <label for="fbxSurfaceArea" class="form-label">Area (m²)</label>
-                            <input type="number" class="form-control" id="fbxSurfaceArea" value="0.1" min="0.01" step="0.01">
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="fbxSurfaceArea" value="0.1" min="0.01" step="0.01">
+                                <span class="input-group-text">m²</span>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label for="fbxSurfaceNACA" class="form-label">NACA Profile</label>
@@ -614,15 +673,24 @@
                         </div>
                         <div class="mb-3">
                             <label for="fbxSurfaceTimeConstant" class="form-label">Time Constant (T)</label>
-                            <input type="number" class="form-control" id="fbxSurfaceTimeConstant" value="0.1" min="0.01" step="0.01">
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="fbxSurfaceTimeConstant" value="0.1" min="0.01" step="0.01">
+                                <span class="input-group-text">s</span>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label for="fbxSurfaceDeltaMax" class="form-label">Max Deflection Angle (deg)</label>
-                            <input type="number" class="form-control" id="fbxSurfaceDeltaMax" value="35.0" min="1" step="1">
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="fbxSurfaceDeltaMax" value="35.0" min="1" step="1">
+                                <span class="input-group-text">°</span>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label for="fbxSurfaceDeltadMax" class="form-label">Max Deflection Rate (deg/s)</label>
-                            <input type="number" class="form-control" id="fbxSurfaceDeltadMax" value="1.0" min="0.1" step="0.1">
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="fbxSurfaceDeltadMax" value="1.0" min="0.1" step="0.1">
+                                <span class="input-group-text">°/s</span>
+                            </div>
                         </div>
                     </div>
                     
@@ -638,20 +706,40 @@
                         </div>
                         <div class="mb-3">
                             <label for="fbxThrusterTProp" class="form-label">Thrust Coefficient (T_prop)</label>
-                            <input type="number" class="form-control" id="fbxThrusterTProp" value="1.0" min="0.1" step="0.1">
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="fbxThrusterTProp" value="1.0" min="0.1" step="0.1">
+                                <span class="input-group-text">N</span>
+                            </div>
                         </div>
                         <div class="mb-3">
-                            <label for="fbxThrusterDiameter" class="form-label">Propeller Diameter (D_prop) (m)</label>
-                            <input type="number" class="form-control" id="fbxThrusterDiameter" value="0.1" min="0.01" step="0.01">
+                            <label for="fbxThrusterDiameter" class="form-label">Propeller Diameter (D_prop)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="fbxThrusterDiameter" value="0.1" min="0.01" step="0.01">
+                                <span class="input-group-text">m</span>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label for="fbxThrusterTp" class="form-label">Time Constant (tp)</label>
-                            <input type="number" class="form-control" id="fbxThrusterTp" value="0.1" min="0.01" step="0.01">
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="fbxThrusterTp" value="0.1" min="0.01" step="0.01">
+                                <span class="input-group-text">s</span>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label for="fbxThrusterJvsKTFile" class="form-label">J vs KT File Path</label>
                             <input type="text" class="form-control" id="fbxThrusterJvsKTFile" value="J_vs_KT.csv">
                             <small class="text-muted">Will be placed in vessel directory</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="fbxThrusterKTatJ0" class="form-label">KT at J0</label>
+                            <input type="number" class="form-control" id="fbxThrusterKTatJ0" value="0.0" step="0.01">
+                        </div>
+                        <div class="mb-3">
+                            <label for="fbxThrusterNMax" class="form-label">Maximum RPM (n_max)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="fbxThrusterNMax" value="2668" min="1" step="1">
+                                <span class="input-group-text">RPM</span>
+                            </div>
                         </div>
                     </div>
                     
@@ -670,6 +758,10 @@
                             </select>
                         </div>
                         <div class="mb-3">
+                            <label for="fbxSensorId" class="form-label">ID</label>
+                            <input type="number" class="form-control" id="fbxSensorId" value="1" min="1" step="1">
+                        </div>
+                        <div class="mb-3">
                             <label for="fbxSensorName" class="form-label">Name</label>
                             <input type="text" class="form-control" id="fbxSensorName">
                         </div>
@@ -683,8 +775,11 @@
                             </div>
                         </div>
                         <div class="mb-3">
-                            <label for="fbxSensorRate" class="form-label">Publish Rate (Hz)</label>
-                            <input type="number" class="form-control" id="fbxSensorRate" value="10" min="1" max="1000">
+                            <label for="fbxSensorRate" class="form-label">Publish Rate</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="fbxSensorRate" value="10" min="1" max="1000">
+                                <span class="input-group-text">Hz</span>
+                            </div>
                         </div>
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" value="" id="fbxSensorNoneLocation">
@@ -945,6 +1040,7 @@ Z_w_w: -0.01</pre>
                                     <input type="number" class="form-control" id="worldSizeXSetting" placeholder="X" value="1000">
                                     <input type="number" class="form-control" id="worldSizeYSetting" placeholder="Y" value="1000">
                                     <input type="number" class="form-control" id="worldSizeZSetting" placeholder="Z" value="100">
+                                    <span class="input-group-text">m</span>
                                 </div>
                                 <div class="form-check mt-1">
                                     <input class="form-check-input" type="checkbox" id="infiniteZSetting" checked>
@@ -958,8 +1054,11 @@ Z_w_w: -0.01</pre>
                                 <label>GPS Datum [lat, lon, alt]</label>
                                 <div class="input-group">
                                     <input type="number" class="form-control" id="gpsDatumLatSetting" placeholder="Lat" value="12.99300" step="0.00001">
+                                    <span class="input-group-text">°</span>
                                     <input type="number" class="form-control" id="gpsDatumLonSetting" placeholder="Lon" value="80.23913" step="0.00001">
+                                    <span class="input-group-text">°</span>
                                     <input type="number" class="form-control" id="gpsDatumAltSetting" placeholder="Alt" value="-87.0" step="0.01">
+                                    <span class="input-group-text">m</span>
                                 </div>
                             </div>
                             
@@ -1139,6 +1238,7 @@ geofence:
                             <input type="number" class="form-control" id="startLocationX" placeholder="X" value="0" step="0.1">
                             <input type="number" class="form-control" id="startLocationY" placeholder="Y" value="0" step="0.1">
                             <input type="number" class="form-control" id="startLocationZ" placeholder="Z" value="0" step="0.1">
+                            <span class="input-group-text">m</span>
                         </div>
                         <small class="text-muted">Initial position in the world coordinate system</small>
                     </div>
@@ -1149,6 +1249,7 @@ geofence:
                             <input type="number" class="form-control" id="startOrientationRoll" placeholder="Roll" value="0" step="0.01">
                             <input type="number" class="form-control" id="startOrientationPitch" placeholder="Pitch" value="0" step="0.01">
                             <input type="number" class="form-control" id="startOrientationYaw" placeholder="Yaw" value="0" step="0.01">
+                            <span class="input-group-text">rad</span>
                         </div>
                         <small class="text-muted">Initial orientation angles in radians</small>
                     </div>
@@ -1159,6 +1260,7 @@ geofence:
                             <input type="number" class="form-control" id="startVelocityU" placeholder="U" value="0" step="0.1">
                             <input type="number" class="form-control" id="startVelocityV" placeholder="V" value="0" step="0.1">
                             <input type="number" class="form-control" id="startVelocityW" placeholder="W" value="0" step="0.1">
+                            <span class="input-group-text">m/s</span>
                         </div>
                         <small class="text-muted">Initial linear velocities in the body-fixed frame</small>
                     </div>
@@ -1169,6 +1271,7 @@ geofence:
                             <input type="number" class="form-control" id="startVelocityP" placeholder="P" value="0" step="0.01">
                             <input type="number" class="form-control" id="startVelocityQ" placeholder="Q" value="0" step="0.01">
                             <input type="number" class="form-control" id="startVelocityR" placeholder="R" value="0" step="0.01">
+                            <span class="input-group-text">rad/s</span>
                         </div>
                         <small class="text-muted">Initial angular velocities in the body-fixed frame</small>
                     </div>
@@ -1208,14 +1311,20 @@ geofence:
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label for="vesselMass">Mass (kg)</label>
-                                <input type="number" class="form-control" id="vesselMass" placeholder="Mass" value="1" min="0.1" step="0.1">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="vesselMass" placeholder="Mass" value="1" min="0.1" step="0.1">
+                                    <span class="input-group-text">kg</span>
+                                </div>
                                 <small class="text-muted">Vessel mass in kilograms</small>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label for="vesselBuoyancyMass">Buoyancy Mass (kg)</label>
-                                <input type="number" class="form-control" id="vesselBuoyancyMass" placeholder="Buoyancy Mass" value="1" min="0.1" step="0.1">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="vesselBuoyancyMass" placeholder="Buoyancy Mass" value="1" min="0.1" step="0.1">
+                                    <span class="input-group-text">kg</span>
+                                </div>
                                 <small class="text-muted">Mass of displaced water (for buoyancy)</small>
                             </div>
                         </div>
@@ -1420,19 +1529,28 @@ geofence:
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label for="vesselLength">Length (m)</label>
-                                <input type="number" class="form-control" id="vesselLength" placeholder="Length" value="1.0" min="0.1" step="0.1">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="vesselLength" placeholder="Length" value="1.0" min="0.1" step="0.1">
+                                    <span class="input-group-text">m</span>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label for="vesselBreadth">Breadth (m)</label>
-                                <input type="number" class="form-control" id="vesselBreadth" placeholder="Breadth" value="0.5" min="0.1" step="0.1">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="vesselBreadth" placeholder="Breadth" value="0.5" min="0.1" step="0.1">
+                                    <span class="input-group-text">m</span>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label for="vesselDepth">Depth (m)</label>
-                                <input type="number" class="form-control" id="vesselDepth" placeholder="Depth" value="0.5" min="0.1" step="0.1">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="vesselDepth" placeholder="Depth" value="0.5" min="0.1" step="0.1">
+                                    <span class="input-group-text">m</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1486,19 +1604,28 @@ geofence:
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label for="gyrationX">Gyration X (kx)</label>
-                                <input type="number" class="form-control" id="gyrationX" placeholder="X" value="1.0" min="0.1" step="0.1">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="gyrationX" placeholder="X" value="1.0" min="0.1" step="0.1">
+                                    <span class="input-group-text">m</span>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label for="gyrationY">Gyration Y (ky)</label>
-                                <input type="number" class="form-control" id="gyrationY" placeholder="Y" value="1.0" min="0.1" step="0.1">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="gyrationY" placeholder="Y" value="1.0" min="0.1" step="0.1">
+                                    <span class="input-group-text">m</span>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label for="gyrationZ">Gyration Z (kz)</label>
-                                <input type="number" class="form-control" id="gyrationZ" placeholder="Z" value="1.0" min="0.1" step="0.1">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="gyrationZ" placeholder="Z" value="1.0" min="0.1" step="0.1">
+                                    <span class="input-group-text">m</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1511,9 +1638,18 @@ geofence:
                                     <input type="number" class="form-control" id="coX" placeholder="X" value="0" step="0.1">
                                     <input type="number" class="form-control" id="coY" placeholder="Y" value="0" step="0.1">
                                     <input type="number" class="form-control" id="coZ" placeholder="Z" value="0" step="0.1">
+                                    <span class="input-group-text">m</span>
+                                </div>
+                                <label class="mt-2">CO Orientation [roll, pitch, yaw]</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="coRoll" placeholder="Roll" value="0" step="0.1">
+                                    <input type="number" class="form-control" id="coPitch" placeholder="Pitch" value="0" step="0.1">
+                                    <input type="number" class="form-control" id="coYaw" placeholder="Yaw" value="0" step="0.1">
+                                    <span class="input-group-text">°</span>
                                 </div>
                             </div>
                         </div>
+                        
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label>Center of Gravity [x, y, z]</label>
@@ -1521,9 +1657,18 @@ geofence:
                                     <input type="number" class="form-control" id="cgX" placeholder="X" value="0" step="0.1">
                                     <input type="number" class="form-control" id="cgY" placeholder="Y" value="0" step="0.1">
                                     <input type="number" class="form-control" id="cgZ" placeholder="Z" value="0" step="0.1">
+                                    <span class="input-group-text">m</span>
+                                </div>
+                                <label class="mt-2">CG Orientation [roll, pitch, yaw]</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="cgRoll" placeholder="Roll" value="0" step="0.1">
+                                    <input type="number" class="form-control" id="cgPitch" placeholder="Pitch" value="0" step="0.1">
+                                    <input type="number" class="form-control" id="cgYaw" placeholder="Yaw" value="0" step="0.1">
+                                    <span class="input-group-text">°</span>
                                 </div>
                             </div>
                         </div>
+                        
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label>Center of Buoyancy [x, y, z]</label>
@@ -1531,6 +1676,14 @@ geofence:
                                     <input type="number" class="form-control" id="cbX" placeholder="X" value="0" step="0.1">
                                     <input type="number" class="form-control" id="cbY" placeholder="Y" value="0" step="0.1">
                                     <input type="number" class="form-control" id="cbZ" placeholder="Z" value="0" step="0.1">
+                                    <span class="input-group-text">m</span>
+                                </div>
+                                <label class="mt-2">CB Orientation [roll, pitch, yaw]</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="cbRoll" placeholder="Roll" value="0" step="0.1">
+                                    <input type="number" class="form-control" id="cbPitch" placeholder="Pitch" value="0" step="0.1">
+                                    <input type="number" class="form-control" id="cbYaw" placeholder="Yaw" value="0" step="0.1">
+                                    <span class="input-group-text">°</span>
                                 </div>
                             </div>
                         </div>

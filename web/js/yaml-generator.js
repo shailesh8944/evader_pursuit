@@ -187,14 +187,24 @@ cross_flow_drag: ${hydrodynamics.cross_flow_drag || false}
             ];
         }
 
+        // Create the structure with position and orientation for each center
         return {
             length: scaledLength,
             breadth: scaledBreadth,
             depth: scaledDepth,
             gyration: this.formatInlineArray(gyration, 4),
-            CO: this.formatInlineArray(geometry.CO || [0.0, 0.0, 0.0], 4),
-            CG: this.formatInlineArray(geometry.CG || [0.0, 0.0, 0.0], 4),
-            CB: this.formatInlineArray(geometry.CB || [0.0, 0.0, 0.0], 4),
+            CO: {
+                position: this.formatInlineArray(geometry.CO_position || geometry.CO || [0.0, 0.0, 0.0], 4),
+                orientation: this.formatInlineArray(geometry.CO_orientation || [0.0, 0.0, 0.0], 4)
+            },
+            CG: {
+                position: this.formatInlineArray(geometry.CG_position || geometry.CG || [0.0, 0.0, 0.0], 4),
+                orientation: this.formatInlineArray(geometry.CG_orientation || [0.0, 0.0, 0.0], 4)
+            },
+            CB: {
+                position: this.formatInlineArray(geometry.CB_position || geometry.CB || [0.0, 0.0, 0.0], 4),
+                orientation: this.formatInlineArray(geometry.CB_orientation || [0.0, 0.0, 0.0], 4)
+            },
             geometry_file: geometry.geometry_file || this.formatFilePath(vesselName, 'HydRA/input/vessel.gdf')
         };
     }

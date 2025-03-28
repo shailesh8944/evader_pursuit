@@ -7,4 +7,6 @@ thrusters:
     T_prop: 1.0
     D_prop: 0.1
     tp: 0.1
-    J_vs_KT: /workspaces/mavlab/ros2_ws/src/mav_simulator/mav_simulator/hullform/Mavymini/J_vs_KT.csv
+    KT_at_J0: 0.0 
+    n_max: 2668 # in RPM
+    J_vs_KT: None # File path to J_vs_KT.csv, Not being used currently

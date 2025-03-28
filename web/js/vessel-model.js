@@ -35,9 +35,15 @@ class VesselModel {
                 length: 1.0,                // Hull length (m)
                 breadth: 0.5,               // Hull breadth/width (m)
                 depth: 0.5,                 // Hull depth/height (m)
-                CO: [0, 0, 0],              // Center of origin (x, y, z)
-                CG: [0, 0, 0],              // Center of gravity (x, y, z)
-                CB: [0, 0, 0],              // Center of buoyancy (x, y, z)
+                CO: [0, 0, 0],              // Center of origin (x, y, z) - Legacy format
+                CG: [0, 0, 0],              // Center of gravity (x, y, z) - Legacy format
+                CB: [0, 0, 0],              // Center of buoyancy (x, y, z) - Legacy format
+                CO_position: [0, 0, 0],     // Center of origin position (x, y, z)
+                CO_orientation: [0, 0, 0],  // Center of origin orientation (roll, pitch, yaw)
+                CG_position: [0, 0, 0],     // Center of gravity position (x, y, z)
+                CG_orientation: [0, 0, 0],  // Center of gravity orientation (roll, pitch, yaw)
+                CB_position: [0, 0, 0],     // Center of buoyancy position (x, y, z)
+                CB_orientation: [0, 0, 0],  // Center of buoyancy orientation (roll, pitch, yaw)
                 gyration: [0.5, 0.8, 0.8],  // Radii of gyration [kxx, kyy, kzz]
                 scale: [1, 1, 1],           // Scale factors for visualization
                 geometry_file: ''           // Path to GDF file
@@ -121,61 +127,8 @@ class VesselModel {
             stlModel: null,
             componentMap: new Map()  // Maps 3D object UUIDs to component data
         };
-        
-        // Track changes for undo/redo functionality
-        this.history = [];
-        this.historyIndex = -1;
-        this.maxHistorySize = 50;
     }
     
-    /**
-     * Save current state to history for undo/redo
-     * Creates a deep copy of the current configuration
-     */
-    saveToHistory() {
-        // Remove any future states if we're in the middle of the history
-        if (this.historyIndex < this.history.length - 1) {
-            this.history = this.history.slice(0, this.historyIndex + 1);
-        }
-        
-        // Add current state to history
-        const stateCopy = JSON.parse(JSON.stringify(this.config));
-        this.history.push(stateCopy);
-        
-        // Limit history size
-        if (this.history.length > this.maxHistorySize) {
-            this.history.shift();
-        } else {
-            this.historyIndex++;
-        }
-    }
-    
-    /**
-     * Undo the last change by restoring the previous state
-     * @returns {boolean} - True if undo was successful, false if no history exists
-     */
-    undo() {
-        if (this.historyIndex > 0) {
-            this.historyIndex--;
-            this.config = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
-            return true;
-        }
-        return false;
-    }
-    
-    /**
-     * Redo a previously undone change
-     * @returns {boolean} - True if redo was successful, false if at the end of history
-     */
-    redo() {
-        if (this.historyIndex < this.history.length - 1) {
-            this.historyIndex++;
-            this.config = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
-            return true;
-        }
-        return false;
-    }
-
     /**
      * Set basic vessel information
      * @param {string} name - Vessel name
@@ -192,7 +145,6 @@ class VesselModel {
             this.config.type = type;
         }
         
-        this.saveToHistory();
     }
 
     /**
@@ -235,9 +187,7 @@ class VesselModel {
             this.updateUIElements();
         }
         
-        // Save to history
-        this.saveToHistory();
-        
+    
         return this;
     }
     
@@ -289,7 +239,7 @@ class VesselModel {
     }
 
     // Update physical properties
-    updatePhysicalProperties(mass, buoyancy_mass, CG, CB) {
+    updatePhysicalProperties(mass, buoyancy_mass, CG, CB, CG_orientation, CB_orientation) {
         if (mass <= 0) {
             throw new Error('Mass must be positive');
         }
@@ -303,18 +253,28 @@ class VesselModel {
             this.config.inertia.buoyancy_mass = this.config.inertia.mass;
         }
         
+        // Update both legacy and new position formats
         if (CG && Array.isArray(CG) && CG.length === 3) {
             this.config.geometry.CG = CG.map(val => parseFloat(val));
+            this.config.geometry.CG_position = CG.map(val => parseFloat(val));
         }
         
         if (CB && Array.isArray(CB) && CB.length === 3) {
             this.config.geometry.CB = CB.map(val => parseFloat(val));
+            this.config.geometry.CB_position = CB.map(val => parseFloat(val));
+        }
+        
+        // Update orientations if provided
+        if (CG_orientation && Array.isArray(CG_orientation) && CG_orientation.length === 3) {
+            this.config.geometry.CG_orientation = CG_orientation.map(val => parseFloat(val));
+        }
+        
+        if (CB_orientation && Array.isArray(CB_orientation) && CB_orientation.length === 3) {
+            this.config.geometry.CB_orientation = CB_orientation.map(val => parseFloat(val));
         }
         
         // Update inertia matrix with new mass
         this.updateInertiaMatrix();
-        
-        this.saveToHistory();
     }
 
     // Update hydrodynamic coefficients
@@ -343,13 +303,13 @@ class VesselModel {
         }
         
         console.log("Updated hydrodynamics:", this.config.hydrodynamics);
-        this.saveToHistory();
+        
     }
 
     // Set Hydra file path
     setHydraFile(filePath) {
         this.config.hydrodynamics.hydra_file = filePath;
-        this.saveToHistory();
+        
     }
 
     // Update simulation parameters
@@ -369,7 +329,7 @@ class VesselModel {
         }
         
         console.log("Updated simulation config:", this.config.simulation);
-        this.saveToHistory();
+        
     }
 
     // Add a new control surface
@@ -405,12 +365,12 @@ class VesselModel {
         }
 
         this.config.control_surfaces.control_surfaces.push(surface);
-        this.saveToHistory();
+        
         return surface.control_surface_id;
     }
 
     // Add a new thruster
-    addThruster(name, location, orientation, id = null, diameter = 0.1, tProp = 1.0, tp = 0.1, jVsKtFile = 'J_vs_KT.csv') {
+    addThruster(name, location, orientation, id = null, diameter = 0.1, tProp = 1.0, tp = 0.1, jVsKtFile = 'J_vs_KT.csv', ktAtJ0 = 0.0, nMax = 2668) {
         if (!location || !orientation) {
             throw new Error('Missing required parameters for thruster');
         }
@@ -426,7 +386,9 @@ class VesselModel {
             T_prop: parseFloat(tProp),
             D_prop: parseFloat(diameter),
             tp: parseFloat(tp),
-            J_vs_KT: `${this.config.name}/J_vs_KT.csv` // This will be updated with proper path in YAML generation
+            J_vs_KT: `${this.config.name}/J_vs_KT.csv`, // This will be updated with proper path in YAML generation
+            KT_at_J0: parseFloat(ktAtJ0),  // Add KT_at_J0 parameter
+            n_max: parseFloat(nMax)  // Add n_max parameter
         };
 
         // Ensure thrusters structure exists
@@ -435,7 +397,7 @@ class VesselModel {
         }
         
         this.config.thrusters.thrusters.push(thruster);
-        this.saveToHistory();
+        
         return thruster.thruster_id;
     }
 
@@ -459,7 +421,7 @@ class VesselModel {
         }
 
         this.config.sensors.sensors.push(sensor);
-        this.saveToHistory();
+        
         return sensor.sensor_id;
     }
     
@@ -478,7 +440,7 @@ class VesselModel {
         }
         
         this.config.guidance.waypoints.push(waypoint);
-        this.saveToHistory();
+        
         return waypoint.id;
     }
 
@@ -499,7 +461,7 @@ class VesselModel {
         
         this.config.initial_conditions.use_quaternion = !!useQuaternion;
         
-        this.saveToHistory();
+        
     }
 
     // Update control types
@@ -512,7 +474,7 @@ class VesselModel {
             this.config.control.thruster_control_type = thrusterControlType;
         }
         
-        this.saveToHistory();
+        
     }
 
     // Get control surface by ID
@@ -586,7 +548,7 @@ class VesselModel {
         }
         
         console.log(`Control surface ${id} after update:`, surface);
-        this.saveToHistory();
+        
         return true;
     }
 
@@ -600,7 +562,7 @@ class VesselModel {
         
         const validKeys = [
             'thruster_name', 'thruster_type', 'thruster_location', 'thruster_orientation',
-            'D_prop', 'T_prop', 'tp'
+            'D_prop', 'T_prop', 'tp', 'KT_at_J0', 'n_max'
         ];
         
         console.log(`Updating thruster ${id} with:`, properties);
@@ -616,7 +578,7 @@ class VesselModel {
                     const parsedValues = value.map(val => parseFloat(val));
                     console.log(`Setting ${key} to:`, parsedValues);
                     thruster[key] = parsedValues;
-                } else if (key === 'D_prop' || key === 'T_prop' || key === 'tp') {
+                } else if (key === 'D_prop' || key === 'T_prop' || key === 'tp' || key === 'KT_at_J0' || key === 'n_max') {
                     thruster[key] = parseFloat(value);
                 } else {
                     thruster[key] = value;
@@ -625,10 +587,22 @@ class VesselModel {
         }
         
         console.log(`Thruster ${id} after update:`, thruster);
-        this.saveToHistory();
+        
         return true;
     }
 
+    // Determine if a sensor uses quaternion orientation
+    isSensorUsingQuaternion(id) {
+        const sensor = this.getSensor(id);
+        if (!sensor) return false;
+        
+        // If the orientation is 'None', it's not using any orientation
+        if (sensor.sensor_orientation === 'None') return false;
+        
+        // Check if orientation is an array with 4 elements (quaternion)
+        return Array.isArray(sensor.sensor_orientation) && sensor.sensor_orientation.length === 4;
+    }
+    
     // Update sensor properties
     updateSensor(id, properties) {
         const sensor = this.getSensor(id);
@@ -663,7 +637,7 @@ class VesselModel {
         }
         
         console.log(`Sensor ${id} after update:`, sensor);
-        this.saveToHistory();
+        
         return true;
     }
     
@@ -680,7 +654,7 @@ class VesselModel {
             }
         }
         
-        this.saveToHistory();
+        
         return true;
     }
 
@@ -692,7 +666,7 @@ class VesselModel {
         
         if (index !== -1) {
             this.config.control_surfaces.control_surfaces.splice(index, 1);
-            this.saveToHistory();
+            
             return true;
         }
         
@@ -709,7 +683,7 @@ class VesselModel {
         
         if (index !== -1) {
             this.config.thrusters.thrusters.splice(index, 1);
-            this.saveToHistory();
+            
             return true;
         }
         
@@ -724,7 +698,7 @@ class VesselModel {
         
         if (index !== -1) {
             this.config.sensors.sensors.splice(index, 1);
-            this.saveToHistory();
+            
             return true;
         }
         
@@ -741,7 +715,7 @@ class VesselModel {
         
         if (index !== -1) {
             this.config.guidance.waypoints.splice(index, 1);
-            this.saveToHistory();
+            
             return true;
         }
         
@@ -902,9 +876,6 @@ class VesselModel {
             
             // Reset component IDs
             this.resetComponentIds();
-            
-            // Save to history
-            this.saveToHistory();
             
             return true;
         } catch (error) {

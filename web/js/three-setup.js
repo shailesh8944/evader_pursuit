@@ -1013,31 +1013,7 @@ class ThreeScene {
     onObjectTransformed(object) {
         if (!object) return;
         
-        // Check if this is a center point
-        if (object.userData && object.userData.centerType) {
-            const type = object.userData.centerType;
-            const position = [
-                object.position.x,
-                object.position.y,
-                object.position.z
-            ];
-            
-            // Update the model data
-            if (window.currentVesselModel && window.currentVesselModel.config) {
-                window.currentVesselModel.config.geometry[type] = position;
-                
-                // Update UI if geometry modal is open
-                this.updateCenterPointUI(type, position);
-                
-                console.log(`${type} position updated to:`, position);
-            }
-            
-            // Update transform info in the side panel
-            this.updateTransformInfo();
-            return;
-        }
-        
-        // Check if this is component axes
+        // If this is a component axes, update the component's data in the model
         if (object.userData && object.userData.isComponentAxes) {
             // Get the parent component
             const componentObject = object.parent;
@@ -1094,10 +1070,24 @@ class ThreeScene {
                                 });
                                 break;
                             case 'sensor':
-                                vesselModel.updateSensor(componentId, {
-                                    sensor_location: position,
-                                    sensor_orientation: orientation
-                                });
+                                // For sensors, use quaternion representation if needed
+                                if (vesselModel.isSensorUsingQuaternion(componentId)) {
+                                    const quatOrientation = [
+                                        worldQuaternion.w,
+                                        worldQuaternion.x,
+                                        worldQuaternion.y,
+                                        worldQuaternion.z
+                                    ];
+                                    vesselModel.updateSensor(componentId, {
+                                        sensor_location: position,
+                                        sensor_orientation: quatOrientation
+                                    });
+                                } else {
+                                    vesselModel.updateSensor(componentId, {
+                                        sensor_location: position,
+                                        sensor_orientation: orientation
+                                    });
+                                }
                                 break;
                         }
                         
@@ -1111,28 +1101,45 @@ class ThreeScene {
             return;
         }
         
-        // Handle other objects (original functionality)
-        this.updateTransformInfo();
-        
-        // Get the component from the model based on the UUID
-        if (window.currentVesselModel.isModelComponentMapped(object.uuid)) {
-            const componentData = window.currentVesselModel.getModelComponentData(object.uuid);
+        // Check if this is a center point
+        if (object.userData && object.userData.centerType) {
+            const type = object.userData.centerType;
+            const position = [
+                object.position.x,
+                object.position.y,
+                object.position.z
+            ];
             
-            if (componentData) {
-                const type = componentData.type;
-                const id = componentData.id;
+            // Extract rotation in degrees
+            const orientation = [
+                THREE.MathUtils.radToDeg(object.rotation.x),
+                THREE.MathUtils.radToDeg(object.rotation.y),
+                THREE.MathUtils.radToDeg(object.rotation.z)
+            ];
+            
+            // Update the model data
+            if (window.currentVesselModel && window.currentVesselModel.config) {
+                // Update legacy format
+                window.currentVesselModel.config.geometry[type] = position;
                 
-                // Update position
-                if (object.position && (type === 'thruster' || type === 'controlSurface' || type === 'sensor')) {
-                    this.updateComponentPositionFromObject(object);
-                }
+                // Update new format
+                window.currentVesselModel.config.geometry[`${type}_position`] = position;
+                window.currentVesselModel.config.geometry[`${type}_orientation`] = orientation;
                 
-                // Update orientation
-                if (object.rotation && (type === 'thruster' || type === 'controlSurface' || type === 'sensor')) {
-                    this.updateComponentOrientationFromObject(object);
-                }
+                // Update UI if geometry modal is open
+                this.updateCenterPointUI(type, position, orientation);
+                
+                console.log(`${type} position updated to:`, position);
+                console.log(`${type} orientation updated to:`, orientation);
             }
+            
+            // Update transform info in the side panel
+            this.updateTransformInfo();
+            return;
         }
+        
+        // For other objects (vessel, etc.)
+        this.updateTransformInfo();
     }
 
     onWindowResize() {
@@ -1493,12 +1500,36 @@ class ThreeScene {
                     </div>`;
                 }
                 
-                // Diameter
+                // Display thruster properties
+                if (componentData.T_prop) {
+                    html += `
+                    <div class="property-row">
+                        <div class="property-label">Thrust Coefficient</div>
+                        <div class="property-value">${parseFloat(componentData.T_prop).toFixed(3)}</div>
+                    </div>`;
+                }
+                
                 if (componentData.D_prop) {
                     html += `
                     <div class="property-row">
                         <div class="property-label">Diameter</div>
                         <div class="property-value">${parseFloat(componentData.D_prop).toFixed(3)} m</div>
+                    </div>`;
+                }
+                
+                if (componentData.KT_at_J0 !== undefined) {
+                    html += `
+                    <div class="property-row">
+                        <div class="property-label">KT at J0</div>
+                        <div class="property-value">${parseFloat(componentData.KT_at_J0).toFixed(3)}</div>
+                    </div>`;
+                }
+                
+                if (componentData.n_max !== undefined) {
+                    html += `
+                    <div class="property-row">
+                        <div class="property-label">Max RPM</div>
+                        <div class="property-value">${parseFloat(componentData.n_max).toFixed(0)}</div>
                     </div>`;
                 }
             } else if (componentType === 'sensor') {
@@ -2332,34 +2363,16 @@ class ThreeScene {
                                     <input type="number" class="form-control" id="thrusterCoefficient" value="${thruster.T_prop}" step="0.1" min="0.1">
                                 </div>
                             </div>
-                        </div>
-                    `;
-                }
-                break;
-                
-            case 'sensor':
-                const sensor = vesselModel.getSensor(componentId);
-                if (sensor) {
-                    html += `
-                        <div class="property-group">
-                            <div class="property-group-title">Sensor Properties</div>
                             <div class="property-row">
-                                <div class="property-label">Type</div>
+                                <div class="property-label">KT at J0</div>
                                 <div class="property-value">
-                                    <select id="sensorType" class="form-control">
-                                        <option value="IMU" ${sensor.sensor_type === 'IMU' ? 'selected' : ''}>IMU</option>
-                                        <option value="GPS" ${sensor.sensor_type === 'GPS' ? 'selected' : ''}>GPS</option>
-                                        <option value="DVL" ${sensor.sensor_type === 'DVL' ? 'selected' : ''}>DVL</option>
-                                        <option value="Depth" ${sensor.sensor_type === 'Depth' ? 'selected' : ''}>Depth</option>
-                                        <option value="Camera" ${sensor.sensor_type === 'Camera' ? 'selected' : ''}>Camera</option>
-                                        <option value="Sonar" ${sensor.sensor_type === 'Sonar' ? 'selected' : ''}>Sonar</option>
-                                    </select>
+                                    <input type="number" class="form-control" id="thrusterKTatJ0" value="${thruster.KT_at_J0 || 0.0}" step="0.01" min="0.0">
                                 </div>
                             </div>
                             <div class="property-row">
-                                <div class="property-label">Publish Rate (Hz)</div>
+                                <div class="property-label">Max RPM</div>
                                 <div class="property-value">
-                                    <input type="number" class="form-control" id="sensorPublishRate" value="${sensor.publish_rate}" step="0.1" min="0.1">
+                                    <input type="number" class="form-control" id="thrusterNMax" value="${thruster.n_max || 2668}" step="1" min="1">
                                 </div>
                             </div>
                         </div>
@@ -2575,6 +2588,24 @@ class ThreeScene {
                         });
                     });
                 }
+                
+                const thrusterKTatJ0Input = document.getElementById('thrusterKTatJ0');
+                if (thrusterKTatJ0Input) {
+                    thrusterKTatJ0Input.addEventListener('change', () => {
+                        vesselModel.updateThruster(componentId, {
+                            KT_at_J0: parseFloat(thrusterKTatJ0Input.value)
+                        });
+                    });
+                }
+                
+                const thrusterNMaxInput = document.getElementById('thrusterNMax');
+                if (thrusterNMaxInput) {
+                    thrusterNMaxInput.addEventListener('change', () => {
+                        vesselModel.updateThruster(componentId, {
+                            n_max: parseFloat(thrusterNMaxInput.value)
+                        });
+                    });
+                }
             }
             
             // Sensor properties
@@ -2687,9 +2718,20 @@ class ThreeScene {
             return;
         }
         
-        // Get world position
-        const worldPosition = new THREE.Vector3();
-        object.getWorldPosition(worldPosition);
+        // FIXED: First look for axes to use their position instead of the object's
+        const axes = object.children.find(child => child.userData.isComponentAxes);
+        let worldPosition = new THREE.Vector3();
+        
+        // If axes exist, use them for position
+        if (axes) {
+            axes.getWorldPosition(worldPosition);
+            console.log(`Using axes position for ${componentType} ${componentId}`);
+        } else {
+            // Fallback to component position if no axes found
+            object.getWorldPosition(worldPosition);
+            console.log(`No axes found, using object position for ${componentType} ${componentId}`);
+        }
+        
         const position = [worldPosition.x, worldPosition.y, worldPosition.z];
         
         console.log(`Updating ${componentType} ${componentId} position:`, position);
@@ -2732,8 +2774,6 @@ class ThreeScene {
             
             if (success) {
                 console.log(`Successfully updated ${componentType} ${componentId} position`);
-                // Save to history to ensure the change is recorded
-                vesselModel.saveToHistory();
             } else {
                 console.error(`Failed to update ${componentType} ${componentId} position`);
             }
@@ -2768,9 +2808,19 @@ class ThreeScene {
             return;
         }
         
-        // Get world orientation
-        const worldQuaternion = new THREE.Quaternion();
-        object.getWorldQuaternion(worldQuaternion);
+        // FIXED: First look for axes to use their orientation instead of the object's
+        const axes = object.children.find(child => child.userData.isComponentAxes);
+        let worldQuaternion = new THREE.Quaternion();
+        
+        // If axes exist, use them for orientation
+        if (axes) {
+            axes.getWorldQuaternion(worldQuaternion);
+            console.log(`Using axes orientation for ${componentType} ${componentId}`);
+        } else {
+            // Fallback to component orientation if no axes found
+            object.getWorldQuaternion(worldQuaternion);
+            console.log(`No axes found, using object orientation for ${componentType} ${componentId}`);
+        }
         
         // Convert to appropriate format based on component type
         let orientation;
@@ -2784,7 +2834,7 @@ class ThreeScene {
             ];
         } else {
             // For other components, use Euler angles
-        const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
+            const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion);
             orientation = [worldEuler.x, worldEuler.y, worldEuler.z];
         }
         
@@ -2828,8 +2878,6 @@ class ThreeScene {
             
             if (success) {
                 console.log(`Successfully updated ${componentType} ${componentId} orientation`);
-                // Save to history to ensure the change is recorded
-                vesselModel.saveToHistory();
             } else {
                 console.error(`Failed to update ${componentType} ${componentId} orientation`);
             }
@@ -3309,7 +3357,7 @@ class ThreeScene {
         this.render();
     }
 
-    updateCenterPoint(type, position) {
+    updateCenterPoint(type, position, orientation) {
         // Update the position of a center point
         const pointKey = `${type.toLowerCase()}Point`;
         if (this[pointKey]) {
@@ -3317,24 +3365,45 @@ class ThreeScene {
             
             // Update vessel model
             if (window.currentVesselModel && window.currentVesselModel.config) {
+                // Update legacy format
                 window.currentVesselModel.config.geometry[type] = [
                     position[0],
                     position[1],
                     position[2]
                 ];
                 
+                // Update new format with position and orientation
+                window.currentVesselModel.config.geometry[`${type}_position`] = [
+                    position[0],
+                    position[1],
+                    position[2]
+                ];
+                
+                // Update orientation if provided
+                if (orientation && Array.isArray(orientation) && orientation.length === 3) {
+                    window.currentVesselModel.config.geometry[`${type}_orientation`] = orientation;
+                    
+                    // Apply rotation to the 3D object if needed
+                    // Convert Euler angles in degrees to radians for Three.js
+                    const rotX = THREE.MathUtils.degToRad(orientation[0]);
+                    const rotY = THREE.MathUtils.degToRad(orientation[1]);
+                    const rotZ = THREE.MathUtils.degToRad(orientation[2]);
+                    this[pointKey].rotation.set(rotX, rotY, rotZ);
+                }
+                
                 // Update UI if geometry modal is open
-                this.updateCenterPointUI(type, position);
+                this.updateCenterPointUI(type, position, orientation);
             }
             
             this.render();
         }
     }
 
-    updateCenterPointUI(type, position) {
+    updateCenterPointUI(type, position, orientation) {
         // Update the UI form fields if geometry modal is open
         const modalElement = document.getElementById('geometryModal');
         if (modalElement && modalElement.classList.contains('show')) {
+            // Update position fields
             const xField = document.getElementById(`${type.toLowerCase()}X`);
             const yField = document.getElementById(`${type.toLowerCase()}Y`);
             const zField = document.getElementById(`${type.toLowerCase()}Z`);
@@ -3343,6 +3412,19 @@ class ThreeScene {
                 xField.value = position[0].toFixed(2);
                 yField.value = position[1].toFixed(2);
                 zField.value = position[2].toFixed(2);
+            }
+            
+            // Update orientation fields if provided
+            if (orientation && Array.isArray(orientation)) {
+                const rollField = document.getElementById(`${type.toLowerCase()}Roll`);
+                const pitchField = document.getElementById(`${type.toLowerCase()}Pitch`);
+                const yawField = document.getElementById(`${type.toLowerCase()}Yaw`);
+                
+                if (rollField && pitchField && yawField) {
+                    rollField.value = orientation[0].toFixed(2);
+                    pitchField.value = orientation[1].toFixed(2);
+                    yawField.value = orientation[2].toFixed(2);
+                }
             }
         }
     }
@@ -3360,18 +3442,39 @@ class ThreeScene {
         const geometry = window.currentVesselModel.config.geometry;
         
         // Create CO point (Center of Origin) - Red
-        const coPosition = geometry.CO || [0, 0, 0];
+        const coPosition = geometry.CO_position || geometry.CO || [0, 0, 0];
+        const coOrientation = geometry.CO_orientation || [0, 0, 0];
         this.coPoint = this.createCenterPoint('CO', coPosition, 0xff4444);
+        if (coOrientation && coOrientation.every(val => val !== 0)) {
+            const rotX = THREE.MathUtils.degToRad(coOrientation[0]);
+            const rotY = THREE.MathUtils.degToRad(coOrientation[1]);
+            const rotZ = THREE.MathUtils.degToRad(coOrientation[2]);
+            this.coPoint.rotation.set(rotX, rotY, rotZ);
+        }
         this.scene.add(this.coPoint);
         
         // Create CG point (Center of Gravity) - Green
-        const cgPosition = geometry.CG || [0, 0, 0];
+        const cgPosition = geometry.CG_position || geometry.CG || [0, 0, 0];
+        const cgOrientation = geometry.CG_orientation || [0, 0, 0];
         this.cgPoint = this.createCenterPoint('CG', cgPosition, 0x44ff44);
+        if (cgOrientation && cgOrientation.every(val => val !== 0)) {
+            const rotX = THREE.MathUtils.degToRad(cgOrientation[0]);
+            const rotY = THREE.MathUtils.degToRad(cgOrientation[1]);
+            const rotZ = THREE.MathUtils.degToRad(cgOrientation[2]);
+            this.cgPoint.rotation.set(rotX, rotY, rotZ);
+        }
         this.scene.add(this.cgPoint);
         
         // Create CB point (Center of Buoyancy) - Blue
-        const cbPosition = geometry.CB || [0, 0, 0];
+        const cbPosition = geometry.CB_position || geometry.CB || [0, 0, 0];
+        const cbOrientation = geometry.CB_orientation || [0, 0, 0];
         this.cbPoint = this.createCenterPoint('CB', cbPosition, 0x4444ff);
+        if (cbOrientation && cbOrientation.every(val => val !== 0)) {
+            const rotX = THREE.MathUtils.degToRad(cbOrientation[0]);
+            const rotY = THREE.MathUtils.degToRad(cbOrientation[1]);
+            const rotZ = THREE.MathUtils.degToRad(cbOrientation[2]);
+            this.cbPoint.rotation.set(rotX, rotY, rotZ);
+        }
         this.scene.add(this.cbPoint);
         
         // Initial visibility setting
@@ -3390,14 +3493,27 @@ class ThreeScene {
                 object.position.z
             ];
             
+            // Extract rotation in degrees
+            const orientation = [
+                THREE.MathUtils.radToDeg(object.rotation.x),
+                THREE.MathUtils.radToDeg(object.rotation.y),
+                THREE.MathUtils.radToDeg(object.rotation.z)
+            ];
+            
             // Update the model data
             if (window.currentVesselModel && window.currentVesselModel.config) {
+                // Update legacy format
                 window.currentVesselModel.config.geometry[type] = position;
                 
+                // Update new format
+                window.currentVesselModel.config.geometry[`${type}_position`] = position;
+                window.currentVesselModel.config.geometry[`${type}_orientation`] = orientation;
+                
                 // Update UI
-                this.updateCenterPointUI(type, position);
+                this.updateCenterPointUI(type, position, orientation);
                 
                 console.log(`${type} position updated to:`, position);
+                console.log(`${type} orientation updated to:`, orientation);
             }
         }
     }
@@ -3413,12 +3529,19 @@ class ThreeScene {
             object.position.z.toFixed(2)
         ];
         
+        // Get orientation in degrees
+        const orientation = [
+            THREE.MathUtils.radToDeg(object.rotation.x).toFixed(2),
+            THREE.MathUtils.radToDeg(object.rotation.y).toFixed(2),
+            THREE.MathUtils.radToDeg(object.rotation.z).toFixed(2)
+        ];
+        
         // Update the component info panel in the right sidebar
         const componentInfoPanel = document.getElementById('component-info');
         if (componentInfoPanel) {
             componentInfoPanel.innerHTML = `
                 <div class="panel-header">
-                    <h5>${type} Position</h5>
+                    <h5>${type} Point</h5>
                 </div>
                 <div class="panel-body">
                     <div class="info-item">
@@ -3428,6 +3551,9 @@ class ThreeScene {
                     </div>
                     <div class="info-item">
                         <strong>Position:</strong> [${position.join(', ')}]
+                    </div>
+                    <div class="info-item">
+                        <strong>Orientation:</strong> [${orientation.join(', ')}]
                     </div>
                     <div class="form-group mt-3">
                         <label>Position</label>
@@ -3446,6 +3572,23 @@ class ThreeScene {
                             </div>
                         </div>
                     </div>
+                    <div class="form-group mt-3">
+                        <label>Orientation (degrees)</label>
+                        <div class="transform-inputs">
+                            <div class="input-group">
+                                <span class="input-group-text">Roll</span>
+                                <input type="number" class="form-control" id="rotX" value="${orientation[0]}" step="5">
+                            </div>
+                            <div class="input-group">
+                                <span class="input-group-text">Pitch</span>
+                                <input type="number" class="form-control" id="rotY" value="${orientation[1]}" step="5">
+                            </div>
+                            <div class="input-group">
+                                <span class="input-group-text">Yaw</span>
+                                <input type="number" class="form-control" id="rotZ" value="${orientation[2]}" step="5">
+                            </div>
+                        </div>
+                    </div>
                     <div class="d-grid gap-2 mt-3">
                         <button class="btn btn-primary" id="btnApplyTransform">Apply Changes</button>
                     </div>
@@ -3457,23 +3600,47 @@ class ThreeScene {
             const posX = document.getElementById('posX');
             const posY = document.getElementById('posY');
             const posZ = document.getElementById('posZ');
+            const rotX = document.getElementById('rotX');
+            const rotY = document.getElementById('rotY');
+            const rotZ = document.getElementById('rotZ');
             
-            if (btnApplyTransform && posX && posY && posZ) {
+            if (btnApplyTransform && posX && posY && posZ && rotX && rotY && rotZ) {
                 btnApplyTransform.addEventListener('click', () => {
                     const newX = parseFloat(posX.value);
                     const newY = parseFloat(posY.value);
                     const newZ = parseFloat(posZ.value);
                     
-                    if (!isNaN(newX) && !isNaN(newY) && !isNaN(newZ)) {
+                    const newRotX = parseFloat(rotX.value);
+                    const newRotY = parseFloat(rotY.value);
+                    const newRotZ = parseFloat(rotZ.value);
+                    
+                    if (!isNaN(newX) && !isNaN(newY) && !isNaN(newZ) &&
+                        !isNaN(newRotX) && !isNaN(newRotY) && !isNaN(newRotZ)) {
+                        
+                        // Update position
                         object.position.set(newX, newY, newZ);
+                        
+                        // Update rotation (convert degrees to radians)
+                        object.rotation.set(
+                            THREE.MathUtils.degToRad(newRotX),
+                            THREE.MathUtils.degToRad(newRotY),
+                            THREE.MathUtils.degToRad(newRotZ)
+                        );
                         
                         // Update the model
                         if (window.currentVesselModel && window.currentVesselModel.config) {
+                            // Update legacy format
                             window.currentVesselModel.config.geometry[type] = [newX, newY, newZ];
-                            console.log(`Updated ${type} position to:`, [newX, newY, newZ]);
+                            
+                            // Update new format
+                            window.currentVesselModel.config.geometry[`${type}_position`] = [newX, newY, newZ];
+                            window.currentVesselModel.config.geometry[`${type}_orientation`] = [newRotX, newRotY, newRotZ];
                             
                             // Update UI if geometry modal is open
-                            this.updateCenterPointUI(type, [newX, newY, newZ]);
+                            this.updateCenterPointUI(type, [newX, newY, newZ], [newRotX, newRotY, newRotZ]);
+                            
+                            console.log(`Updated ${type} position to:`, [newX, newY, newZ]);
+                            console.log(`Updated ${type} orientation to:`, [newRotX, newRotY, newRotZ]);
                         }
                         
                         this.render();

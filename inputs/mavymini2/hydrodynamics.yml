@@ -1,39 +1,24 @@
-# Hydrodynamic coefficients calculated using strip theory and Hoerner's cross-flow drag
-# New coefficients calculated for vessel type: AUV
-# All coefficients are in dimensional form
 hydra_file: /workspaces/mavlab/inputs/mavymini/HydRA/MAVYMINI_hydra.json
-dim_flag: False
+dim_flag: false
 cross_flow_drag: false
 
-# Surge hydrodynamic derivatives (X)
-X_u_au: -1011.7807125967629
+# Surge hydrodynamic derivatives
 X_u_u: -0.01
 
-# Sway hydrodynamic derivatives (Y)
-Y_r_ar: -1518497.9168777363
-Y_r_av: -38.83529607078374
-Y_r_r: 0.0017799664706713543
-Y_v_ar: -21205761.25258683
-Y_v_av: -190.70786849122976
+# Sway hydrodynamic derivatives
 Y_v_v: -0.010659050686665396
+Y_r_r: 0.0017799664706713543
 
-# Heave hydrodynamic derivatives (Z)
-Z_q_aq: -1518497.9168777363
-Z_q_aw: -38.83529607078374
-Z_w_aq: -21205761.25258683
-Z_w_aw: -190.70786849122976
+# Yaw hydrodynamic derivatives
+N_v_v: -0.0006242757399292063
+N_r_r: -0.001889456681929024
+
+# Heave hydrodynamic derivatives
 Z_w_w: -0.01
 
-# Yaw hydrodynamic derivatives (N)
-N_r_ar: -2660316287247.037
-N_r_av: -25514642.672851562
-N_r_r: -0.001889456681929024
-N_v_ar: -3037028.591341909
-N_v_av: -0.00013955793242365706
-N_v_v: -0.0006242757399292063
 
-# Pitch hydrodynamic derivatives (M)
-M_q_aq: -2660316287247.037
-M_q_aw: -25514642.672851562
-M_w_aq: -3037028.591341909
-M_w_aw: -0.00013955793242365706
+## Consider underscore in the terms eg: X_u_u instead of Xuu
+
+
+
+
