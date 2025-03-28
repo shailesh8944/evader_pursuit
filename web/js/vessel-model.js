@@ -859,20 +859,128 @@ class VesselModel {
 
     // Export the vessel configuration as JSON
     exportAsJson() {
-        return JSON.stringify(this.config, null, 2);
+        // Create a deep copy of the config to modify
+        const exportData = {
+            config: JSON.parse(JSON.stringify(this.config)),
+            modelData: {
+                name: this.modelData.name,
+                type: this.modelData.type,
+                length: this.modelData.length,
+                width: this.modelData.width,
+                height: this.modelData.height,
+                mass: this.modelData.mass,
+                componentMap: []
+            }
+        };
+
+        // Convert componentMap to array for serialization
+        this.modelData.componentMap.forEach((component, uuid) => {
+            exportData.modelData.componentMap.push({
+                uuid,
+                component
+            });
+        });
+
+        // Promise to handle async file reading
+        return new Promise((resolve, reject) => {
+            const pendingTasks = [];
+
+            // Add FBX file if exists
+            if (this.modelData.fbxFile) {
+                const fbxTask = new Promise((resolveFbx) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const base64Data = e.target.result.split(',')[1]; // Remove data URL prefix
+                        exportData.modelData.fbxFile = {
+                            name: this.modelData.fbxFile.name,
+                            type: this.modelData.fbxFile.type,
+                            size: this.modelData.fbxFile.size,
+                            data: base64Data
+                        };
+                        resolveFbx();
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(this.modelData.fbxFile);
+                });
+                pendingTasks.push(fbxTask);
+            }
+
+            // Add NACA file if exists
+            if (this.modelData.nacaFile) {
+                const nacaTask = new Promise((resolveNaca) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const base64Data = e.target.result.split(',')[1]; // Remove data URL prefix
+                        exportData.modelData.nacaFile = {
+                            name: this.modelData.nacaFile.name,
+                            type: this.modelData.nacaFile.type,
+                            size: this.modelData.nacaFile.size,
+                            data: base64Data
+                        };
+                        resolveNaca();
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(this.modelData.nacaFile);
+                });
+                pendingTasks.push(nacaTask);
+            }
+
+            // Add hydra file if exists
+            if (this.modelData.hydraZipFile) {
+                const hydraTask = new Promise((resolveHydra) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const base64Data = e.target.result.split(',')[1]; // Remove data URL prefix
+                        exportData.modelData.hydraZipFile = {
+                            name: this.modelData.hydraZipFile.name,
+                            type: this.modelData.hydraZipFile.type,
+                            size: this.modelData.hydraZipFile.size,
+                            data: base64Data
+                        };
+                        resolveHydra();
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(this.modelData.hydraZipFile);
+                });
+                pendingTasks.push(hydraTask);
+            }
+
+            // When all file reading is done, resolve with the complete JSON
+            Promise.all(pendingTasks)
+                .then(() => resolve(JSON.stringify(exportData, null, 2)))
+                .catch(reject);
+        });
     }
 
     // Import vessel configuration from JSON
     importFromJson(jsonString) {
         try {
-            const config = JSON.parse(jsonString);
+            const importedData = JSON.parse(jsonString);
             
-            // Validate essential structure
-            if (!config.name || !config.geometry || !config.inertia) {
-                throw new Error('Invalid vessel configuration format');
+            // Handle both formats - old format is just the config object
+            // New format has config and modelData
+            if (importedData.config && importedData.modelData) {
+                // New format with modelData
+                const config = importedData.config;
+                
+                // Validate essential structure
+                if (!config.name || !config.geometry || !config.inertia) {
+                    throw new Error('Invalid vessel configuration format');
+                }
+                
+                this.config = config;
+                
+                // Handle modelData import
+                this.importModelData(importedData.modelData);
+            } else {
+                // Old format - just the config object
+                // Validate essential structure
+                if (!importedData.name || !importedData.geometry || !importedData.inertia) {
+                    throw new Error('Invalid vessel configuration format');
+                }
+                
+                this.config = importedData;
             }
-            
-            this.config = config;
             
             // Reset component IDs
             this.resetComponentIds();
@@ -882,6 +990,80 @@ class VesselModel {
             console.error('Error importing vessel configuration:', error);
             return false;
         }
+    }
+    
+    // Import model data from saved configuration
+    async importModelData(modelData) {
+        // Set basic modelData properties
+        this.modelData.name = modelData.name;
+        this.modelData.type = modelData.type;
+        this.modelData.length = modelData.length;
+        this.modelData.width = modelData.width;
+        this.modelData.height = modelData.height;
+        this.modelData.mass = modelData.mass;
+        
+        // Clear current component map
+        this.modelData.componentMap.clear();
+        
+        // Import component map
+        if (Array.isArray(modelData.componentMap)) {
+            modelData.componentMap.forEach(item => {
+                if (item.uuid && item.component) {
+                    this.modelData.componentMap.set(item.uuid, item.component);
+                }
+            });
+        }
+        
+        // Import FBX file if exists
+        if (modelData.fbxFile && modelData.fbxFile.data) {
+            const fbxFile = this.base64ToFile(
+                modelData.fbxFile.data,
+                modelData.fbxFile.name,
+                modelData.fbxFile.type
+            );
+            this.modelData.fbxFile = fbxFile;
+        }
+        
+        // Import NACA file if exists
+        if (modelData.nacaFile && modelData.nacaFile.data) {
+            const nacaFile = this.base64ToFile(
+                modelData.nacaFile.data,
+                modelData.nacaFile.name,
+                modelData.nacaFile.type
+            );
+            this.modelData.nacaFile = nacaFile;
+        }
+        
+        // Import hydra file if exists
+        if (modelData.hydraZipFile && modelData.hydraZipFile.data) {
+            const hydraFile = this.base64ToFile(
+                modelData.hydraZipFile.data,
+                modelData.hydraZipFile.name,
+                modelData.hydraZipFile.type
+            );
+            this.modelData.hydraZipFile = hydraFile;
+        }
+    }
+    
+    // Helper to convert base64 to File object
+    base64ToFile(base64Data, filename, mimeType) {
+        const byteCharacters = atob(base64Data);
+        const byteArrays = [];
+        
+        for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+            const slice = byteCharacters.slice(offset, offset + 512);
+            
+            const byteNumbers = new Array(slice.length);
+            for (let i = 0; i < slice.length; i++) {
+                byteNumbers[i] = slice.charCodeAt(i);
+            }
+            
+            const byteArray = new Uint8Array(byteNumbers);
+            byteArrays.push(byteArray);
+        }
+        
+        const blob = new Blob(byteArrays, {type: mimeType});
+        return new File([blob], filename, {type: mimeType});
     }
     
     // Reset component IDs to ensure they're sequential after import

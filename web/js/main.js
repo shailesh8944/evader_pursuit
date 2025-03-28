@@ -179,24 +179,34 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         // Save vessel configuration
-        document.getElementById('btn-save-vessel')?.addEventListener('click', function() {
+        document.getElementById('btn-save-vessel')?.addEventListener('click', async function() {
             const vesselName = window.currentVesselModel.config.name;
             if (!vesselName) {
                 showNotification('Please enter a vessel name before saving', 'error');
                 return;
             }
             
-            const configJson = window.currentVesselModel.exportAsJson();
-            const blob = new Blob([configJson], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${vesselName}_config.json`;
-            a.click();
-            
-            URL.revokeObjectURL(url);
-            showNotification('Vessel configuration saved', 'success');
+            try {
+                // Show loading notification when saving with potentially large files
+                showNotification('Preparing vessel configuration for saving...', 'info');
+                
+                // exportAsJson now returns a promise
+                const configJson = await window.currentVesselModel.exportAsJson();
+                
+                const blob = new Blob([configJson], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${vesselName}_config.json`;
+                a.click();
+                
+                URL.revokeObjectURL(url);
+                showNotification('Vessel configuration saved with FBX model and configured components', 'success');
+            } catch (error) {
+                console.error('Error saving vessel configuration:', error);
+                showNotification('Failed to save vessel configuration', 'error');
+            }
         });
         
         // Load vessel configuration
@@ -205,13 +215,16 @@ document.addEventListener('DOMContentLoaded', function() {
             input.type = 'file';
             input.accept = '.json';
             
-            input.addEventListener('change', function() {
+            input.addEventListener('change', async function() {
                 if (this.files && this.files[0]) {
                     const file = this.files[0];
                     const reader = new FileReader();
                     
-                    reader.onload = function(e) {
+                    reader.onload = async function(e) {
                         try {
+                            // Show loading notification
+                            showNotification('Loading vessel configuration...', 'info');
+                            
                             const result = window.currentVesselModel.importFromJson(e.target.result);
                             
                             if (result) {
@@ -225,11 +238,90 @@ document.addEventListener('DOMContentLoaded', function() {
                                     threeScene.vessel = null;
                                 }
                                 
+                                // Load FBX model if it exists in the imported data
+                                if (window.currentVesselModel.modelData.fbxFile) {
+                                    try {
+                                        showNotification('Loading 3D model from saved configuration...', 'info');
+                                        const result = await threeScene.loadFBXModel(window.currentVesselModel.modelData.fbxFile);
+                                        
+                                        // Restore component mappings
+                                        if (result.vessel) {
+                                            // Create a new component map with remapped UUIDs
+                                            const oldComponentMap = new Map();
+                                            window.currentVesselModel.modelData.componentMap.forEach((component, oldUuid) => {
+                                                oldComponentMap.set(oldUuid, component);
+                                            });
+                                            
+                                            // Clear the current component map as we'll rebuild it
+                                            window.currentVesselModel.modelData.componentMap.clear();
+                                            
+                                            // First collect all components by name
+                                            const meshByName = new Map();
+                                            const meshByIndex = new Map();
+                                            let componentIndex = 0;
+                                            
+                                            result.vessel.traverse(child => {
+                                                if (child.isMesh) {
+                                                    // Store by name for named components
+                                                    if (child.name && child.name !== '') {
+                                                        meshByName.set(child.name, child);
+                                                    }
+                                                    // Also store by index for unnamed components
+                                                    meshByIndex.set(componentIndex++, child);
+                                                }
+                                            });
+                                            
+                                            // Now try to match old components with new meshes
+                                            oldComponentMap.forEach((component, oldUuid) => {
+                                                // Try to find the component by name first
+                                                let mesh = null;
+                                                
+                                                if (component.name && component.name !== '') {
+                                                    mesh = meshByName.get(component.name);
+                                                }
+                                                
+                                                // If not found by name and we have index, try by index
+                                                if (!mesh && component.index !== undefined) {
+                                                    mesh = meshByIndex.get(component.index);
+                                                }
+                                                
+                                                // If we found a matching mesh, restore the component
+                                                if (mesh) {
+                                                    // Save the component to the new UUID
+                                                    window.currentVesselModel.modelData.componentMap.set(mesh.uuid, component);
+                                                    
+                                                    // Update mesh properties
+                                                    mesh.userData.isComponentMapped = true;
+                                                    mesh.userData.componentType = component.type;
+                                                    mesh.userData.componentId = component.id;
+                                                    
+                                                    // Create visual indicators
+                                                    threeScene.addComponentAxes(mesh);
+                                                    
+                                                    // Apply styling based on component type
+                                                    threeScene.applyComponentStyling(mesh, component.type);
+                                                    
+                                                    console.log(`Restored component: ${component.name || 'unnamed'} (${component.type})`);
+                                                } else {
+                                                    console.warn(`Could not find mesh for component: ${component.name || 'unnamed'} (${component.type})`);
+                                                }
+                                            });
+                                            
+                                            showNotification('Components restored successfully', 'success');
+                                        }
+                                        
+                                        showNotification('3D model loaded successfully', 'success');
+                                    } catch (error) {
+                                        console.error('Error loading 3D model:', error);
+                                        showNotification('Failed to load 3D model from saved configuration', 'warning');
+                                    }
+                                }
+                                
                                 // Update scene hierarchy
                                 threeScene.updateSceneHierarchy();
                                 threeScene.render();
                                 
-                                showNotification('Vessel configuration loaded', 'success');
+                                showNotification('Vessel configuration loaded successfully', 'success');
                             } else {
                                 showNotification('Failed to load configuration', 'error');
                             }
@@ -587,7 +679,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const componentType = document.getElementById('fbxComponentType').value;
             let componentData = {
                 type: componentType,
-                uuid: objectUuid
+                uuid: objectUuid,
+                name: object.name,
+                index: threeScene.getObjectIndex(object)
             };
             
             // Get component center position in world coordinates

@@ -3732,6 +3732,98 @@ class ThreeScene {
             this.axesRenderer.render(this.axesScene, this.axesCamera);
         };
     }
+
+    // Apply styling to components based on their type
+    applyComponentStyling(object, componentType) {
+        if (!object || !componentType) return;
+        
+        // Store original material if not already saved
+        if (!object.userData.originalMaterial) {
+            if (Array.isArray(object.material)) {
+                object.userData.originalMaterials = object.material.map(m => m.clone());
+            } else {
+                object.userData.originalMaterial = object.material.clone();
+            }
+        }
+        
+        // Create a new material for the component based on its type
+        let color;
+        let opacity = 0.9;
+        let transparent = true;
+        
+        // Assign colors based on component type
+        switch (componentType) {
+            case 'controlSurface':
+                color = 0x3498db; // Blue for control surfaces
+                break;
+            case 'thruster':
+                color = 0xe74c3c; // Red for thrusters
+                break;
+            case 'sensor':
+                color = 0x2ecc71; // Green for sensors
+                break;
+            default:
+                color = 0xf39c12; // Orange for unknown types
+        }
+        
+        // Apply new material
+        if (Array.isArray(object.material)) {
+            // For multi-material objects, apply color to all materials
+            object.material = object.material.map(() => {
+                return new THREE.MeshPhongMaterial({
+                    color: color,
+                    transparent: transparent,
+                    opacity: opacity,
+                    shininess: 80
+                });
+            });
+        } else {
+            // For single-material objects
+            object.material = new THREE.MeshPhongMaterial({
+                color: color,
+                transparent: transparent,
+                opacity: opacity,
+                shininess: 80
+            });
+        }
+        
+        // Mark the object as a component of this type
+        object.userData.componentType = componentType;
+        object.userData.isComponentMapped = true;
+        
+        // Force a render to update the appearance
+        this.render();
+    }
+    
+    // Restore original material for an object
+    restoreOriginalMaterial(object) {
+        if (!object) return;
+        
+        if (Array.isArray(object.material) && object.userData.originalMaterials) {
+            object.material = object.userData.originalMaterials.map(m => m.clone());
+        } else if (object.userData.originalMaterial) {
+            object.material = object.userData.originalMaterial.clone();
+        }
+        
+        // Force a render to update the appearance
+        this.render();
+    }
+
+    // Get an object's index in the loaded model (for reconnecting components after loading)
+    getObjectIndex(object) {
+        if (!object || !this.vessel) return -1;
+        
+        // Get all mesh objects in the vessel
+        const meshes = [];
+        this.vessel.traverse(child => {
+            if (child.isMesh) {
+                meshes.push(child);
+            }
+        });
+        
+        // Find the index of this object in the meshes array
+        return meshes.findIndex(mesh => mesh.uuid === object.uuid);
+    }
 }
 
 // Export the class
