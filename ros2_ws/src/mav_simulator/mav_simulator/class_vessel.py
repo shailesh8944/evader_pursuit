@@ -79,7 +79,7 @@ class Vessel:
         
         # Mass parameters
         self.mass = vessel_params['inertia']['mass']
-        self.CG = vessel_params['geometry']['CG']
+        self.CG = vessel_params['geometry']['CG']['position']
         self.gyration = vessel_params['geometry']['gyration']
         
         if vessel_params['inertia']['inertia_matrix'] == "None" or vessel_params['inertia']['added_mass_matrix'] == "None":
@@ -93,7 +93,7 @@ class Vessel:
         self.W = self.mass * self.g  # Weight
         self.buoyancy_mass = vessel_params['inertia']['buoyancy_mass']  # Buoyancy force, default to neutral
         self.B = self.buoyancy_mass * self.g  # Buoyancy force, default to neutral
-        self.CB = vessel_params['geometry']['CB']  # Center of buoyancy location relative to body frame
+        self.CB = vessel_params['geometry']['CB']['position']  # Center of buoyancy location relative to body frame
 
         # Dimensionalization flag
         self.dim_flag = hydrodynamic_data.get('dim_flag', False)
