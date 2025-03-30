@@ -1188,6 +1188,25 @@ class ThreeScene {
                     return !isPartOfVessel || isCenterPoint;
                 }
                 
+                // Check if the object is part of the vessel model
+                if (this.vessel) {
+                    let isPartOfVessel = false;
+                    this.vessel.traverse((child) => {
+                        if (child === intersect.object) {
+                            isPartOfVessel = true;
+                        }
+                    });
+
+                    // If it's part of the vessel, check if model selectability is enabled
+                    if (isPartOfVessel) {
+                        // Check the state of the selectability toggle
+                        const toggleModelSelectable = document.getElementById('toggleModelSelectable');
+                        if (toggleModelSelectable && !toggleModelSelectable.checked) {
+                            return false; // Not selectable when toggle is off
+                        }
+                    }
+                }
+                
                 // If vessel is visible or doesn't exist, allow selection of any selectable object
                 return true;
             });
@@ -1575,7 +1594,6 @@ class ThreeScene {
         html += `
             <div class="mt-3">
                 <button id="btnConfigureComponent" class="btn btn-primary">${buttonText}</button>
-                ${componentData ? '<button id="btnDeleteComponent" class="btn btn-danger ms-2">Delete Component</button>' : ''}
             </div>
         `;
         
@@ -1598,49 +1616,6 @@ class ThreeScene {
                 configBtn.addEventListener('click', () => {
                     const typeValue = document.getElementById('componentTypeSelect').value;
                     this.showComponentConfigModal(object, typeValue);
-                });
-            }
-            
-            // Add event listener for delete button
-            const deleteBtn = document.getElementById('btnDeleteComponent');
-            if (deleteBtn && componentType && componentId) {
-                deleteBtn.addEventListener('click', () => {
-                    if (confirm(`Are you sure you want to delete this ${componentType}?`)) {
-                        // Remove the component from the vessel model
-                        if (componentType === 'controlSurface') {
-                            vesselModel.removeControlSurface(componentId);
-                        } else if (componentType === 'thruster') {
-                            vesselModel.removeThruster(componentId);
-                        } else if (componentType === 'sensor') {
-                            vesselModel.removeSensor(componentId);
-                        }
-                        
-                        // Remove the mapping
-                        vesselModel.unmapModelComponent(object.uuid);
-                        
-                        // Remove component axes if they exist
-                        const axesChild = object.children.find(child => child.userData.isComponentAxes);
-                        if (axesChild) {
-                            object.remove(axesChild);
-                        }
-                        
-                        // Restore original material if needed
-                        this.restoreOriginalMaterial(object);
-                        
-                        // Refresh the component info display
-                        this.showComponentInfo(object);
-                        
-                        // Update scene hierarchy if needed
-                        this.updateSceneHierarchy();
-                        
-                        // Render scene
-                        this.render();
-                        
-                        // Show notification if the function exists
-                        if (typeof showNotification === 'function') {
-                            showNotification(`Deleted ${componentType} (ID: ${componentId})`, 'success');
-                        }
-                    }
                 });
             }
             
@@ -1979,6 +1954,75 @@ class ThreeScene {
         return this.vessel.visible;
     }
 
+    // Set transparency for the FBX model
+    setModelTransparency(value) {
+        if (!this.vessel) return;
+        
+        // Convert value (0-100) to opacity (1-0)
+        const opacity = 1 - (value / 100);
+        
+        // Traverse all mesh objects and update their materials
+        this.vessel.traverse((child) => {
+            if (child.isMesh) {
+                // Handle multiple materials
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(material => {
+                        material.transparent = opacity < 1;
+                        material.opacity = opacity;
+                    });
+                } else {
+                    // Handle single material
+                    child.material.transparent = opacity < 1;
+                    child.material.opacity = opacity;
+                }
+            }
+        });
+        
+        // Force a render to update the appearance
+        this.render();
+    }
+
+    // Set whether the model is selectable
+    setModelSelectable(selectable) {
+        if (!this.vessel) return;
+        
+        // Traverse all mesh objects and update their selectable property
+        this.vessel.traverse((child) => {
+            if (child.isMesh) {
+                child.userData.selectable = selectable;
+            }
+        });
+        
+        // If the model is made non-selectable and a mesh is currently selected, deselect it
+        if (!selectable && this.selectedObject) {
+            // Check if the selected object is part of the vessel
+            let isPartOfVessel = false;
+            this.vessel.traverse((child) => {
+                if (child === this.selectedObject) {
+                    isPartOfVessel = true;
+                }
+            });
+            
+            // Only deselect if it's part of the vessel
+            if (isPartOfVessel) {
+                this.restoreOriginalMaterial(this.selectedObject);
+                this.transformControls.detach();
+                this.selectedObject = null;
+                this.clearComponentInfo();
+                
+                // Update the properties panel to show no selection
+                document.getElementById('object-properties').innerHTML = `
+                    <div class="no-selection-message">
+                        Select an object to view its properties
+                    </div>
+                `;
+                
+                // Force a render to update the appearance
+                this.render();
+            }
+        }
+    }
+
     // Add new method to create body center coordinate system
     addBodyCenterSystem(position = new THREE.Vector3(0, 0, 0)) {
         // Remove existing BCS if any
@@ -2181,6 +2225,19 @@ class ThreeScene {
                                 toggleButton.classList.remove('active');
                             }
                         }
+                    }
+                    
+                    // Apply current transparency setting
+                    const transparencySlider = document.getElementById('modelTransparency');
+                    if (transparencySlider) {
+                        const transparencyValue = parseInt(transparencySlider.value, 10);
+                        this.setModelTransparency(transparencyValue);
+                    }
+                    
+                    // Apply current selectability setting
+                    const toggleModelSelectable = document.getElementById('toggleModelSelectable');
+                    if (toggleModelSelectable) {
+                        this.setModelSelectable(toggleModelSelectable.checked);
                     }
                     
                     // Update scene hierarchy

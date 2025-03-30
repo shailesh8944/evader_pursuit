@@ -1942,6 +1942,25 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
         
+        // Toggle model selectability
+        document.getElementById('toggleModelSelectable')?.addEventListener('change', function() {
+            if (threeScene.vessel) {
+                threeScene.setModelSelectable(this.checked);
+                showNotification(`3D model ${this.checked ? 'is now selectable' : 'is no longer selectable'}`, 'info');
+            } else {
+                showNotification('No 3D model loaded', 'warning');
+                this.checked = true;
+            }
+        });
+        
+        // Model transparency slider
+        document.getElementById('modelTransparency')?.addEventListener('input', function() {
+            if (threeScene.vessel) {
+                const transparencyValue = parseInt(this.value, 10);
+                threeScene.setModelTransparency(transparencyValue);
+            }
+        });
+        
         // Hydra output zip upload
         const hydraZipInput = document.getElementById('hydraZip');
         if (hydraZipInput) {
@@ -1949,14 +1968,108 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (this.files && this.files[0]) {
                     const file = this.files[0];
                     
-                    // Store file reference
-                    window.currentVesselModel.setModelFile('hydra', file);
+                    // Show loading notification
+                    showNotification('Loading Hydra output...', 'info');
                     
-                    // Update Hydra file path in config
-                    const vesselName = window.currentVesselModel.config.name || 'vessel';
-                    window.currentVesselModel.config.hydrodynamics.hydra_file = `/workspaces/mavlab/inputs/${vesselName}/HydRA/${vesselName.toUpperCase()}_hydra.json`;
-                    
-                    showNotification('Hydra output loaded', 'success');
+                    // Use setTimeout to allow UI to update before starting heavy operation
+                    setTimeout(async () => {
+                        try {
+                            // Load the model if threeScene has the method
+                            if (typeof threeScene.loadHydraModel === 'function') {
+                                const result = await threeScene.loadHydraModel(file);
+                                const model = result.vessel;
+                                const dimensions = result.dimensions;
+                                
+                                // Store file reference
+                                window.currentVesselModel.setModelFile('hydra', file);
+                                
+                                // Update the vessel model dimensions if we have them
+                                if (dimensions) {
+                                    console.log("Updating vessel model with Hydra dimensions:", dimensions);
+                                    
+                                    // Update the vessel model
+                                    window.currentVesselModel.updateDimensions(
+                                        dimensions.length,
+                                        dimensions.width,
+                                        dimensions.height
+                                    );
+                                    
+                                    // Store axis configuration in the vessel model
+                                    window.currentVesselModel.config.geometry.axisConfig = dimensions.axes;
+                                    
+                                    // Store bounding box information
+                                    window.currentVesselModel.config.geometry.boundingBox = dimensions.boundingBox;
+                                    
+                                    // Update gyration values based on the new dimensions
+                                    if (typeof recalculateGyrationValues === 'function') {
+                                        recalculateGyrationValues();
+                                    }
+                                    
+                                    // If geometry modal is open, update its values
+                                    const geometryModal = document.getElementById('geometryModal');
+                                    if (geometryModal && geometryModal.classList.contains('show')) {
+                                        // Get UI elements
+                                        const vesselLength = document.getElementById('vesselLength');
+                                        const vesselBreadth = document.getElementById('vesselBreadth');
+                                        const vesselDepth = document.getElementById('vesselDepth');
+                                        const lengthAxis = document.getElementById('lengthAxis');
+                                        const breadthAxis = document.getElementById('breadthAxis');
+                                        const depthAxis = document.getElementById('depthAxis');
+                                        const gdfFileInfo = document.getElementById('gdfFileInfo');
+                                        
+                                        if (vesselLength && vesselBreadth && vesselDepth) {
+                                            // Update dimension inputs
+                                            vesselLength.value = dimensions.length.toFixed(2);
+                                            vesselBreadth.value = dimensions.breadth.toFixed(2);
+                                            vesselDepth.value = dimensions.depth.toFixed(2);
+                                        }
+                                        
+                                        if (lengthAxis && breadthAxis && depthAxis) {
+                                            // Update axis dropdowns
+                                            lengthAxis.value = dimensions.axes.length;
+                                            breadthAxis.value = dimensions.axes.breadth;
+                                            depthAxis.value = dimensions.axes.depth;
+                                        }
+                                        
+                                        // Update gyration display if available
+                                        const gyrationX = document.getElementById('gyrationX');
+                                        const gyrationY = document.getElementById('gyrationY');
+                                        const gyrationZ = document.getElementById('gyrationZ');
+                                        
+                                        if (gyrationX && gyrationY && gyrationZ) {
+                                            const gyrationValues = window.currentVesselModel.config.geometry.gyration || [0, 0, 0];
+                                            gyrationX.value = gyrationValues[0].toFixed(2);
+                                            gyrationY.value = gyrationValues[1].toFixed(2);
+                                            gyrationZ.value = gyrationValues[2].toFixed(2);
+                                        }
+                                        
+                                        // Show info message in the modal
+                                        if (gdfFileInfo) {
+                                            gdfFileInfo.style.display = 'block';
+                                            gdfFileInfo.innerHTML = `
+                                                <i class="bi bi-info-circle"></i> <strong>Dimensions detected from Hydra file:</strong><br>
+                                                Length: ${dimensions.length.toFixed(2)}m (${lengthAxis.value}-axis)<br>
+                                                Breadth: ${dimensions.breadth.toFixed(2)}m (${breadthAxis.value}-axis)<br>
+                                                Depth: ${dimensions.depth.toFixed(2)}m (${depthAxis.value}-axis)<br>
+                                                <small class="text-muted">Based on the bounding box of the geometry</small>
+                                            `;
+                                        }
+                                    }
+                                }
+                                
+                                showNotification(`Hydra model loaded successfully. Dimensions: L=${dimensions.length.toFixed(2)}m, B=${dimensions.breadth.toFixed(2)}m, D=${dimensions.depth.toFixed(2)}m`, 'success');
+                                
+                                // Update scene hierarchy
+                                threeScene.updateSceneHierarchy();
+                            } else {
+                                console.warn("No dimensions extracted from Hydra model");
+                                showNotification('Hydra model loaded successfully, but could not extract dimensions', 'warning');
+                            }
+                        } catch (error) {
+                            console.error('Error loading Hydra model:', error);
+                            showNotification('Failed to load Hydra model: ' + error.message, 'error');
+                        }
+                    }, 100);
                 }
             });
         }
