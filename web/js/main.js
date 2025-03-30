@@ -4257,20 +4257,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     parseFloat(cbZ.value)
                 ];
                 
-                // Get center orientations
-                const CO_orientation = [
+                // Get center orientations (from UI in degrees)
+                const CO_orientation_deg = [
                     parseFloat(coRoll.value),
                     parseFloat(coPitch.value),
                     parseFloat(coYaw.value)
                 ];
                 
-                const CG_orientation = [
+                const CG_orientation_deg = [
                     parseFloat(cgRoll.value),
                     parseFloat(cgPitch.value),
                     parseFloat(cgYaw.value)
                 ];
                 
-                const CB_orientation = [
+                const CB_orientation_deg = [
                     parseFloat(cbRoll.value),
                     parseFloat(cbPitch.value),
                     parseFloat(cbYaw.value)
@@ -4298,25 +4298,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.currentVesselModel.config.geometry.CG_position = CG;
                 window.currentVesselModel.config.geometry.CB_position = CB;
                 
-                window.currentVesselModel.config.geometry.CO_orientation = CO_orientation;
-                window.currentVesselModel.config.geometry.CG_orientation = CG_orientation;
-                window.currentVesselModel.config.geometry.CB_orientation = CB_orientation;
+                // Pass degree values to the 3D scene update
+                // (updateCenterPoint will convert them to radians internally for storage)
+                if (window.threeScene) {
+                    // Update the ThreeScene center points
+                    window.threeScene.updateCenterPoint('CO', CO, CO_orientation_deg);
+                    window.threeScene.updateCenterPoint('CG', CG, CG_orientation_deg);
+                    window.threeScene.updateCenterPoint('CB', CB, CB_orientation_deg);
+                    
+                    // Force a rendering update
+                    window.threeScene.render();
+                }
                 
                 window.currentVesselModel.config.geometry.geometry_file = geometryFilePath.value;
                 
                 // Store axis direction configuration in the model
                 window.currentVesselModel.config.geometry.axisConfig = axisConfig;
-                
-                // Update 3D visualization with new center point positions and orientations
-                if (window.threeScene) {
-                    // Update the ThreeScene center points
-                    window.threeScene.updateCenterPoint('CO', CO, CO_orientation);
-                    window.threeScene.updateCenterPoint('CG', CG, CG_orientation);
-                    window.threeScene.updateCenterPoint('CB', CB, CB_orientation);
-                    
-                    // Force a rendering update
-                    window.threeScene.render();
-                }
                 
                 // Close the modal
                 geometryModal.hide();

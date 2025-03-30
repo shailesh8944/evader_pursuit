@@ -3522,10 +3522,17 @@ class ThreeScene {
                 
                 // Update orientation if provided
                 if (orientation && Array.isArray(orientation) && orientation.length === 3) {
-                    window.currentVesselModel.config.geometry[`${type}_orientation`] = orientation;
+                    // Convert orientation to radians for storage in the YAML file
+                    const orientationInRadians = [
+                        THREE.MathUtils.degToRad(orientation[0]),
+                        THREE.MathUtils.degToRad(orientation[1]),
+                        THREE.MathUtils.degToRad(orientation[2])
+                    ];
                     
-                    // Apply rotation to the 3D object if needed
-                    // Convert Euler angles in degrees to radians for Three.js
+                    // Store radians in the model for YAML export
+                    window.currentVesselModel.config.geometry[`${type}_orientation`] = orientationInRadians;
+                    
+                    // Apply rotation to the 3D object (Three.js uses radians)
                     const rotX = THREE.MathUtils.degToRad(orientation[0]);
                     const rotY = THREE.MathUtils.degToRad(orientation[1]);
                     const rotZ = THREE.MathUtils.degToRad(orientation[2]);
@@ -3587,10 +3594,8 @@ class ThreeScene {
         const coOrientation = geometry.CO_orientation || [0, 0, 0];
         this.coPoint = this.createCenterPoint('CO', coPosition, 0xff4444);
         if (coOrientation && coOrientation.every(val => val !== 0)) {
-            const rotX = THREE.MathUtils.degToRad(coOrientation[0]);
-            const rotY = THREE.MathUtils.degToRad(coOrientation[1]);
-            const rotZ = THREE.MathUtils.degToRad(coOrientation[2]);
-            this.coPoint.rotation.set(rotX, rotY, rotZ);
+            // Apply rotation directly if values are already in radians
+            this.coPoint.rotation.set(coOrientation[0], coOrientation[1], coOrientation[2]);
         }
         this.scene.add(this.coPoint);
         
@@ -3599,10 +3604,8 @@ class ThreeScene {
         const cgOrientation = geometry.CG_orientation || [0, 0, 0];
         this.cgPoint = this.createCenterPoint('CG', cgPosition, 0x44ff44);
         if (cgOrientation && cgOrientation.every(val => val !== 0)) {
-            const rotX = THREE.MathUtils.degToRad(cgOrientation[0]);
-            const rotY = THREE.MathUtils.degToRad(cgOrientation[1]);
-            const rotZ = THREE.MathUtils.degToRad(cgOrientation[2]);
-            this.cgPoint.rotation.set(rotX, rotY, rotZ);
+            // Apply rotation directly if values are already in radians
+            this.cgPoint.rotation.set(cgOrientation[0], cgOrientation[1], cgOrientation[2]);
         }
         this.scene.add(this.cgPoint);
         
@@ -3611,10 +3614,8 @@ class ThreeScene {
         const cbOrientation = geometry.CB_orientation || [0, 0, 0];
         this.cbPoint = this.createCenterPoint('CB', cbPosition, 0x4444ff);
         if (cbOrientation && cbOrientation.every(val => val !== 0)) {
-            const rotX = THREE.MathUtils.degToRad(cbOrientation[0]);
-            const rotY = THREE.MathUtils.degToRad(cbOrientation[1]);
-            const rotZ = THREE.MathUtils.degToRad(cbOrientation[2]);
-            this.cbPoint.rotation.set(rotX, rotY, rotZ);
+            // Apply rotation directly if values are already in radians
+            this.cbPoint.rotation.set(cbOrientation[0], cbOrientation[1], cbOrientation[2]);
         }
         this.scene.add(this.cbPoint);
         
@@ -3634,11 +3635,18 @@ class ThreeScene {
                 object.position.z
             ];
             
-            // Extract rotation in degrees
-            const orientation = [
+            // Extract rotation in degrees for UI display
+            const orientationDegrees = [
                 THREE.MathUtils.radToDeg(object.rotation.x),
                 THREE.MathUtils.radToDeg(object.rotation.y),
                 THREE.MathUtils.radToDeg(object.rotation.z)
+            ];
+            
+            // Store orientation in radians for YAML export
+            const orientationRadians = [
+                object.rotation.x,
+                object.rotation.y,
+                object.rotation.z
             ];
             
             // Update the model data
@@ -3648,13 +3656,13 @@ class ThreeScene {
                 
                 // Update new format
                 window.currentVesselModel.config.geometry[`${type}_position`] = position;
-                window.currentVesselModel.config.geometry[`${type}_orientation`] = orientation;
+                window.currentVesselModel.config.geometry[`${type}_orientation`] = orientationRadians;
                 
-                // Update UI
-                this.updateCenterPointUI(type, position, orientation);
+                // Update UI (using degrees for display)
+                this.updateCenterPointUI(type, position, orientationDegrees);
                 
                 console.log(`${type} position updated to:`, position);
-                console.log(`${type} orientation updated to:`, orientation);
+                console.log(`${type} orientation updated to (radians):`, orientationRadians);
             }
         }
     }
@@ -3670,8 +3678,15 @@ class ThreeScene {
             object.position.z.toFixed(2)
         ];
         
-        // Get orientation in degrees
-        const orientation = [
+        // Get orientation in radians
+        const orientationRad = [
+            object.rotation.x.toFixed(4),
+            object.rotation.y.toFixed(4),
+            object.rotation.z.toFixed(4)
+        ];
+        
+        // Get orientation in degrees for display
+        const orientationDeg = [
             THREE.MathUtils.radToDeg(object.rotation.x).toFixed(2),
             THREE.MathUtils.radToDeg(object.rotation.y).toFixed(2),
             THREE.MathUtils.radToDeg(object.rotation.z).toFixed(2)
@@ -3694,104 +3709,14 @@ class ThreeScene {
                         <strong>Position:</strong> [${position.join(', ')}]
                     </div>
                     <div class="info-item">
-                        <strong>Orientation:</strong> [${orientation.join(', ')}]
+                        <strong>Orientation (rad):</strong> [${orientationRad.join(', ')}]
                     </div>
-                    <div class="form-group mt-3">
-                        <label>Position</label>
-                        <div class="transform-inputs">
-                            <div class="input-group">
-                                <span class="input-group-text">X</span>
-                                <input type="number" class="form-control" id="posX" value="${object.position.x.toFixed(2)}" step="0.1">
-                            </div>
-                            <div class="input-group">
-                                <span class="input-group-text">Y</span>
-                                <input type="number" class="form-control" id="posY" value="${object.position.y.toFixed(2)}" step="0.1">
-                            </div>
-                            <div class="input-group">
-                                <span class="input-group-text">Z</span>
-                                <input type="number" class="form-control" id="posZ" value="${object.position.z.toFixed(2)}" step="0.1">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-group mt-3">
-                        <label>Orientation (degrees)</label>
-                        <div class="transform-inputs">
-                            <div class="input-group">
-                                <span class="input-group-text">Roll</span>
-                                <input type="number" class="form-control" id="rotX" value="${orientation[0]}" step="5">
-                            </div>
-                            <div class="input-group">
-                                <span class="input-group-text">Pitch</span>
-                                <input type="number" class="form-control" id="rotY" value="${orientation[1]}" step="5">
-                            </div>
-                            <div class="input-group">
-                                <span class="input-group-text">Yaw</span>
-                                <input type="number" class="form-control" id="rotZ" value="${orientation[2]}" step="5">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="d-grid gap-2 mt-3">
-                        <button class="btn btn-primary" id="btnApplyTransform">Apply Changes</button>
+                    <div class="info-item">
+                        <strong>Orientation (deg):</strong> [${orientationDeg.join(', ')}]
                     </div>
                 </div>
             `;
-            
-            // Set up event listeners for the position inputs and apply button
-            const btnApplyTransform = document.getElementById('btnApplyTransform');
-            const posX = document.getElementById('posX');
-            const posY = document.getElementById('posY');
-            const posZ = document.getElementById('posZ');
-            const rotX = document.getElementById('rotX');
-            const rotY = document.getElementById('rotY');
-            const rotZ = document.getElementById('rotZ');
-            
-            if (btnApplyTransform && posX && posY && posZ && rotX && rotY && rotZ) {
-                btnApplyTransform.addEventListener('click', () => {
-                    const newX = parseFloat(posX.value);
-                    const newY = parseFloat(posY.value);
-                    const newZ = parseFloat(posZ.value);
-                    
-                    const newRotX = parseFloat(rotX.value);
-                    const newRotY = parseFloat(rotY.value);
-                    const newRotZ = parseFloat(rotZ.value);
-                    
-                    if (!isNaN(newX) && !isNaN(newY) && !isNaN(newZ) &&
-                        !isNaN(newRotX) && !isNaN(newRotY) && !isNaN(newRotZ)) {
-                        
-                        // Update position
-                        object.position.set(newX, newY, newZ);
-                        
-                        // Update rotation (convert degrees to radians)
-                        object.rotation.set(
-                            THREE.MathUtils.degToRad(newRotX),
-                            THREE.MathUtils.degToRad(newRotY),
-                            THREE.MathUtils.degToRad(newRotZ)
-                        );
-                        
-                        // Update the model
-                        if (window.currentVesselModel && window.currentVesselModel.config) {
-                            // Update legacy format
-                            window.currentVesselModel.config.geometry[type] = [newX, newY, newZ];
-                            
-                            // Update new format
-                            window.currentVesselModel.config.geometry[`${type}_position`] = [newX, newY, newZ];
-                            window.currentVesselModel.config.geometry[`${type}_orientation`] = [newRotX, newRotY, newRotZ];
-                            
-                            // Update UI if geometry modal is open
-                            this.updateCenterPointUI(type, [newX, newY, newZ], [newRotX, newRotY, newRotZ]);
-                            
-                            console.log(`Updated ${type} position to:`, [newX, newY, newZ]);
-                            console.log(`Updated ${type} orientation to:`, [newRotX, newRotY, newRotZ]);
-                        }
-                        
-                        this.render();
-                    }
-                });
-            }
         }
-        
-        // Also update the transform info panel
-        this.updateTransformInfo();
     }
 
     // Add method to clear component info
