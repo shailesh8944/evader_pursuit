@@ -1575,6 +1575,7 @@ class ThreeScene {
         html += `
             <div class="mt-3">
                 <button id="btnConfigureComponent" class="btn btn-primary">${buttonText}</button>
+                ${componentData ? '<button id="btnDeleteComponent" class="btn btn-danger ms-2">Delete Component</button>' : ''}
             </div>
         `;
         
@@ -1597,6 +1598,49 @@ class ThreeScene {
                 configBtn.addEventListener('click', () => {
                     const typeValue = document.getElementById('componentTypeSelect').value;
                     this.showComponentConfigModal(object, typeValue);
+                });
+            }
+            
+            // Add event listener for delete button
+            const deleteBtn = document.getElementById('btnDeleteComponent');
+            if (deleteBtn && componentType && componentId) {
+                deleteBtn.addEventListener('click', () => {
+                    if (confirm(`Are you sure you want to delete this ${componentType}?`)) {
+                        // Remove the component from the vessel model
+                        if (componentType === 'controlSurface') {
+                            vesselModel.removeControlSurface(componentId);
+                        } else if (componentType === 'thruster') {
+                            vesselModel.removeThruster(componentId);
+                        } else if (componentType === 'sensor') {
+                            vesselModel.removeSensor(componentId);
+                        }
+                        
+                        // Remove the mapping
+                        vesselModel.unmapModelComponent(object.uuid);
+                        
+                        // Remove component axes if they exist
+                        const axesChild = object.children.find(child => child.userData.isComponentAxes);
+                        if (axesChild) {
+                            object.remove(axesChild);
+                        }
+                        
+                        // Restore original material if needed
+                        this.restoreOriginalMaterial(object);
+                        
+                        // Refresh the component info display
+                        this.showComponentInfo(object);
+                        
+                        // Update scene hierarchy if needed
+                        this.updateSceneHierarchy();
+                        
+                        // Render scene
+                        this.render();
+                        
+                        // Show notification if the function exists
+                        if (typeof showNotification === 'function') {
+                            showNotification(`Deleted ${componentType} (ID: ${componentId})`, 'success');
+                        }
+                    }
                 });
             }
             
