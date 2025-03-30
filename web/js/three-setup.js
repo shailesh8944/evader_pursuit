@@ -626,7 +626,27 @@ class ThreeScene {
     }
 
     addComponentAxes(component) {
-        const axes = this.createLocalAxes();
+        // Calculate component dimensions to determine appropriate axes size
+        let componentSize = 0.3; // Default fallback size
+        
+        // Get component dimensions if available
+        if (component.geometry) {
+            // Use bounding box to determine size
+            component.geometry.computeBoundingBox();
+            const boundingBox = component.geometry.boundingBox;
+            const width = boundingBox.max.x - boundingBox.min.x;
+            const height = boundingBox.max.y - boundingBox.min.y;
+            const depth = boundingBox.max.z - boundingBox.min.z;
+            
+            // Use the largest dimension to calculate a proportional axes size
+            const maxDimension = Math.max(width, height, depth);
+            componentSize = maxDimension * 0.5; // 50% of the largest dimension
+            
+            // Clamp the size to reasonable bounds
+            componentSize = Math.max(0.05, Math.min(componentSize, 0.5));
+        }
+        
+        const axes = this.createLocalAxes(componentSize);
         axes.userData.isAxes = true;
         axes.userData.isComponentAxes = true;
         axes.userData.parentId = component.userData.id;
@@ -3224,9 +3244,29 @@ class ThreeScene {
             console.error(`Failed to determine component ID and type for: ${component.name}`);
         }
         
+        // Calculate component dimensions to determine appropriate axes size
+        let componentSize = 0.15; // Default fallback size
+        
+        // Get component dimensions
+        if (component.geometry) {
+            // Use bounding box to determine size
+            component.geometry.computeBoundingBox();
+            const boundingBox = component.geometry.boundingBox;
+            const width = boundingBox.max.x - boundingBox.min.x;
+            const height = boundingBox.max.y - boundingBox.min.y;
+            const depth = boundingBox.max.z - boundingBox.min.z;
+            
+            // Use the largest dimension to calculate a proportional axes size
+            const maxDimension = Math.max(width, height, depth);
+            componentSize = maxDimension * 0.5; // 50% of the largest dimension
+            
+            // Clamp the size to reasonable bounds
+            componentSize = Math.max(0.05, Math.min(componentSize, 0.5));
+        }
+        
         // Create axes
-        const axisLength = size;
-        const axisRadius = size * 0.05;
+        const axisLength = componentSize;
+        const axisRadius = componentSize * 0.05;
         
         // Add a center sphere to visually indicate the pivot point
         const centerSphereGeometry = new THREE.SphereGeometry(axisRadius * 1.5, 8, 8);
@@ -3271,7 +3311,7 @@ class ThreeScene {
         zCone.position.set(0, 0, axisLength);
         
         // Add axis labels
-        const labelSize = size * 0.3;
+        const labelSize = componentSize * 0.3;
         const labelOffset = axisLength * 1.2;
         
         // X label
