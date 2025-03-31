@@ -62,7 +62,7 @@ class IMUSensor(BaseSensor):
         state_der = self.vessel_node.vessel.current_state_der
         
         # Handle both quaternion and euler angle inputs
-        if quat:
+        if not quat:
             # Convert euler angles to quaternion
             eul = state[9:12]
             quat = kin.eul_to_quat(eul)
@@ -165,8 +165,8 @@ class EncoderSensor(BaseSensor):
         super().__init__(sensor_config, vessel_id, topic_prefix, vessel_node)
         
         # Get number of control surfaces and thrusters from vessel
-        self.num_control_surfaces = len(vessel_node.vessel.control_surfaces['control_surfaces'])
-        self.num_thrusters = len(vessel_node.vessel.thrusters['thrusters'])
+        self.num_control_surfaces = len(vessel_node.vessel.control_surfaces['control_surfaces']) if 'control_surfaces' in vessel_node.vessel.__dict__ else 0
+        self.num_thrusters = len(vessel_node.vessel.thrusters['thrusters']) if 'thrusters' in vessel_node.vessel.__dict__ else 0
         
         # Calculate indices in state vector for actuators
         # From vessel_ode: state vector structure is:

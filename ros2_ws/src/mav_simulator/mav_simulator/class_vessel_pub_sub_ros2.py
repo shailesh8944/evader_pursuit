@@ -50,21 +50,28 @@ class Vessel_Pub_Sub():
         self.topic_prefix = f'{self.vessel_name}_{self.vessel_id:02d}'
         
         # Get control surfaces and thrusters directly from vessel
-        self.control_surfaces = vessel.control_surfaces['control_surfaces']
-        self.thrusters = vessel.thrusters['thrusters']
-        
-        # Store actuator IDs with type prefixes
-        # cs_ for control surfaces, th_ for thrusters
-        self.control_surface_ids = {}  # Maps 'cs_id' to index
-        self.thruster_ids = {}        # Maps 'th_id' to index
-        
-        for idx, cs in enumerate(self.control_surfaces):
-            cs_id = cs.get('control_surface_id', idx+1)
-            self.control_surface_ids[f'cs_{cs_id}'] = idx
+
+        if 'control_surfaces' in vessel.__dict__:
+            self.control_surfaces = vessel.control_surfaces['control_surfaces']
+
+            # Store actuator IDs with type prefixes
+            # cs_ for control surfaces, th_ for thrusters
+            self.control_surface_ids = {}  # Maps 'cs_id' to index
+
+            for idx, cs in enumerate(self.control_surfaces):
+                cs_id = cs.get('control_surface_id', idx+1)
+                self.control_surface_ids[f'cs_{cs_id}'] = idx
+
+        if 'thrusters' in vessel.__dict__:
+            self.thrusters = vessel.thrusters['thrusters']
             
-        for idx, th in enumerate(self.thrusters):
-            th_id = th.get('thruster_id', idx+1)
-            self.thruster_ids[f'th_{th_id}'] = idx
+            # Store actuator IDs with type prefixes
+            # cs_ for control surfaces, th_ for thrusters        
+            self.thruster_ids = {}        # Maps 'th_id' to index
+                
+            for idx, th in enumerate(self.thrusters):
+                th_id = th.get('thruster_id', idx+1)
+                self.thruster_ids[f'th_{th_id}'] = idx
         
         # self.delta_c = np.zeros(len(self.control_surfaces))
         # self.n_c = np.zeros(len(self.thrusters))
@@ -258,9 +265,16 @@ class Vessel_Pub_Sub():
         
         # Position and orientation
         msg.pose.pose.position = Point(x=state[6], y=state[7], z=state[8])
-        msg.pose.pose.orientation = Quaternion(
-            x=state[10], y=state[11], z=state[12], w=state[9]
-        )
+        
+        if self.vessel.use_quaternion:
+            msg.pose.pose.orientation = Quaternion(
+                x=state[10], y=state[11], z=state[12], w=state[9]
+            )
+        else:
+            state_quat = kin.eul_to_quat(state[9:12])
+            msg.pose.pose.orientation = Quaternion(
+                x=state_quat[1], y=state_quat[2], z=state_quat[3], w=state_quat[0]
+            )
         
         # Linear and angular velocities
         msg.twist.twist.linear = Vector3(x=state[0], y=state[1], z=state[2])

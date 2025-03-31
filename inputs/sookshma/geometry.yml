@@ -1,0 +1,18 @@
+# Dimensions of the box enclosing the vessel
+length: 1
+breadth: 0.24
+depth: 0.5
+gyration: [0.096, 0.25, 0.25]
+CO:
+  position: [0.0, 0.0, 0.0]
+  orientation: [0.0, 0.0, 0.0]
+CG:
+  position: [2.89415958e-02, 0.0, -1.62558889e-01]
+  orientation: [0.0, 0.0, 0.0]
+CB:
+  position: [2.89415958e-02, 0.0, -1.36000000e-01]
+  orientation: [0.0, 0.0, 0.0]
+
+geometry_file: /workspaces/mavlab/inputs/sookshma/HydRA/input/sookshma.gdf
+
+Fn: 0.16
