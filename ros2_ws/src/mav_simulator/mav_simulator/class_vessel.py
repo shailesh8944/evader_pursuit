@@ -115,19 +115,22 @@ class Vessel:
             self._dimensionalize_coefficients(self.rho, self.L, self.U)
         
         # Load NACA airfoil data
-        if 'naca_file' in vessel_params['control_surfaces']:
-            self.naca_data = pd.read_csv(vessel_params['control_surfaces']['naca_file'])
-        else:
-            raise ValueError("NACA airfoil data file path not specified in vessel parameters")
+        if 'control_surfaces' in vessel_params:
+            if 'naca_file' in vessel_params['control_surfaces']:
+                self.naca_data = pd.read_csv(vessel_params['control_surfaces']['naca_file'])
+            else:
+                raise ValueError("NACA airfoil data file path not specified in vessel parameters")
         
         # Determine state vector size based on attitude representation and actuators
         self.use_quaternion = vessel_params['initial_conditions'].get('use_quaternion', False)
-        attitude_size = 4 if self.use_quaternion else 3
+        attitude_size = 4 if self.use_quaternion else 3        
 
-        self.control_surfaces = vessel_params['control_surfaces']
+        if 'control_surfaces' in vessel_params:
+            self.control_surfaces = vessel_params['control_surfaces']
         n_control_surfaces = len(self.control_surfaces) if hasattr(self, 'control_surfaces') else 0
 
-        self.thrusters = vessel_params['thrusters']
+        if 'thrusters' in vessel_params:
+            self.thrusters = vessel_params['thrusters']
         n_thrusters = len(self.thrusters) if hasattr(self, 'thrusters') else 0
         
         # Build initial state vector
@@ -163,7 +166,6 @@ class Vessel:
         self.control_surface_control_type = vessel_params['control']['control_surface_control_type']
         self.thruster_control_type = vessel_params['control']['thruster_control_type']
         
-        self.tp = self.thrusters['thrusters'][0]['tp']
         # Initialize commanded values
         self.delta_c = np.zeros(n_control_surfaces)
         self.n_c = np.zeros(n_thrusters)
@@ -390,7 +392,7 @@ class Vessel:
         F = np.zeros(6)
                     
         # Dictionary mapping velocity components to values
-        vel_map = {'u': u, 'v': v, 'w': w, 'p': p, 'q': q, 'r': r}
+        vel_map = {'u': u - self.U, 'v': v, 'w': w, 'p': p, 'q': q, 'r': r}
         
         # Process each hydrodynamic coefficient from the vessel's hydrodynamics dictionary
         # Example coefficients: X_u_u (X-force dependent on u*u), Y_v_v (Y-force dependent on v*v)
@@ -602,8 +604,8 @@ class Vessel:
             X_prop = KT * self.rho * thruster['D_prop']**4 * np.abs(n_prop[i]) * n_prop[i]
             
             # Apply thrust deduction if available
-            if hasattr(self, 'tp'):
-                X_prop *= (1 - self.tp)
+            if 'tp' in thruster:
+                X_prop *= (1 - thruster['tp'])
 
             # Force vector in thruster frame (thrust acts along x-axis of thruster)
             F_thruster = np.array([X_prop, 0.0, 0.0])

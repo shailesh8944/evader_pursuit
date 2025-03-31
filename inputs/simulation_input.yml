@@ -23,34 +23,49 @@ geofence:
   - [12.993335, 80.239098]
   - [12.993496, 80.239007] 
 
-nagents: 2
+nagents: 1
 
 agents:
-  -
-    name: mavymini
-    type: auv
-    geometry: /workspaces/mavlab/inputs/{name}/geometry.yml
-    inertia: /workspaces/mavlab/inputs/{name}/inertia.yml
-    hydrodynamics: /workspaces/mavlab/inputs/{name}/hydrodynamics.yml
-    control_surfaces: /workspaces/mavlab/inputs/{name}/control_surfaces.yml
-    initial_conditions: /workspaces/mavlab/inputs/{name}/initial_conditions.yml
-    sensors: /workspaces/mavlab/inputs/{name}/sensors.yml
-    guidance: /workspaces/mavlab/inputs/{name}/guidance.yml
-    control: /workspaces/mavlab/inputs/{name}/control.yml
-    thrusters: /workspaces/mavlab/inputs/{name}/thrusters.yml
-  # This is an example of multiple agents
-  -
-    name: mavymini2
-    type: auv
-    geometry: /workspaces/mavlab/inputs/{name}/geometry.yml
-    inertia: /workspaces/mavlab/inputs/{name}/inertia.yml
-    hydrodynamics: /workspaces/mavlab/inputs/{name}/hydrodynamics.yml
-    control_surfaces: /workspaces/mavlab/inputs/{name}/control_surfaces.yml
-    initial_conditions: /workspaces/mavlab/inputs/{name}/initial_conditions.yml
-    sensors: /workspaces/mavlab/inputs/{name}/sensors.yml
-    guidance: /workspaces/mavlab/inputs/{name}/guidance.yml
-    control: /workspaces/mavlab/inputs/{name}/control.yml
-    thrusters: /workspaces/mavlab/inputs/{name}/thrusters.yml
+  - 
+    name: sookshma
+    type: usv
+    U: 0.5
+    geometry: /workspaces/mavlab/inputs/sookshma/geometry.yml
+    inertia: /workspaces/mavlab/inputs/sookshma/inertia.yml
+    hydrodynamics: /workspaces/mavlab/inputs/sookshma/hydrodynamics.yml
+    # control_surfaces: /workspaces/mavlab/inputs/sookshma/control_surfaces.yml
+    initial_conditions: /workspaces/mavlab/inputs/sookshma/initial_conditions.yml
+    sensors: /workspaces/mavlab/inputs/sookshma/sensors.yml
+    guidance: /workspaces/mavlab/inputs/sookshma/guidance.yml
+    control: /workspaces/mavlab/inputs/sookshma/control.yml
+    # thrusters: /workspaces/mavlab/inputs/sookshma/thrusters.yml
+
+# agents:
+#   -
+#     name: mavymini
+#     type: auv
+#     geometry: /workspaces/mavlab/inputs/{name}/geometry.yml
+#     inertia: /workspaces/mavlab/inputs/{name}/inertia.yml
+#     hydrodynamics: /workspaces/mavlab/inputs/{name}/hydrodynamics.yml
+#     control_surfaces: /workspaces/mavlab/inputs/{name}/control_surfaces.yml
+#     initial_conditions: /workspaces/mavlab/inputs/{name}/initial_conditions.yml
+#     sensors: /workspaces/mavlab/inputs/{name}/sensors.yml
+#     guidance: /workspaces/mavlab/inputs/{name}/guidance.yml
+#     control: /workspaces/mavlab/inputs/{name}/control.yml
+#     thrusters: /workspaces/mavlab/inputs/{name}/thrusters.yml
+#   # This is an example of multiple agents
+#   -
+#     name: mavymini2
+#     type: auv
+#     geometry: /workspaces/mavlab/inputs/{name}/geometry.yml
+#     inertia: /workspaces/mavlab/inputs/{name}/inertia.yml
+#     hydrodynamics: /workspaces/mavlab/inputs/{name}/hydrodynamics.yml
+#     control_surfaces: /workspaces/mavlab/inputs/{name}/control_surfaces.yml
+#     initial_conditions: /workspaces/mavlab/inputs/{name}/initial_conditions.yml
+#     sensors: /workspaces/mavlab/inputs/{name}/sensors.yml
+#     guidance: /workspaces/mavlab/inputs/{name}/guidance.yml
+#     control: /workspaces/mavlab/inputs/{name}/control.yml
+#     thrusters: /workspaces/mavlab/inputs/{name}/thrusters.yml
 
 
 
