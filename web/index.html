@@ -52,11 +52,25 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/stats.min.js"></script>
     
+    <!-- Water and Sky modules for the simulator -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/objects/Water.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/objects/Sky.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
+    
     <!-- Additional libraries for file handling and UI functionality -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.6.5/split.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    
+    <!-- Custom JS files -->
+    <script src="js/vessel-model.js"></script>
+    <script src="js/gdf-loader.js"></script>
+    <script src="js/controls.js"></script>
+    <script src="js/three-setup.js"></script>
+    <script src="js/yaml-generator.js"></script>
+    <script src="js/vessel-simulator.js"></script>
+    <script src="js/main.js"></script>
 </head>
 <body>
     <!-- Main application container with CAD-like layout -->
@@ -86,6 +100,10 @@
                 <div class="toolbar-divider"></div>
                 <button class="toolbar-btn" id="btn-generate-yaml" title="Generate YAML files">
                     <i class="bi bi-file-earmark-code"></i> Generate YAML
+                </button>
+                <div class="toolbar-divider"></div>
+                <button class="toolbar-btn" id="btn-run-simulator" title="Run vessel simulator">
+                    <i class="bi bi-play-fill"></i> Run Simulator
                 </button>
                 <div class="toolbar-divider"></div>
                 <button class="toolbar-btn theme-toggle-btn" id="btn-toggle-theme" title="Toggle dark/light mode">
@@ -1822,16 +1840,27 @@ geofence:
         </div>
     </div>
 
-    <!-- Bootstrap JS and Popper.js -->
+    <!-- Vessel Simulator Modal -->
+    <div class="modal fade" id="simulatorModal" tabindex="-1" aria-labelledby="simulatorModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="simulatorModalLabel">Vessel Simulator</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div id="simulator-container" style="width: 100%; height: 100%;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Custom JS -->
-    <script src="js/vessel-model.js"></script>
-    <script src="js/yaml-generator.js"></script>
-    <script src="js/gdf-loader.js"></script>
-    <script src="js/controls.js"></script>
-    <script src="js/three-setup.js"></script>
-    <script src="js/main.js"></script>
     <script>
         // Add this script to toggle visibility of location/orientation fields
         document.addEventListener('DOMContentLoaded', function() {
