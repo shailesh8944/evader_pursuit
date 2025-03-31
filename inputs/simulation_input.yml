@@ -29,16 +29,18 @@ agents:
   - 
     name: sookshma
     type: usv
-    U: 0.5
+    U: 0.5 # For dinmensionalization of hydrodynamic coefficients
+    maintain_speed: true
+    active_dof: [1,1,1,1,1,1] # All degrees of freedom are active
     geometry: /workspaces/mavlab/inputs/sookshma/geometry.yml
     inertia: /workspaces/mavlab/inputs/sookshma/inertia.yml
     hydrodynamics: /workspaces/mavlab/inputs/sookshma/hydrodynamics.yml
-    # control_surfaces: /workspaces/mavlab/inputs/sookshma/control_surfaces.yml
+    control_surfaces: /workspaces/mavlab/inputs/sookshma/control_surfaces.yml
     initial_conditions: /workspaces/mavlab/inputs/sookshma/initial_conditions.yml
     sensors: /workspaces/mavlab/inputs/sookshma/sensors.yml
     guidance: /workspaces/mavlab/inputs/sookshma/guidance.yml
     control: /workspaces/mavlab/inputs/sookshma/control.yml
-    # thrusters: /workspaces/mavlab/inputs/sookshma/thrusters.yml
+    thrusters: /workspaces/mavlab/inputs/sookshma/thrusters.yml
 
 # agents:
 #   -

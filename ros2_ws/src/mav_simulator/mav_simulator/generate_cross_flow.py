@@ -25,6 +25,7 @@ import argparse
 from pathlib import Path
 from mav_simulator.class_grid import Grid
 from mav_simulator.calculate_hydrodynamics import CalculateHydrodynamics
+from mav_simulator.terminalMessages import print_info, print_warning, print_error
 
 class CrossFlowGenerator:
     def __init__(self, gdf_file, hydra_file, yaml_file, initial_conditions_file, vessel_type='auv'):
@@ -65,10 +66,10 @@ class CrossFlowGenerator:
     def calculate_coefficients(self):
         """Calculate cross-flow drag coefficients."""
         if self.vessel_type == 'auv':
-            print("Calculating coefficients for AUV...")
+            print_info("Calculating coefficients for AUV...")
             self.hydro_calc.cross_flow_drag_AUV()
         else:
-            print("Calculating coefficients for surface ship...")
+            print_info("Calculating coefficients for surface ship...")
             self.hydro_calc.cross_flow_drag()
         return self.hydro_calc.ode_options
 
@@ -83,7 +84,7 @@ class CrossFlowGenerator:
         # Check if cross_flow_drag calculation is enabled
         cross_flow_enabled = hydro_data.get('cross_flow_drag', True)
         if not cross_flow_enabled:
-            print("cross_flow_drag is set to False. Skipping coefficient calculations.")
+            print_warning("cross_flow_drag is set to False. Skipping coefficient calculations.")
             return
             
         # Calculate new coefficients
@@ -135,7 +136,7 @@ class CrossFlowGenerator:
                 for prefix in coeff_groups:
                     if key.startswith(prefix):
                         coeff_groups[prefix].append((key, float(value)))
-                        print(f"Adding new coefficient: {key}")
+                        print_info(f"Adding new coefficient: {key}")
                         break
         
         # Write each group with its comment
@@ -168,7 +169,7 @@ def main():
     # Create generator and update coefficients
     generator = CrossFlowGenerator(gdf_file, hydra_file, yaml_file, initial_conditions_file, vessel_type=args.type)
     generator.update_yaml_file()
-    print(f"Process completed for {args.type.upper()}")
+    print_info(f"Process completed for {args.type.upper()}")
 
 if __name__ == '__main__':
     main() 

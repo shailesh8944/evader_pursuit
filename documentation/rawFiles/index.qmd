@@ -17,7 +17,15 @@ The Vessel Configurator is what allows you to configure a new marine vessel. You
 
 The Vessel Simulation is where the actual simulation takes place. It follows the dynamics as per the parameters you set in the Vessel Configurator. This is where you can also custom code your control and guidance algorithms which will publish the required data in ROS2 to make the vessel run. The various sensors are modelled with real world physics whose outputs you can see in the ROS2 terminal, or from the  GUI.
 
+## Key Features
+
+- **Realistic Physics**: Follows dyanmics modelling as defined by Fossen's \textit{Handbook of Marine Craft Hydrodynamics and Motion Control}
+- **Modular Architecture**: Easy integration of custom vessel models, sensors, and controllers
+- **ROS2 Integration**: Native support for Robot Operating System 2 (ROS2) for distributed robotics applications
+- **Web Application**: Lightweight web application for configuring and running the simulation
+- **Multiple Agents**: Simulate multiple vessels in the same environment
+
 ## How to Use This Documentation
 
-Navigate through the sections using the sidebar. The documentation is organized into Setup, theory on the Kinematics and Dynamics used in the simulator along with the coordinate systems used for various components, python simulator backend and how to use the web GUI.
+Navigate through the sections using the sidebar. The documentation discusses the Setup, theory on the Kinematics and Dynamics used in the simulator, the coordinate systems used for various components (control surfaces, thrusters, sensors and Body centre), the python simulator backend and how to use the Panisim vessel configurator and the Panisim vessel simulator.
 

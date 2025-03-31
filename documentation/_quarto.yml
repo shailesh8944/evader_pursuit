@@ -9,13 +9,13 @@ book:
   repo-url: https://github.com/yourusername/mav_simulator
   repo-actions: [edit, issue]
   chapters:
-    - index.qmd
+    - rawFiles/index.qmd
     - rawFiles/setup.qmd
     - rawFiles/quickstart.qmd
-    - rawFiles/Introduction/intro.qmd
     - part: "Kinematics"
       chapters:
-      - rawFiles/Kinematics/kinematics.qmd
+        - rawFiles/Kinematics/KinematicsEquations.qmd
+        - rawFiles/Kinematics/KinematicsModule.qmd
     - part: "Dynamics"  
       chapters:
       - rawFiles/Dynamics/hydrodynamics.qmd

@@ -26,6 +26,7 @@ import sys
 from mav_simulator.module_kinematics import Smat, eul_to_rotm, eul_rate_matrix, eul_to_quat
 import mav_simulator.module_control as con
 from mav_simulator.calculate_hydrodynamics import CalculateHydrodynamics
+from mav_simulator.terminalMessages import print_debug, print_info, print_warning, print_error
 
 class Vessel:
     """A class representing a marine vessel with its dynamics.
@@ -50,7 +51,7 @@ class Vessel:
     delta_c = None
     n_c = None
     
-    def __init__(self, vessel_params: Dict, hydrodynamic_data: Dict, vessel_id: int, ros_flag: bool = True):
+    def __init__(self, vessel_params: Dict, hydrodynamic_data: Dict, vessel_id: int):
         """Initialize vessel with parameters and hydrodynamic data.
         
         Args:
@@ -58,13 +59,14 @@ class Vessel:
             hydrodynamic_data: Dictionary containing hydrodynamic coefficients
         """
 
+        self.active_dof = vessel_params['active_dof']
+        self.maintain_speed = vessel_params['maintain_speed']
+        
         self.vessel_config = vessel_params
         self.vessel_name = vessel_params['name']
         self.vessel_id = vessel_id
 
         self.gps_datum = vessel_params['gps_datum']
-        # ROS flag
-        self.ros_flag = ros_flag
 
         # Force direction mapping
         self.force_indices = {'X': 0, 'Y': 1, 'Z': 2, 'K': 3, 'M': 4, 'N': 5}
@@ -82,13 +84,19 @@ class Vessel:
         self.CG = vessel_params['geometry']['CG']['position']
         self.gyration = vessel_params['geometry']['gyration']
         
-        if vessel_params['inertia']['inertia_matrix'] == "None" or vessel_params['inertia']['added_mass_matrix'] == "None":
+        if vessel_params['inertia']['inertia_matrix'] == "None":
             hydrodynamics = CalculateHydrodynamics()
             self.mass_matrix = hydrodynamics._generate_mass_matrix(self.CG,self.mass,self.gyration)
-            self.added_mass_matrix = hydrodynamics.calculate_added_mass_from_hydra(hydrodynamic_data['hydra_file'])
         else:
             self.mass_matrix = vessel_params['inertia']['inertia_matrix']
+
+        if vessel_params['inertia']['added_mass_matrix'] == "None":
+            hydrodynamics = CalculateHydrodynamics()
+            self.added_mass_matrix = hydrodynamics.calculate_added_mass_from_hydra(hydrodynamic_data['hydra_file'])
+        else:
             self.added_mass_matrix = vessel_params['inertia']['added_mass_matrix']
+
+
         # Buoyancy parameters
         self.W = self.mass * self.g  # Weight
         self.buoyancy_mass = vessel_params['inertia']['buoyancy_mass']  # Buoyancy force, default to neutral
@@ -114,25 +122,46 @@ class Vessel:
         if not self.dim_flag:
             self._dimensionalize_coefficients(self.rho, self.L, self.U)
         
+
         # Load NACA airfoil data
-        if 'control_surfaces' in vessel_params:
-            if 'naca_file' in vessel_params['control_surfaces']:
-                self.naca_data = pd.read_csv(vessel_params['control_surfaces']['naca_file'])
-            else:
-                raise ValueError("NACA airfoil data file path not specified in vessel parameters")
+        try:
+            self.naca_data = pd.read_csv(vessel_params['control_surfaces']['naca_file'])
+        except:
+            print_warning("NACA airfoil data file path not specified in vessel parameters, will use control surface hydrodynamics if specified")
+            pass
         
         # Determine state vector size based on attitude representation and actuators
         self.use_quaternion = vessel_params['initial_conditions'].get('use_quaternion', False)
         attitude_size = 4 if self.use_quaternion else 3        
 
-        if 'control_surfaces' in vessel_params:
-            self.control_surfaces = vessel_params['control_surfaces']
-        n_control_surfaces = len(self.control_surfaces) if hasattr(self, 'control_surfaces') else 0
 
-        if 'thrusters' in vessel_params:
-            self.thrusters = vessel_params['thrusters']
-        n_thrusters = len(self.thrusters) if hasattr(self, 'thrusters') else 0
+        self.n_control_surfaces = 0
+        self.n_thrusters = 0
         
+        try:
+            if vessel_params['control_surfaces'] is not None:
+                self.control_surfaces = vessel_params['control_surfaces']
+                self.n_control_surfaces = len(self.control_surfaces['control_surfaces']) if 'control_surfaces' in self.control_surfaces else 0
+                print_info(f"Control surfaces for vessel {self.vessel_name}: {self.n_control_surfaces}")
+            else:
+                self.n_control_surfaces = 0
+                print_warning(" No control surfaces specified in vessel parameters")
+        except:
+            print_warning(" No control surfaces specified in vessel parameters")
+            self.n_control_surfaces = 0
+
+        try:
+            if vessel_params['thrusters'] is not None:
+                self.thrusters = vessel_params['thrusters']
+                self.n_thrusters = len(self.thrusters['thrusters']) if 'thrusters' in self.thrusters else 0
+                print_info(f"Thrusters for vessel {self.vessel_name}: {self.n_thrusters}")
+            else:
+                self.n_thrusters = 0
+                print_warning(" No thrusters specified in vessel parameters")
+        except:
+            print_warning(" No thrusters specified in vessel parameters")
+            self.n_thrusters = 0
+
         # Build initial state vector
         initial_velocity = vessel_params['initial_conditions']['start_velocity']
         initial_position = vessel_params['initial_conditions']['start_location']
@@ -141,8 +170,8 @@ class Vessel:
             # Convert Euler angles to quaternion if needed
             initial_orientation = eul_to_quat(initial_orientation)
             
-        initial_control = np.zeros(n_control_surfaces)  # Initial control surface angles
-        initial_thrust = np.zeros(n_thrusters)  # Initial thruster states
+        initial_control = np.zeros(self.n_control_surfaces)  # Initial control surface angles
+        initial_thrust = np.zeros(self.n_thrusters)  # Initial thruster states
         
         self.current_state = np.concatenate([
             initial_velocity,
@@ -163,12 +192,10 @@ class Vessel:
         self.Tmax = vessel_params['sim_time']
         self.dt = vessel_params['time_step']
         self.t = 0.0
-        self.control_surface_control_type = vessel_params['control']['control_surface_control_type']
-        self.thruster_control_type = vessel_params['control']['thruster_control_type']
         
         # Initialize commanded values
-        self.delta_c = np.zeros(n_control_surfaces)
-        self.n_c = np.zeros(n_thrusters)
+        self.delta_c = np.zeros(self.n_control_surfaces)
+        self.n_c = np.zeros(self.n_thrusters)
 
         # Initialize history with pre-allocated array based on simulation time
         num_timesteps = int(self.Tmax / self.dt) + 2
@@ -273,9 +300,7 @@ class Vessel:
         
         # Calculate indices for control surfaces and thrusters
         control_start = attitude_end
-        n_control_surfaces = len(self.control_surfaces) if hasattr(self, 'control_surfaces') else 0
-        thruster_start = control_start + n_control_surfaces
-        n_thrusters = len(self.thrusters) if hasattr(self, 'thrusters') else 0
+        thruster_start = control_start + self.n_control_surfaces
         
         # Extract state components
         vel = state[0:6]  # [u, v, w, p, q, r]
@@ -286,33 +311,21 @@ class Vessel:
             angles = eul_to_rotm(quat)
         else:
             angles = state[9:attitude_end]  # [phi, theta, psi]
-            
-        # Extract control surface angles and thruster states
-        control_angles = state[control_start:thruster_start] if n_control_surfaces > 0 else np.array([])
-        thruster_states = state[thruster_start:] if n_thrusters > 0 else np.array([])
         
-        # Get commanded values
-        if not self.ros_flag:
-            # Get control surface commands
-            if self.control_surface_control_type == 'fixed_rudder':
-                self.delta_c = con.fixed_rudder(t, state, n_control_surfaces, 10.0) #Enter rudder angle here
-            elif self.control_surface_control_type == 'switching_rudder':
-                self.delta_c = con.switching_rudder(t, state, n_control_surfaces)
-            else:
-                raise ValueError(f"Invalid control surface control type: {self.control_surface_control_type}")
-                
-            # Get thruster commands
-            if self.thruster_control_type == 'fixed_rpm':
-                self.n_c = con.fixed_thrust(t, state, n_thrusters,1000.0) #Enter RPM here
-            else:
-                raise ValueError(f"Invalid thruster control type: {self.thruster_control_type}")
+      
         # Initialize state derivative vector
         state_dot = np.zeros_like(state)
         
         # Calculate forces and moments
         F_hyd = self.hydrodynamic_forces(vel)
-        F_control = self.control_forces(control_angles) if n_control_surfaces > 0 else np.zeros(6)
-        F_thrust = self.thruster_forces(thruster_states) if n_thrusters > 0 else np.zeros(6)
+        if self.n_control_surfaces > 0:
+            F_control = self.control_forces(state[control_start:thruster_start])
+        else:
+            F_control = np.zeros(6)
+        if self.n_thrusters > 0:
+            F_thrust = self.thruster_forces(state[thruster_start:])
+        else:
+            F_thrust = np.zeros(6)
         F_g = self.gravitational_forces(angles[0], angles[1])  # Add gravitational forces        
         
         # Calculate mass matrices
@@ -345,9 +358,9 @@ class Vessel:
             state_dot[9:attitude_end] = eul_rate_matrix(angles) @ vel[3:6]
         
         # Calculate control surface derivatives using individual time constants
-        if n_control_surfaces > 0:
+        if self.n_control_surfaces > 0:
             delta_c = np.array(self.delta_c) if isinstance(self.delta_c, (list, np.ndarray)) else np.array([self.delta_c])
-            for i in range(n_control_surfaces):
+            for i in range(self.n_control_surfaces):
                 # Get time constant and limits for this control surface
                 T = self.control_surfaces['control_surfaces'][i]['control_surface_T']
                 delta_max = self.control_surfaces['control_surfaces'][i]['control_surface_delta_max']
@@ -357,22 +370,26 @@ class Vessel:
                 delta_c[i] = np.clip(delta_c[i], -delta_max, delta_max)
                 
                 # Calculate derivative
-                state_dot[control_start + i] = (delta_c[i] - control_angles[i]) / T
+                state_dot[control_start + i] = (delta_c[i] - state[control_start + i]) / T
                 
                 # Apply rate limiting
                 state_dot[control_start + i] = np.clip(state_dot[control_start + i], 
                                                      -deltad_max, 
                                                      deltad_max)
         # Calculate thruster derivatives
-        if n_thrusters > 0:
-            n_c = self.n_c if hasattr(self, 'n_c') else np.zeros(n_thrusters)
-            for i in range(n_thrusters):
-                state_dot[thruster_start + i] = (n_c[i] - thruster_states[i]) / 1.0 # TODO: Add time constant
+        if self.n_thrusters > 0:
+            n_c = self.n_c if hasattr(self, 'n_c') else np.zeros(self.n_thrusters)
+            for i in range(self.n_thrusters):
+                state_dot[thruster_start + i] = (n_c[i] - state[thruster_start + i]) / 1.0 # TODO: Add time constant
                 # Apply rate limiting
                 if hasattr(self, 'nd_max'):
                     state_dot[thruster_start + i] = np.clip(state_dot[thruster_start + i], 
                                                           -self.nd_max, 
                                                           self.nd_max)
+        
+
+        state_dot[0:6] = state_dot[0:6] * self.active_dof
+        state_dot[9:12] = state_dot[9:12] * self.active_dof[3:6]
         
         return state_dot
     
@@ -392,7 +409,10 @@ class Vessel:
         F = np.zeros(6)
                     
         # Dictionary mapping velocity components to values
-        vel_map = {'u': u - self.U, 'v': v, 'w': w, 'p': p, 'q': q, 'r': r}
+        if self.maintain_speed:
+            vel_map = {'u': u - self.U, 'v': v, 'w': w, 'p': p, 'q': q, 'r': r}
+        else:
+            vel_map = {'u': u, 'v': v, 'w': w, 'p': p, 'q': q, 'r': r}
         
         # Process each hydrodynamic coefficient from the vessel's hydrodynamics dictionary
         # Example coefficients: X_u_u (X-force dependent on u*u), Y_v_v (Y-force dependent on v*v)
@@ -450,83 +470,93 @@ class Vessel:
         q = self.current_state[4]
         r = self.current_state[5]
 
-        # First calculate forces from hydrodynamic coefficients if they exist
-        if hasattr(self, 'hydrodynamics'):
-            for coeff_name, coeff_value in self.hydrodynamics.items():
-                if 'delta' in coeff_name and coeff_value != 0:
-                    force_dir = coeff_name.split('_')[0]
-                    if force_dir in self.force_indices:
-                        tau[self.force_indices[force_dir]] += coeff_value * delta
 
         # Then calculate forces from control surfaces
+
+        
         for surface in self.control_surfaces['control_surfaces']:
-            # Get surface parameters
-            sd = surface['control_surface_location']  # [x,y,z] coordinates in body frame
-            area = surface['control_surface_area']
-            
-            # Create rotation matrix from Euler angles
-            phi, theta, psi = surface['control_surface_orientation']
-            cphi = np.cos(phi)
-            sphi = np.sin(phi)
-            cth = np.cos(theta)
-            sth = np.sin(theta)
-            cpsi = np.cos(psi)
-            spsi = np.sin(psi)
-            
-            # Rotation matrix from surface frame to body frame
-            R = np.array([
-                [cth*cpsi, -cth*spsi, sth],
-                [sphi*sth*cpsi + cphi*spsi, -sphi*sth*spsi + cphi*cpsi, -sphi*cth],
-                [-cphi*sth*cpsi + sphi*spsi, cphi*sth*spsi + sphi*cpsi, cphi*cth]
-            ])
 
-            # Calculate local velocities at control surface
-            netU = u
-            netV = v + r*sd[0] + p*sd[2]  # yaw and roll effects on sway
-            netW = w + p*sd[1] - q*sd[0]  # roll and pitch effects on heave
-           
-            # Transform velocities to surface frame
-            V_surface = R.T @ np.array([netU, netV, netW])
-        
-            # Get corresponding delta for this control surface based on surface ID
-            surface_id = surface['control_surface_id']
-            surface_delta = delta[surface_id - 1]  # Subtract 1 since IDs start at 1
-            
-            # Calculate effective angle of attack
-            alpha = np.arctan2(V_surface[2], V_surface[0]) + surface_delta
-            V_mag = np.sqrt(V_surface[0]**2 + V_surface[2]**2)
-            
-            # Calculate dynamic pressure
-            q_dyn = 0.5 * self.rho * V_mag**2 * area
-            
-            # Check if angle of attack is near vertical
-            # stall condition
-            if abs(np.rad2deg(alpha)) > stall_angle:
-                L = 0.0 #Lift is zero at stall
-                D = q_dyn * 0.1  # Use a high drag coefficient (~1.2) for stalled flat plate
+            # If control surface has hydrodynamic coefficients, calculate forces from them
+            if surface['control_surface_hydrodynamics']!= 'None':
+                                  
+                    for coeff_name, coeff_value in surface['control_surface_hydrodynamics'].items():
+                        if 'delta' in coeff_name:
+                             if self.dim_flag:   
+                                factor = 0.5 * self.rho * self.L**3 * self.U**2
+                                coeff_value = coeff_value * factor
+                        force_dir = coeff_name.split('_')[0]
+                        if force_dir in self.force_indices:
+                            tau[self.force_indices[force_dir]] += coeff_value * delta[surface['control_surface_id'] - 1]
+                            
             else:
-                # Normal operation - calculate both lift and drag
-                if Cl is None or Cd is None:
-                    alpha_deg = np.clip(np.rad2deg(alpha), 
-                                      self.naca_data['Alpha'].min(), 
-                                      self.naca_data['Alpha'].max())
-                    Cl = np.interp(alpha_deg, self.naca_data['Alpha'], self.naca_data['Cl'])
-                    Cd = np.interp(alpha_deg, self.naca_data['Alpha'], self.naca_data['Cd'])
-                L = q_dyn * Cl
-                D = q_dyn * Cd
-            # Force vector in surface frame
-            F_surface = np.array([-D, 0.0, -L])  
+                # If control surface has no hydrodynamic coefficients, calculate forces from Aerofoil data
+                
+                # Get surface parameters
+                sd = surface['control_surface_location']  # [x,y,z] coordinates in body frame
+                area = surface['control_surface_area']
+                
+                # Create rotation matrix from Euler angles
+                phi, theta, psi = surface['control_surface_orientation']
+                cphi = np.cos(phi)
+                sphi = np.sin(phi)
+                cth = np.cos(theta)
+                sth = np.sin(theta)
+                cpsi = np.cos(psi)
+                spsi = np.sin(psi)
+                
+                # Rotation matrix from surface frame to body frame
+                R = np.array([
+                    [cth*cpsi, -cth*spsi, sth],
+                    [sphi*sth*cpsi + cphi*spsi, -sphi*sth*spsi + cphi*cpsi, -sphi*cth],
+                    [-cphi*sth*cpsi + sphi*spsi, cphi*sth*spsi + sphi*cpsi, cphi*cth]
+                ])
 
-            # Transform forces to body frame
-            F_body = R @ F_surface
+                # Calculate local velocities at control surface
+                netU = u
+                netV = v + r*sd[0] + p*sd[2]  # yaw and roll effects on sway
+                netW = w + p*sd[1] - q*sd[0]  # roll and pitch effects on heave
             
-            # Add forces
-            tau[0:3] += F_body
+                # Transform velocities to surface frame
+                V_surface = R.T @ np.array([netU, netV, netW])
             
-            # Calculate and add moments
-            tau[3:6] += np.cross(sd, F_body)
+                # Get corresponding delta for this control surface based on surface ID
+                surface_id = surface['control_surface_id']
+                surface_delta = delta[surface_id - 1]  # Subtract 1 since IDs start at 1
+                
+                # Calculate effective angle of attack
+                alpha = np.arctan2(V_surface[2], V_surface[0]) + surface_delta
+                V_mag = np.sqrt(V_surface[0]**2 + V_surface[2]**2)
+                
+                # Calculate dynamic pressure
+                q_dyn = 0.5 * self.rho * V_mag**2 * area
+                
+                # Check if angle of attack is near vertical
+                # stall condition
+                if abs(np.rad2deg(alpha)) > stall_angle:
+                    L = 0.0 #Lift is zero at stall
+                    D = q_dyn * 0.1  # Use a high drag coefficient (~1.2) for stalled flat plate
+                else:
+                    # Normal operation - calculate both lift and drag
+                    if Cl is None or Cd is None:
+                        alpha_deg = np.clip(np.rad2deg(alpha), 
+                                        self.naca_data['Alpha'].min(), 
+                                        self.naca_data['Alpha'].max())
+                        Cl = np.interp(alpha_deg, self.naca_data['Alpha'], self.naca_data['Cl'])
+                        Cd = np.interp(alpha_deg, self.naca_data['Alpha'], self.naca_data['Cd'])
+                    L = q_dyn * Cl
+                    D = q_dyn * Cd
+                # Force vector in surface frame
+                F_surface = np.array([-D, 0.0, -L])  
 
-        
+                # Transform forces to body frame
+                F_body = R @ F_surface
+                
+                # Add forces
+                tau[0:3] += F_body
+                
+                # Calculate and add moments
+                tau[3:6] += np.cross(sd, F_body)
+
         return tau
 
     def thruster_forces(self, n_prop):
@@ -630,11 +660,6 @@ class Vessel:
         self.current_state_der = self.vessel_ode(self.t + self.dt, self.current_state)
         
         self.t = sol.t[-1]
-
-        # Store current state in history
-        if not self.ros_flag:
-            self.history[self.time_index, :] = self.current_state
-            self.time_index += 1
 
     def reset(self):
         """Reset the vessel to the initial state"""

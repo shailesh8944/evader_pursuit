@@ -171,23 +171,19 @@ def transform_to_co_frame(vessel_config: Dict) -> Dict:
         if 'CG' in geometry:
             if 'position' in geometry['CG']:
                 geometry['CG']['position'] = transform_position(geometry['CG']['position'])
-            if 'orientation' in geometry['CG']:
-                geometry['CG']['orientation'] = transform_orientation(geometry['CG']['orientation'])
         
         # Transform CB position and orientation relative to CO
         if 'CB' in geometry:
             if 'position' in geometry['CB']:
                 geometry['CB']['position'] = transform_position(geometry['CB']['position'])
-            if 'orientation' in geometry['CB']:
-                geometry['CB']['orientation'] = transform_orientation(geometry['CB']['orientation'])
-        
+            
         # Set CO to origin with zero orientation
         if 'CO' in geometry:
             geometry['CO']['position'] = [0.0, 0.0, 0.0]
             geometry['CO']['orientation'] = [0.0, 0.0, 0.0]
     
     # Transform thrusters
-    if 'thrusters' in vessel_config:
+    if 'thrusters' in vessel_config and vessel_config['thrusters'] is not None:
         for thruster in vessel_config['thrusters'].get('thrusters', []):
             if 'thruster_location' in thruster:
                 thruster['thruster_location'] = transform_position(thruster['thruster_location'])
@@ -195,7 +191,7 @@ def transform_to_co_frame(vessel_config: Dict) -> Dict:
                 thruster['thruster_orientation'] = transform_orientation(thruster['thruster_orientation'])
     
     # Transform control surfaces
-    if 'control_surfaces' in vessel_config:
+    if 'control_surfaces' in vessel_config and vessel_config['control_surfaces'] is not None:
         for surface in vessel_config['control_surfaces'].get('control_surfaces', []):
             if 'control_surface_location' in surface:
                 surface['control_surface_location'] = transform_position(surface['control_surface_location'])
@@ -203,7 +199,7 @@ def transform_to_co_frame(vessel_config: Dict) -> Dict:
                 surface['control_surface_orientation'] = transform_orientation(surface['control_surface_orientation'])
     
     # Transform sensors
-    if 'sensors' in vessel_config:
+    if 'sensors' in vessel_config and vessel_config['sensors'] is not None:
         for sensor in vessel_config['sensors'].get('sensors', []):
             if 'sensor_location' in sensor and sensor['sensor_location'] != 'None':
                 sensor['sensor_location'] = transform_position(sensor['sensor_location'])
@@ -246,9 +242,13 @@ def read_input(input_file: str = None) -> Tuple[Dict, List[Dict]]:
         vessel_name = agent['name']
         vessel_config = {
             'name': vessel_name,
-            'type': agent['type']
+            'type': agent['type'],
+            'active_dof': agent['active_dof'],
+            'U': agent['U'],
+            'maintain_speed': agent['maintain_speed']
         }
         
+        # Required for cross-flow drag generation
         gdf_file = load_yaml(resolve_path(base_path, agent['geometry'], vessel_name))['geometry_file']
         hydra_file = load_yaml(resolve_path(base_path, agent['hydrodynamics'], vessel_name))['hydra_file']
         hydrodynamics_file = resolve_path(base_path, agent['hydrodynamics'], vessel_name)

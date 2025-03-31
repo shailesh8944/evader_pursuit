@@ -74,9 +74,6 @@ document.addEventListener('DOMContentLoaded', function() {
             initializeFileHandlers(threeScene);
             initializeYAMLGeneration();
             
-            // Initialize simulator
-            initializeSimulator(threeScene);
-            
             // Initialize center points toggle
             initializeCenterPointsControls(threeScene);
             
@@ -4328,77 +4325,5 @@ document.addEventListener('DOMContentLoaded', function() {
                 showToast('Error: ' + error.message, 'error');
             }
         });
-    }
-
-    // Initialize simulator button
-    function initializeSimulator(threeScene) {
-        // Simulator instance
-        let vesselSimulator = null;
-        
-        // Get button and modal elements
-        const simulatorBtn = document.getElementById('btn-run-simulator');
-        const simulatorModal = document.getElementById('simulatorModal');
-        const simulatorContainer = document.getElementById('simulator-container');
-        
-        // Initialize button click handler
-        if (simulatorBtn) {
-            simulatorBtn.addEventListener('click', function() {
-                // Check if we have a vessel model loaded
-                const fbxInput = document.getElementById('fbxFile');
-                let vesselModel = null;
-                
-                if (!fbxInput || !fbxInput.files || fbxInput.files.length === 0) {
-                    showNotification('Please load a 3D model before running the simulator', 'warning');
-                    return;
-                }
-                
-                // Get the current vessel configuration
-                const vesselConfig = window.currentVesselModel ? window.currentVesselModel.config : null;
-                
-                // Show the simulator modal
-                const bsModal = new bootstrap.Modal(simulatorModal);
-                bsModal.show();
-                
-                // Function to handle modal shown event
-                simulatorModal.addEventListener('shown.bs.modal', async function initializeSimulatorScene() {
-                    // Remove this listener to avoid multiple initializations
-                    simulatorModal.removeEventListener('shown.bs.modal', initializeSimulatorScene);
-                    
-                    try {
-                        // Show loading indicator while initializing simulator
-                        showNotification('Initializing simulator...', 'info');
-                        
-                        // Create simulator instance
-                        vesselSimulator = new VesselSimulator();
-                        
-                        // Initialize simulator with vessel model and configuration
-                        await vesselSimulator.init(fbxInput.files[0], vesselConfig, simulatorContainer);
-                        
-                        // Show success notification
-                        showNotification('Simulator initialized successfully', 'success');
-                    } catch (error) {
-                        console.error('Error initializing simulator:', error);
-                        showNotification('Error initializing simulator: ' + error.message, 'error');
-                    }
-                });
-                
-                // Function to handle modal hidden event
-                simulatorModal.addEventListener('hidden.bs.modal', function cleanup() {
-                    // Remove this listener to avoid memory leaks
-                    simulatorModal.removeEventListener('hidden.bs.modal', cleanup);
-                    
-                    // Dispose simulator resources
-                    if (vesselSimulator) {
-                        vesselSimulator.dispose();
-                        vesselSimulator = null;
-                    }
-                    
-                    // Clear container
-                    if (simulatorContainer) {
-                        simulatorContainer.innerHTML = '';
-                    }
-                });
-            });
-        }
     }
 }); 

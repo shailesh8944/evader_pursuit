@@ -1,4 +1,4 @@
-thrusters:
+thrusters: 
   - 
     thruster_name: back
     thruster_id: 1

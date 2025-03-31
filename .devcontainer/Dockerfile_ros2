@@ -11,6 +11,7 @@ RUN apt-get update --fix-missing
 RUN apt-get -y install libboost-all-dev curl
 RUN apt-get -y install libasio-dev 
 RUN apt-get -y install ros-humble-diagnostic-updater ros-humble-nmea-msgs ros-humble-rtcm-msgs
+RUN apt-get -y install ros-humble-rosbridge-server  
 
 ENV USERNAME=mavlab
 RUN useradd -m $USERNAME && \

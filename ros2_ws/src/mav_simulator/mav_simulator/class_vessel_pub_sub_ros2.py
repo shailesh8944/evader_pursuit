@@ -26,6 +26,7 @@ from geometry_msgs.msg import Point, Vector3, Pose, Quaternion, Twist, PoseWithC
 from interfaces.msg import Actuator, DVL
 import mav_simulator.module_kinematics as kin
 from mav_simulator.module_sensors import create_sensor
+from mav_simulator.terminalMessages import print_info
 
 class Vessel_Pub_Sub():
     """ROS2 publisher/subscriber interface for a vessel.
@@ -234,7 +235,7 @@ class Vessel_Pub_Sub():
                     if actuator_id in self.control_surface_ids:
                         idx = self.control_surface_ids[actuator_id]
                         self.vessel.delta_c[idx] = value * np.pi / 180.0
-                        print(f"control_surface {actuator_id} idx: {idx}, value: {value} deg -> {self.vessel.delta_c[idx]} rad")
+                        print_info(f"control_surface {actuator_id} idx: {idx}, value: {value} deg -> {self.vessel.delta_c[idx]} rad")
                     else:
                         self.world_node.get_logger().warn(f'Unknown control surface ID: {actuator_id}')
                         
@@ -243,7 +244,7 @@ class Vessel_Pub_Sub():
                     if actuator_id in self.thruster_ids:
                         idx = self.thruster_ids[actuator_id]
                         self.vessel.n_c[idx] = value
-                        print(f"thruster {actuator_id} idx: {idx}, value: {value} RPM")
+                        print_info(f"thruster {actuator_id} idx: {idx}, value: {value} RPM")
                     else:
                         self.world_node.get_logger().warn(f'Unknown thruster ID: {actuator_id}')
                         
