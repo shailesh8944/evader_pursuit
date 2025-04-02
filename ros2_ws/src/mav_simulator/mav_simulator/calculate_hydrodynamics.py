@@ -19,6 +19,8 @@ import sys
 import numpy as np
 import json
 from mav_simulator.module_kinematics import Smat
+from mav_simulator.terminalMessages import print_info
+
 
 class CalculateHydrodynamics:
     def __init__(self):
@@ -26,7 +28,7 @@ class CalculateHydrodynamics:
         self.length = None
         self.U_des = None
         self.ode_options = {}
-
+        self.rho = None
     def _generate_mass_matrix(self,CG,mass,gyration):
     
         """Generate the mass matrix"""
@@ -54,6 +56,9 @@ class CalculateHydrodynamics:
         Returns:
             np.ndarray: 6x6 added mass matrix
         """
+
+    
+
         # Load hydrodynamic data from file
         with open(hydra_file, 'r') as file:
             mdict = json.load(file)
@@ -103,23 +108,23 @@ class CalculateHydrodynamics:
 
         # Construct final added mass matrix (converting from ENU to NED)
         A = A_zero.copy()
-        A[2:5, 2:5] = np.diag(np.array([A33_wn, A44_wn, A55_wn]))
+        A[2:5][:, 2:5] = np.diag(np.array([A33_wn, A44_wn, A55_wn]))
 
+        # used for linear damping
         B33_wn = np.interp(wn3, omg[1:], BD[1:, 2, 2, 0, 0])
         B44_wn = np.interp(wn4, omg[1:], BD[1:, 3, 3, 0, 0])
         B55_wn = np.interp(wn5, omg[1:], BD[1:, 4, 4, 0, 0])
-
+        
         # Change from ENU to NED
-        A = A_zero
         R = np.array([
             [0, 1, 0],
             [1, 0, 0],
             [0, 0, -1]
         ])
         
-        A[2:5][:, 2:5] = np.diag(np.array([A33_wn, A44_wn, A55_wn]))
         A[0:3,0:3] = R @ A[0:3,0:3] @ R.T
         A[3:6,3:6] = R @ A[3:6,3:6] @ R.T
+
         return A
     
     def cross_flow_drag(self):

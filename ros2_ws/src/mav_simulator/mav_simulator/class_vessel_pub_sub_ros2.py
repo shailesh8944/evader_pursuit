@@ -19,7 +19,7 @@ Author: MAV Simulator Team
 
 import numpy as np
 from rclpy.node import Node
-from std_msgs.msg import Float64
+from std_msgs.msg import Float64, Float64MultiArray
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, PointCloud2, Image, LaserScan, NavSatFix, NavSatStatus
 from geometry_msgs.msg import Point, Vector3, Pose, Quaternion, Twist, PoseWithCovarianceStamped, TwistWithCovarianceStamped
@@ -99,6 +99,12 @@ class Vessel_Pub_Sub():
         self.odometry = {
             'pub': self.world_node.create_publisher(Odometry, f'{self.topic_prefix}/odometry_sim', 10),
             'timer': self.world_node.create_timer(self.vessel.vessel_config['time_step'], self.publish_odometry)
+        }
+        
+        # Create vessel state publisher
+        self.vessel_state = {
+            'pub': self.world_node.create_publisher(Float64MultiArray, f'{self.topic_prefix}/vessel_state', 10),
+            'timer': self.world_node.create_timer(self.vessel.vessel_config['time_step'], self.publish_vessel_state)
         }
         
         # Create actuator subscribers
@@ -286,3 +292,38 @@ class Vessel_Pub_Sub():
         msg.twist.covariance = np.zeros((6, 6)).flatten()
         
         self.odometry['pub'].publish(msg)
+
+    def publish_vessel_state(self):
+        """Publish complete vessel state including control surfaces and thrusters."""
+        current_time = self.world_node.get_clock().now()
+        
+        msg = Float64MultiArray()
+        
+        # Get the full state vector
+        state = self.vessel.current_state
+        
+        # Determine state vector structure based on quaternion vs euler
+        use_quaternion = hasattr(self.vessel, 'use_quaternion') and self.vessel.use_quaternion
+        attitude_size = 4 if use_quaternion else 3
+        attitude_end = 9 + attitude_size
+        
+        # Calculate indices for control surfaces and thrusters
+        control_start = attitude_end
+        thruster_start = control_start + self.vessel.n_control_surfaces
+        
+        # Create label for describing the state vector contents
+        state_description = (
+            "State vector: [u, v, w, p, q, r, x, y, z, "
+            f"{'q0, q1, q2, q3' if use_quaternion else 'phi, theta, psi'}, "
+            "control_surfaces, thrusters]"
+        )
+        
+        # Add description as a field in the message
+        msg.data = state.tolist()
+        
+        # Log state description once (or infrequently)
+        if hasattr(self, '_state_desc_logged') == False:
+            self.world_node.get_logger().info(f"Publishing vessel state: {state_description}")
+            self._state_desc_logged = True
+            
+        self.vessel_state['pub'].publish(msg)

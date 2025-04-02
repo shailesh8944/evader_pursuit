@@ -1,0 +1,1518 @@
+// Vessel management class
+class VesselManager {
+  constructor() {
+    this.vessels = new Map();
+    this.activeVessel = null;
+    this.selectorHandlerAdded = false;
+    this.configurationHandlerAdded = false;
+    this.userConfig = {
+      controlSurfaces: 0,
+      thrusters: 0
+    };
+    this.connectToROS();
+    this.setupConfigurationPanel();
+  }
+
+  connectToROS() {
+    this.ros = new ROSLIB.Ros({
+    url: 'ws://localhost:9090'
+  });
+  
+    this.setupRosConnection();
+  }
+
+  setupRosConnection() {
+    this.ros.on('connection', () => {
+    console.log('Connected to rosbridge.');
+      document.getElementById('connectionStatus').className = 'status-indicator status-connected';
+      document.getElementById('connectionText').textContent = 'Connected';
+      
+      // Begin vessel discovery after connection
+      setTimeout(() => this.discoverVessels(), 1000);
+  });
+
+    this.ros.on('error', (error) => {
+    console.error('Error connecting to rosbridge: ', error);
+      document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
+      document.getElementById('connectionText').textContent = 'Disconnected';
+      
+      // Clear active vessel when disconnected
+      this.handleDisconnection();
+    });
+    
+    this.ros.on('close', () => {
+      console.log('Connection to rosbridge closed.');
+      document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
+      document.getElementById('connectionText').textContent = 'Disconnected';
+      
+      // Clear active vessel when disconnected
+      this.handleDisconnection();
+      
+      // Attempt to reconnect after a delay
+      setTimeout(() => this.connectToROS(), 3000);
+    });
+    
+    // Add a heartbeat monitor to detect stale connections
+    this.setupHeartbeatMonitor();
+  }
+
+  // Setup a heartbeat to monitor connection health
+  setupHeartbeatMonitor() {
+    // Clear any existing heartbeat
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+    
+    // Setup connection timeout detection
+    let lastMessageTime = Date.now();
+    
+    // Create a topic to monitor for any messages
+    this.heartbeatTopic = new ROSLIB.Topic({
+      ros: this.ros,
+      name: '/rosout',
+      messageType: 'rosgraph_msgs/Log'
+    });
+    
+    // Listen for any message to update the last message time
+    this.heartbeatTopic.subscribe(() => {
+      lastMessageTime = Date.now();
+    });
+    
+    // Check connection status every 5 seconds
+    this.heartbeatInterval = setInterval(() => {
+      const currentTime = Date.now();
+      const timeSinceLastMessage = currentTime - lastMessageTime;
+      
+      // If no messages for 10 seconds, consider disconnected
+      if (timeSinceLastMessage > 10000) {
+        console.warn('No messages received for 10 seconds, connection may be stale');
+        
+        // Update UI to show potentially disconnected state
+        document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
+        document.getElementById('connectionText').textContent = 'Connection Stale';
+        
+        // Clear active vessel data
+        this.handleDisconnection();
+        
+        // Try to reconnect
+        this.ros.close();
+      }
+    }, 5000);
+  }
+  
+  // Handle disconnection by cleaning up vessel data
+  handleDisconnection() {
+    // Stop data collection for active vessel
+    if (this.activeVessel) {
+      this.activeVessel.stopDataCollection();
+    }
+  }
+
+  async discoverVessels() {
+    try {
+      console.log('Starting vessel discovery...');
+      
+      // Try the getTopicsAndTypes method first
+      if (typeof this.ros.getTopicsAndTypes === 'function') {
+        this.ros.getTopicsAndTypes(this.processTopics.bind(this));
+      } 
+      // Fall back to getTopics if getTopicsAndTypes isn't available
+      else if (typeof this.ros.getTopics === 'function') {
+        this.ros.getTopics(this.processTopicsLegacy.bind(this));
+      }
+      // Manual fallback for testing
+      else {
+        console.warn('No topic discovery methods available, using fallback');
+        this.manualVesselDiscovery();
+      }
+    } catch (error) {
+      console.error('Error discovering vessels:', error);
+      this.manualVesselDiscovery();
+    }
+  }
+  
+  processTopics(result) {
+    if (!result || !result.topics || !Array.isArray(result.topics)) {
+      console.error('Invalid topic result format:', result);
+      this.manualVesselDiscovery();
+      return;
+    }
+    
+    const topicsAndTypes = result.topics;
+    
+    // Find vessel topics
+    const vesselTopics = topicsAndTypes
+      .filter(topic => 
+        topic.name.endsWith('/odometry_sim') || 
+        topic.name.endsWith('/vessel_state')
+      )
+      .map(topic => topic.name);
+
+    console.log('Found vessel topics:', vesselTopics);
+    this.updateVesselSelector(vesselTopics);
+  }
+  
+  processTopicsLegacy(result) {
+    if (!result || !result.topics || !Array.isArray(result.topics)) {
+      console.error('Invalid topic result format:', result);
+      this.manualVesselDiscovery();
+      return;
+    }
+    
+    const topics = result.topics;
+    
+    // Find vessel topics
+    const vesselTopics = topics.filter(topic => 
+      topic.endsWith('/odometry_sim') || 
+      topic.endsWith('/vessel_state')
+    );
+
+    console.log('Found vessel topics (legacy):', vesselTopics);
+    this.updateVesselSelector(vesselTopics);
+  }
+  
+  manualVesselDiscovery() {
+    // Hard-coded fallback for testing
+    console.log('Using manual vessel discovery');
+    const vesselTopics = [
+      '/sookshma_00/odometry_sim',
+      '/sookshma_00/vessel_state'
+    ];
+    this.updateVesselSelector(vesselTopics);
+  }
+  
+  updateVesselSelector(vesselTopics) {
+    // Extract vessel names
+    const vesselNames = new Set();
+    vesselTopics.forEach(topic => {
+      const parts = topic.split('/');
+      if (parts.length >= 2) {
+        const vesselName = parts[1];
+        vesselNames.add(vesselName);
+      }
+    });
+
+    console.log('Found vessels:', Array.from(vesselNames));
+
+    // Update vessel selector
+    const vesselSelect = document.getElementById('vesselSelect');
+    vesselSelect.innerHTML = '<option value="">Select Vessel</option>';
+    
+    if (vesselNames.size === 0) {
+      const option = document.createElement('option');
+      option.value = "";
+      option.textContent = "No vessels found";
+      option.disabled = true;
+      vesselSelect.appendChild(option);
+    } else {
+      vesselNames.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        vesselSelect.appendChild(option);
+      });
+    }
+
+    // Setup vessel selection handler - only add once
+    if (!this.selectorHandlerAdded) {
+      vesselSelect.addEventListener('change', (e) => {
+        this.setActiveVessel(e.target.value);
+      });
+      this.selectorHandlerAdded = true;
+    }
+    
+    // Auto-select first vessel if available
+    if (vesselNames.size === 1) {
+      const firstVessel = Array.from(vesselNames)[0];
+      vesselSelect.value = firstVessel;
+      this.setActiveVessel(firstVessel);
+    }
+  }
+
+  setupConfigurationPanel() {
+    const applyButton = document.getElementById('applyConfig');
+    const controlSurfacesInput = document.getElementById('controlSurfacesInput');
+    const thrustersInput = document.getElementById('thrustersInput');
+
+    if (!this.configurationHandlerAdded) {
+      applyButton.addEventListener('click', () => {
+        const controlSurfaces = parseInt(controlSurfacesInput.value) || 0;
+        const thrusters = parseInt(thrustersInput.value) || 0;
+        
+        this.updateConfiguration(controlSurfaces, thrusters);
+      });
+      
+      // Auto-calculate the other value when one input changes
+      controlSurfacesInput.addEventListener('input', () => {
+        if (this.latestStateLength && controlSurfacesInput.value) {
+          const controlSurfaces = parseInt(controlSurfacesInput.value) || 0;
+          const remainingStates = this.latestStateLength - 12; // 12 for position and orientation
+          const calculatedThrusters = Math.max(0, remainingStates - controlSurfaces);
+          thrustersInput.value = calculatedThrusters;
+        }
+      });
+      
+      thrustersInput.addEventListener('input', () => {
+        if (this.latestStateLength && thrustersInput.value) {
+          const thrusters = parseInt(thrustersInput.value) || 0;
+          const remainingStates = this.latestStateLength - 12; // 12 for position and orientation
+          const calculatedControlSurfaces = Math.max(0, remainingStates - thrusters);
+          controlSurfacesInput.value = calculatedControlSurfaces;
+        }
+      });
+      
+      this.configurationHandlerAdded = true;
+    }
+  }
+  
+  updateConfiguration(controlSurfaces, thrusters) {
+    console.log(`Updating configuration: ${controlSurfaces} control surfaces, ${thrusters} thrusters`);
+    this.userConfig = {
+      controlSurfaces,
+      thrusters
+    };
+    
+    // Update the active vessel with the new configuration
+    if (this.activeVessel) {
+      this.activeVessel.setConfiguration(controlSurfaces, thrusters);
+    }
+  }
+  
+  // When vessel state is received, store its length for auto-calculation
+  updateLatestStateLength(length) {
+    this.latestStateLength = length;
+    
+    // Update calculations if needed
+    if (this.latestStateLength) {
+      const remainingStates = this.latestStateLength - 12;
+      const controlSurfacesInput = document.getElementById('controlSurfacesInput');
+      const thrustersInput = document.getElementById('thrustersInput');
+      
+      // If user hasn't set values yet, provide initial estimate
+      if (parseInt(controlSurfacesInput.value) === 0 && parseInt(thrustersInput.value) === 0) {
+        // Default distribution: half and half
+        const estimatedControls = Math.floor(remainingStates / 2);
+        const estimatedThrusters = remainingStates - estimatedControls;
+        
+        controlSurfacesInput.value = estimatedControls;
+        thrustersInput.value = estimatedThrusters;
+      }
+    }
+  }
+
+  setActiveVessel(vesselName) {
+    if (this.activeVessel) {
+      this.activeVessel.unsubscribe();
+    }
+
+    if (!vesselName) return;
+
+    this.activeVessel = new VesselVisualizer(vesselName, this.ros, this.userConfig);
+    this.activeVessel.subscribe();
+  }
+}
+
+// Vessel visualization class
+class VesselVisualizer {
+  constructor(vesselName, ros, userConfig) {
+    this.vesselName = vesselName;
+    this.ros = ros;
+    this.charts = new Map();
+    this.sampleIndex = 0;
+    this.setConfiguration(userConfig.controlSurfaces, userConfig.thrusters);
+    this.setupChartPlugins();
+    this.setupCharts();
+    this.isCollectingData = false;
+    this.lastMessageTime = Date.now();
+    this.dataMonitorInterval = null;
+  }
+  
+  setConfiguration(controlSurfaces, thrusters) {
+    this.config = {
+      controlSurfaces: controlSurfaces || 0,
+      thrusters: thrusters || 0
+    };
+    console.log(`Set vessel configuration: ${this.config.controlSurfaces} control surfaces, ${this.config.thrusters} thrusters`);
+  }
+
+  setupChartPlugins() {
+    // Register the zoom plugin if it exists but isn't registered
+    if (window.ChartJS && !Chart.registry.plugins.get('zoom')) {
+      try {
+        Chart.register(window.ChartZoom);
+        console.log("Chart.js Zoom plugin registered");
+      } catch (e) {
+        console.warn("Could not register Chart.js Zoom plugin:", e);
+      }
+    }
+  }
+
+  setupCharts() {
+    // Common chart options for better visualization
+    Chart.defaults.font.family = "'Roboto', sans-serif";
+    Chart.defaults.color = '#666';
+    Chart.defaults.elements.line.borderWidth = 2;
+    Chart.defaults.elements.point.radius = 0; // Hide points for smoother lines
+    Chart.defaults.elements.point.hoverRadius = 4; // Show points on hover
+    
+    // Better color scheme
+    const colorSchemes = {
+      position: ['#FF6384', '#36A2EB', '#4BC0C0'],
+      velocity: ['#FF9F40', '#9966FF', '#FF6384'],
+      angular: ['#FFCD56', '#4BC0C0', '#36A2EB'],
+    };
+
+    // Setup path chart with improved styling
+    this.charts.set('path', new Chart(document.getElementById('pathChart'), {
+    type: 'scatter',
+    data: {
+        datasets: [
+          {
+        label: 'Path',
+        data: [],
+            borderColor: '#FF6384',
+            backgroundColor: 'transparent', // Remove fill color
+        showLine: true,
+            fill: false, // No fill
+            tension: 0.4, // Smooth curves
+            borderWidth: 2.5, // Slightly thicker line for better visibility
+            pointRadius: 0 // Hide points on path
+          },
+          {
+            label: 'Current Position',
+            data: [],
+            borderColor: '#36A2EB',
+            backgroundColor: '#36A2EB',
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            showLine: false
+          }
+        ]
+    },
+    options: {
+      animation: false,
+      responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'nearest',
+          intersect: false,
+          axis: 'xy'
+        },
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            enabled: true,
+            mode: 'nearest',
+            callbacks: {
+              label: function(context) {
+                const point = context.raw;
+                return `Position: (${point.x.toFixed(2)}, ${point.y.toFixed(2)})`;
+              }
+            }
+          },
+          zoom: {
+            pan: {
+              enabled: true,
+              mode: 'xy',
+              modifierKey: 'ctrl'
+            },
+            zoom: {
+              wheel: {
+                enabled: true,
+              },
+              pinch: {
+                enabled: true
+              },
+              mode: 'xy',
+            },
+            limits: {
+              y: {min: 'original', max: 'original'},
+              x: {min: 'original', max: 'original'}
+            }
+          }
+        },
+      scales: {
+          x: { 
+            display: true, 
+            title: { display: true, text: 'X Position (m)' },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.05)',
+              tickColor: 'rgba(0, 0, 0, 0.15)'
+            },
+            ticks: {
+              maxTicksLimit: 10
+            },
+            type: 'linear',
+            offset: true // Better alignment
+          },
+          y: { 
+            display: true, 
+            title: { display: true, text: 'Y Position (m)' },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.05)',
+              tickColor: 'rgba(0, 0, 0, 0.15)'
+            },
+            ticks: {
+              maxTicksLimit: 10
+            },
+            type: 'linear',
+            offset: true // Better alignment
+          }
+        }
+      }
+    }));
+
+    // Create path controls container
+    const pathContainer = document.getElementById('pathChart').parentNode;
+    const controlsContainer = document.createElement('div');
+    controlsContainer.className = 'path-controls';
+    
+    // Create reset zoom button
+    const resetButton = document.createElement('button');
+    resetButton.textContent = 'Reset Zoom';
+    resetButton.className = 'chart-control-btn';
+    resetButton.onclick = () => {
+      const pathChart = this.charts.get('path');
+      if (pathChart) {
+        pathChart.resetZoom();
+      }
+    };
+    
+    // Create clear path button
+    const clearButton = document.createElement('button');
+    clearButton.textContent = 'Clear Path';
+    clearButton.className = 'chart-control-btn';
+    clearButton.onclick = () => {
+      const pathChart = this.charts.get('path');
+      if (pathChart) {
+        pathChart.data.datasets[0].data = [];
+        
+        // Keep the current position (last point)
+        if (pathChart.data.datasets[1].data.length > 0) {
+          const currentPos = pathChart.data.datasets[1].data[0];
+          pathChart.data.datasets[0].data.push(currentPos);
+        }
+        
+        pathChart.update();
+      }
+    };
+    
+    // Create follow toggle button
+    const followButton = document.createElement('button');
+    followButton.textContent = 'Auto Follow: ON';
+    followButton.className = 'chart-control-btn';
+    followButton.dataset.following = 'true';
+    followButton.onclick = () => {
+      const isFollowing = followButton.dataset.following === 'true';
+      followButton.dataset.following = isFollowing ? 'false' : 'true';
+      followButton.textContent = `Auto Follow: ${isFollowing ? 'OFF' : 'ON'}`;
+      
+      // If turning following back on, reset the zoom to show current position
+      if (!isFollowing) {
+        const pathChart = this.charts.get('path');
+        if (pathChart) {
+          pathChart.resetZoom();
+          this.adjustPathScaling(pathChart);
+          pathChart.update();
+        }
+      }
+    };
+    
+    // Add buttons to controls container
+    controlsContainer.appendChild(resetButton);
+    controlsContainer.appendChild(clearButton);
+    controlsContainer.appendChild(followButton);
+    
+    // Add controls to the path container
+    pathContainer.appendChild(controlsContainer);
+    
+    // Store the follow button for later reference
+    this.pathFollowButton = followButton;
+
+    // Common chart config for line charts
+    const createLineChartConfig = (id, labels, colors) => {
+      return {
+    type: 'line',
+    data: {
+      labels: [],
+          datasets: labels.map((label, i) => ({
+            label,
+            data: [],
+            borderColor: colors[i],
+            backgroundColor: this.hexToRgba(colors[i], 0.1),
+            fill: false,
+            tension: 0.3, // Smooth line transitions
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 4
+          }))
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                boxWidth: 12,
+                usePointStyle: true,
+                padding: 10,
+                font: {
+                  size: 11
+                }
+              }
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              callbacks: {
+                label: function(context) {
+                  return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: { 
+              display: false,
+              type: 'linear',
+              ticks: {
+                maxTicksLimit: 6
+              }
+            },
+            y: {
+              beginAtZero: false,
+              grid: {
+                color: 'rgba(0, 0, 0, 0.05)',
+                tickColor: 'rgba(0, 0, 0, 0.15)'
+              },
+              ticks: {
+                maxTicksLimit: 8
+              }
+            }
+          }
+        }
+      };
+    };
+
+    // Create charts with consistent styling
+    const charts = [
+      { id: 'position', title: 'Position (m)', labels: ['x', 'y', 'z'], colors: colorSchemes.position },
+      { id: 'velocity', title: 'Velocity (m/s)', labels: ['u', 'v', 'w'], colors: colorSchemes.velocity },
+      { id: 'angularVelocity', title: 'Angular Velocity (rad/s)', labels: ['p', 'q', 'r'], colors: colorSchemes.angular },
+      { id: 'orientation', title: 'Euler Angles (degrees)', labels: ['Roll', 'Pitch', 'Yaw'], colors: colorSchemes.angular }
+    ];
+
+    charts.forEach(({ id, title, labels, colors }) => {
+      const config = createLineChartConfig(id, labels, colors);
+      config.options.plugins.title = {
+        display: true,
+        text: title,
+        font: {
+          size: 14,
+          weight: 'normal'
+        }
+      };
+      this.charts.set(id, new Chart(document.getElementById(`${id}Chart`), config));
+    });
+  }
+
+  // Convert hex color to rgba for backgrounds
+  hexToRgba(hex, alpha) {
+    // Standard colors
+    if (!hex.startsWith('#')) {
+      const colors = {
+        red: [255, 0, 0],
+        green: [0, 128, 0],
+        blue: [0, 0, 255],
+        yellow: [255, 255, 0],
+        orange: [255, 165, 0],
+        purple: [128, 0, 128],
+        cyan: [0, 255, 255],
+      };
+      
+      if (colors[hex]) {
+        const [r, g, b] = colors[hex];
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+      
+      // For HSL colors
+      if (hex.startsWith('hsl')) {
+        // Extract values using regex
+        const match = hex.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+        if (match) {
+          return `hsla(${match[1]}, ${match[2]}%, ${match[3]}%, ${alpha})`;
+        }
+        return `${hex.replace(')', `, ${alpha})`).replace('hsl', 'hsla')}`;
+      }
+      
+      return `rgba(128, 128, 128, ${alpha})`;
+    }
+    
+    // Convert hex to rgba
+    try {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    } catch (e) {
+      return `rgba(128, 128, 128, ${alpha})`;
+    }
+  }
+
+  // Method to remove disconnect overlays when reconnecting
+  removeDisconnectOverlays() {
+    // Remove overlays from chart containers
+    document.querySelectorAll('.chart-disconnected').forEach(overlay => {
+      overlay.classList.remove('active');
+      // Remove after fade-out animation completes
+      setTimeout(() => {
+        overlay.remove();
+      }, 300);
+    });
+  }
+
+  // Update the startDataCollection method to remove overlays when reconnecting
+  startDataCollection() {
+    if (this.isCollectingData) return;
+    
+    this.isCollectingData = true;
+    this.lastMessageTime = Date.now();
+    
+    // Remove any disconnect overlays when starting data collection
+    this.removeDisconnectOverlays();
+    
+    // Start monitoring data flow
+    if (!this.dataMonitorInterval) {
+      this.dataMonitorInterval = setInterval(() => {
+        const timeSinceLastMessage = Date.now() - this.lastMessageTime;
+        
+        // If no messages for 3 seconds, consider connection stale
+        if (timeSinceLastMessage > 3000) {
+          console.warn(`No data received for ${timeSinceLastMessage}ms, stopping collection`);
+          this.stopDataCollection();
+          this.showConnectionStatus('stale');
+        }
+      }, 1000);
+    }
+  }
+
+  // Update showConnectionStatus to handle more connection states
+  showConnectionStatus(status) {
+    const container = document.getElementById('vesselInfo');
+    if (!container) return;
+    
+    // Remove existing status indicator
+    const existingStatus = container.querySelector('.status-indicator');
+    if (existingStatus) {
+      existingStatus.remove();
+    }
+    
+    let statusClass = '';
+    let statusText = '';
+    
+    if (status === true || status === 'connected') {
+      statusClass = 'connected';
+      statusText = 'Connected';
+      // Remove disconnect overlays when connected
+      this.removeDisconnectOverlays();
+    } else if (status === 'stale') {
+      statusClass = 'stale';
+      statusText = 'Connection Stale';
+    } else {
+      statusClass = 'disconnected';
+      statusText = 'Disconnected';
+      // Add disconnect overlays when disconnected
+      this.addDisconnectOverlays();
+    }
+    
+    const statusElement = document.createElement('div');
+    statusElement.className = `status-indicator ${statusClass}`;
+    statusElement.innerHTML = `<span class="status-dot"></span><span class="status-text">${statusText}</span>`;
+    
+    container.prepend(statusElement);
+  }
+
+  subscribe() {
+    try {
+      console.log(`Attempting to subscribe to vessel ${this.vesselName}`);
+      
+      // Try different message types for odometry
+      const odomTypes = [
+        'nav_msgs/Odometry', 
+        'nav_msgs/msg/Odometry'
+      ];
+      
+      // Try different message types for vessel state
+      const stateTypes = [
+        'std_msgs/Float64MultiArray',
+        'std_msgs/msg/Float64MultiArray'
+      ];
+      
+      // Subscribe to odometry with flexible message type
+      this.subscribeWithTypes(`/${this.vesselName}/odometry_sim`, odomTypes, 
+        (message) => this.handleOdometry(message), 
+        (error) => console.error('Failed to subscribe to odometry:', error)
+      );
+      
+      // Subscribe to vessel state with flexible message type
+      this.subscribeWithTypes(`/${this.vesselName}/vessel_state`, stateTypes,
+        (message) => this.handleVesselState(message),
+        (error) => console.error('Failed to subscribe to vessel state:', error)
+      );
+      
+      // Start data collection tracking
+      this.startDataCollection();
+      
+      console.log(`Subscribed to vessel ${this.vesselName}`);
+    } catch (error) {
+      console.error(`Error subscribing to vessel ${this.vesselName}:`, error);
+    }
+  }
+  
+  subscribeWithTypes(topicName, messageTypes, callback, errorCallback) {
+    // Try to subscribe with each message type until successful
+    const trySubscribe = (index) => {
+      if (index >= messageTypes.length) {
+        errorCallback(new Error(`Failed to subscribe to ${topicName} with any message type`));
+        return;
+      }
+      
+      const topic = new ROSLIB.Topic({
+        ros: this.ros,
+        name: topicName,
+        messageType: messageTypes[index]
+      });
+      
+      try {
+        topic.subscribe((message) => {
+          // Successfully subscribed
+          console.log(`Subscribed to ${topicName} with type ${messageTypes[index]}`);
+          
+          // Store the topic for later unsubscription
+          if (topicName.endsWith('/odometry_sim')) {
+            this.odomTopic = topic;
+          } else if (topicName.endsWith('/vessel_state')) {
+            this.stateTopic = topic;
+          }
+          
+          callback(message);
+        });
+      } catch (error) {
+        console.warn(`Failed to subscribe to ${topicName} with type ${messageTypes[index]}:`, error);
+        // Try the next message type
+        trySubscribe(index + 1);
+      }
+    };
+    
+    // Start with the first message type
+    trySubscribe(0);
+  }
+
+  unsubscribe() {
+    // Stop data collection
+    this.stopDataCollection();
+    
+    // Unsubscribe from topics
+    if (this.odomTopic) {
+      this.odomTopic.unsubscribe();
+      this.odomTopic = null;
+    }
+    
+    if (this.stateTopic) {
+      this.stateTopic.unsubscribe();
+      this.stateTopic = null;
+    }
+    
+    // Add disconnect indicator to vessel info
+    this.showConnectionStatus(false);
+    
+    // Add disconnect overlays
+    this.addDisconnectOverlays();
+    
+    console.log(`Unsubscribed from vessel ${this.vesselName}`);
+  }
+
+  handleOdometry(message) {
+    // Update last message time
+    this.lastMessageTime = Date.now();
+    
+    // Ensure we're collecting data
+    if (!this.isCollectingData) {
+      this.startDataCollection();
+      this.showConnectionStatus(true);
+    }
+    
+    this.sampleIndex++;
+
+    // Extract data
+    const x = message.pose.pose.position.x;
+    const y = message.pose.pose.position.y;
+    const z = message.pose.pose.position.z;
+    const u = message.twist.twist.linear.x;
+    const v = message.twist.twist.linear.y;
+    const w = message.twist.twist.linear.z;
+    const p = message.twist.twist.angular.x;
+    const q = message.twist.twist.angular.y;
+    const r = message.twist.twist.angular.z;
+    
+    // Convert quaternion to Euler angles
+    const euler = this.quaternionToEuler(message.pose.pose.orientation);
+
+    // Update charts
+    this.updateChart('path', [{x, y}]);
+    this.updateChart('position', [x, y, z]);
+    this.updateChart('velocity', [u, v, w]);
+    this.updateChart('angularVelocity', [p, q, r]);
+    this.updateChart('orientation', [euler.roll, euler.pitch, euler.yaw]);
+
+    // Update vessel info
+    this.updateVesselInfo(message);
+  }
+
+  handleVesselState(message) {
+    console.log('Received vessel state:', message);
+    
+    // Check if message has data property (standard ROS message)
+    if (!message.data || !Array.isArray(message.data)) {
+      console.warn('Vessel state message has no data array');
+      return;
+    }
+
+    // Extract control surfaces and thrusters from vessel state
+    const state = message.data;
+    
+    // Update manager with the latest state length for auto-calculation
+    if (vesselManager) {
+      vesselManager.updateLatestStateLength(state.length);
+    }
+    
+    // Handle the case where state might be shorter than expected
+    if (state.length < 12) {
+      console.warn(`State vector length (${state.length}) is too short`);
+      return;
+    }
+
+    // Use the user configuration instead of guessing
+    const controlStart = 12; // After position and orientation
+    const thrusterStart = controlStart + this.config.controlSurfaces;
+    
+    // Only update if we have controls in config and enough state data
+    if (this.config.controlSurfaces > 0 && state.length > controlStart) {
+      // Ensure we don't try to access beyond array bounds
+      const end = Math.min(thrusterStart, state.length);
+      this.updateControlSurfaces(state.slice(controlStart, end));
+    } else {
+      // Clear control surfaces chart if no controls
+      const container = document.getElementById('controlSurfacesChart');
+      container.innerHTML = '<div style="text-align: center; padding: 20px;">No control surfaces configured</div>';
+    }
+    
+    // Only update if we have thrusters in config and enough state data
+    if (this.config.thrusters > 0 && state.length > thrusterStart) {
+      this.updateThrusters(state.slice(thrusterStart, thrusterStart + this.config.thrusters));
+    } else {
+      // Clear thrusters chart if no thrusters
+      const container = document.getElementById('thrustersChart');
+      container.innerHTML = '<div style="text-align: center; padding: 20px;">No thrusters configured</div>';
+    }
+  }
+
+  updateChart(chartId, values) {
+    const chart = this.charts.get(chartId);
+    if (!chart) return;
+
+    // Maximum number of points to show
+    const MAX_POINTS = 200;
+
+    if (chartId === 'path') {
+      // For path chart with current position tracking
+      const newPoint = values[0];
+      
+      // Update the path (dataset 0)
+      chart.data.datasets[0].data.push(newPoint);
+      
+      // Keep the last MAX_POINTS for the path
+      if (chart.data.datasets[0].data.length > MAX_POINTS) {
+        chart.data.datasets[0].data.shift();
+      }
+      
+      // Update the current position marker (dataset 1)
+      chart.data.datasets[1].data = [newPoint];
+      
+      // Auto-scale the axes if auto-follow is enabled
+      const isFollowing = this.pathFollowButton 
+        ? this.pathFollowButton.dataset.following === 'true'
+        : true;
+      
+      if (isFollowing && chart.data.datasets[0].data.length > 1) {
+        this.adjustPathScaling(chart);
+      }
+    } else {
+      // For other charts, maintain continuous time series
+      chart.data.labels.push(this.sampleIndex);
+      
+      // Add data to each dataset
+      values.forEach((value, i) => {
+        if (i < chart.data.datasets.length) {
+          chart.data.datasets[i].data.push(value);
+          if (chart.data.datasets[i].data.length > MAX_POINTS) {
+            chart.data.datasets[i].data.shift();
+          }
+        }
+      });
+      
+      // Remove excess labels to match data length
+      while (chart.data.labels.length > chart.data.datasets[0].data.length) {
+        chart.data.labels.shift();
+      }
+      
+      // Adjust x-axis for better visualization
+      if (chart.options.scales.x.type === 'linear') {
+        const minIndex = Math.min(...chart.data.labels);
+        const maxIndex = Math.max(...chart.data.labels);
+        chart.options.scales.x.min = minIndex;
+        chart.options.scales.x.max = maxIndex;
+      }
+    }
+
+    chart.update('none'); // 'none' mode for better performance
+  }
+
+  // Method to automatically adjust path chart scaling
+  adjustPathScaling(chart) {
+    // Check if auto-follow is disabled
+    const isFollowing = this.pathFollowButton 
+      ? this.pathFollowButton.dataset.following === 'true'
+      : true;
+      
+    if (!isFollowing) {
+      return;
+    }
+    
+    // Don't auto-adjust if the user has manually zoomed or panned
+    if (chart._zoom && chart._zoom.panning) {
+      return;
+    }
+    
+    const data = chart.data.datasets[0].data;
+    
+    // If no data, don't adjust
+    if (!data || data.length === 0) {
+      return;
+    }
+    
+    // Calculate min/max values with padding
+    let minX = Number.MAX_VALUE;
+    let maxX = Number.MIN_VALUE;
+    let minY = Number.MAX_VALUE;
+    let maxY = Number.MIN_VALUE;
+    
+    data.forEach(point => {
+      if (point && typeof point.x === 'number' && typeof point.y === 'number') {
+        minX = Math.min(minX, point.x);
+        maxX = Math.max(maxX, point.x);
+        minY = Math.min(minY, point.y);
+        maxY = Math.max(maxY, point.y);
+      }
+    });
+    
+    // Handle case where all values are the same
+    if (minX === maxX) {
+      minX -= 10;
+      maxX += 10;
+    }
+    if (minY === maxY) {
+      minY -= 10;
+      maxY += 10;
+    }
+    
+    // Add padding (15%)
+    const rangeX = maxX - minX;
+    const rangeY = maxY - minY;
+    
+    const paddingX = rangeX * 0.15;
+    const paddingY = rangeY * 0.15;
+    
+    // Set min/max on axes to ensure equal scaling (maintain aspect ratio)
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    
+    // Ensure the scale is the same for both axes (use the larger range with padding)
+    const maxRange = Math.max(rangeX + 2 * paddingX, rangeY + 2 * paddingY);
+    
+    // Calculate the new bounds, ensuring they're centered around the centroid
+    const newMinX = centerX - maxRange / 2;
+    const newMaxX = centerX + maxRange / 2;
+    const newMinY = centerY - maxRange / 2;
+    const newMaxY = centerY + maxRange / 2;
+    
+    // Only update if there are significant changes or on first run
+    if (!chart._lastBounds || 
+        Math.abs(chart._lastBounds.minX - newMinX) > 0.05 ||
+        Math.abs(chart._lastBounds.maxX - newMaxX) > 0.05 ||
+        Math.abs(chart._lastBounds.minY - newMinY) > 0.05 ||
+        Math.abs(chart._lastBounds.maxY - newMaxY) > 0.05) {
+      
+      // Set the new bounds
+      chart.options.scales.x.min = newMinX;
+      chart.options.scales.x.max = newMaxX;
+      chart.options.scales.y.min = newMinY;
+      chart.options.scales.y.max = newMaxY;
+      
+      // Store the last bounds to avoid unnecessary updates
+      chart._lastBounds = { minX: newMinX, maxX: newMaxX, minY: newMinY, maxY: newMaxY };
+    }
+  }
+
+  updateControlSurfaces(controlStates) {
+    const container = document.getElementById('controlSurfacesChart');
+    
+    if (!controlStates || controlStates.length === 0) {
+      container.innerHTML = '<div style="text-align: center; padding: 20px;">No control surfaces available</div>';
+      return;
+    }
+    
+    const existingChart = this.charts.get('controlSurfaces');
+    if (existingChart) {
+      if (existingChart.data.datasets.length === controlStates.length) {
+        // Update existing chart data
+        existingChart.data.labels.push(this.sampleIndex);
+        
+        controlStates.forEach((value, i) => {
+          existingChart.data.datasets[i].data.push(value);
+          // Keep only the last 200 points for smoother rendering
+          if (existingChart.data.datasets[i].data.length > 200) {
+            existingChart.data.datasets[i].data.shift();
+          }
+        });
+        
+        // Remove excess labels
+        while (existingChart.data.labels.length > existingChart.data.datasets[0].data.length) {
+          existingChart.data.labels.shift();
+        }
+        
+        existingChart.update('none'); // Use 'none' mode for better performance
+        return;
+      }
+      existingChart.destroy();
+    }
+    
+    // Create new canvas and chart
+    container.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    container.appendChild(canvas);
+
+    // Create color scheme based on number of control surfaces
+    const colors = controlStates.map((_, i) => 
+      `hsl(${(i * 360) / Math.max(controlStates.length, 1)}, 70%, 50%)`);
+
+    // Create chart with enhanced styling
+    const chart = new Chart(canvas, {
+    type: 'line',
+    data: {
+        labels: [this.sampleIndex],
+        datasets: controlStates.map((value, i) => ({
+          label: `Control Surface ${i + 1}`,
+          data: [value],
+          borderColor: colors[i],
+          backgroundColor: this.hexToRgba(colors[i], 0.1),
+          fill: false,
+          tension: 0.3,
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4
+        }))
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              boxWidth: 12,
+              usePointStyle: true,
+              font: {
+                size: 11
+              }
+            }
+          },
+          tooltip: {
+            mode: 'index',
+            intersect: false
+          }
+        },
+        scales: {
+          x: { 
+            display: false,
+            type: 'linear'
+          },
+          y: {
+            grid: {
+              color: 'rgba(0, 0, 0, 0.05)',
+              tickColor: 'rgba(0, 0, 0, 0.15)'
+            }
+          }
+        }
+      }
+    });
+
+    this.charts.set('controlSurfaces', chart);
+  }
+
+  updateThrusters(thrusterStates) {
+    const container = document.getElementById('thrustersChart');
+    
+    if (!thrusterStates || thrusterStates.length === 0) {
+      container.innerHTML = '<div style="text-align: center; padding: 20px;">No thrusters available</div>';
+      return;
+    }
+    
+    const existingChart = this.charts.get('thrusters');
+    if (existingChart) {
+      if (existingChart.data.datasets.length === thrusterStates.length) {
+        // Update existing chart
+        existingChart.data.labels.push(this.sampleIndex);
+        
+        thrusterStates.forEach((value, i) => {
+          existingChart.data.datasets[i].data.push(value);
+          if (existingChart.data.datasets[i].data.length > 200) {
+            existingChart.data.datasets[i].data.shift();
+          }
+        });
+        
+        // Remove excess labels
+        while (existingChart.data.labels.length > existingChart.data.datasets[0].data.length) {
+          existingChart.data.labels.shift();
+        }
+        
+        existingChart.update('none'); // Use 'none' mode for better performance
+        return;
+      }
+      existingChart.destroy();
+    }
+    
+    // Create new canvas and chart
+    container.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    container.appendChild(canvas);
+
+    // Create color scheme with more vibrant colors for thrusters
+    const colors = thrusterStates.map((_, i) => 
+      `hsl(${(i * 360) / Math.max(thrusterStates.length, 1) + 180}, 80%, 50%)`);
+
+    // Create chart with enhanced styling
+    const chart = new Chart(canvas, {
+    type: 'line',
+    data: {
+        labels: [this.sampleIndex],
+        datasets: thrusterStates.map((value, i) => ({
+          label: `Thruster ${i + 1}`,
+          data: [value],
+          borderColor: colors[i],
+          backgroundColor: this.hexToRgba(colors[i], 0.1),
+          fill: false,
+          tension: 0.3,
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4
+        }))
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              boxWidth: 12,
+              usePointStyle: true,
+              font: {
+                size: 11
+              }
+            }
+          },
+          tooltip: {
+            mode: 'index',
+            intersect: false
+          }
+        },
+        scales: {
+          x: { 
+            display: false,
+            type: 'linear'
+          },
+          y: {
+            grid: {
+              color: 'rgba(0, 0, 0, 0.05)',
+              tickColor: 'rgba(0, 0, 0, 0.15)'
+            }
+          }
+        }
+      }
+    });
+
+    this.charts.set('thrusters', chart);
+  }
+
+  updateVesselInfo(message) {
+    try {
+      const container = document.getElementById('vesselInfo');
+      
+      if (!message || !message.pose || !message.pose.pose || !message.twist || !message.twist.twist) {
+        console.warn('Incomplete odometry message received');
+        return;
+      }
+      
+      // Clear connection status indicators
+      const existingStatus = container.querySelector('.status-indicator');
+      if (existingStatus) {
+        existingStatus.remove();
+      }
+      
+      container.innerHTML = `
+        <div class="info-item">
+          <div class="info-label">Vessel Name</div>
+          <div class="info-value">${this.vesselName}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Position</div>
+          <div class="info-value">X: ${message.pose.pose.position.x.toFixed(2)}m</div>
+          <div class="info-value">Y: ${message.pose.pose.position.y.toFixed(2)}m</div>
+          <div class="info-value">Z: ${message.pose.pose.position.z.toFixed(2)}m</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Velocity</div>
+          <div class="info-value">U: ${message.twist.twist.linear.x.toFixed(2)}m/s</div>
+          <div class="info-value">V: ${message.twist.twist.linear.y.toFixed(2)}m/s</div>
+          <div class="info-value">W: ${message.twist.twist.linear.z.toFixed(2)}m/s</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Angular Velocity</div>
+          <div class="info-value">P: ${message.twist.twist.angular.x.toFixed(2)}rad/s</div>
+          <div class="info-value">Q: ${message.twist.twist.angular.y.toFixed(2)}rad/s</div>
+          <div class="info-value">R: ${message.twist.twist.angular.z.toFixed(2)}rad/s</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Last Update</div>
+          <div class="info-value">${new Date().toLocaleTimeString()}</div>
+        </div>
+      `;
+    } catch (error) {
+      console.error('Error updating vessel info:', error);
+    }
+  }
+
+  quaternionToEuler(q) {
+    const x = q.x, y = q.y, z = q.z, w = q.w;
+    const sinr_cosp = 2 * (w * x + y * z);
+    const cosr_cosp = 1 - 2 * (x * x + y * y);
+    const roll = Math.atan2(sinr_cosp, cosr_cosp) * 180 / Math.PI;
+
+    const sinp = 2 * (w * y - z * x);
+    const pitch = Math.abs(sinp) >= 1 ? Math.sign(sinp) * Math.PI / 2 : Math.asin(sinp) * 180 / Math.PI;
+
+    const siny_cosp = 2 * (w * z + x * y);
+    const cosy_cosp = 1 - 2 * (y * y + z * z);
+    const yaw = Math.atan2(siny_cosp, cosy_cosp) * 180 / Math.PI;
+    
+    return { roll, pitch, yaw };
+  }
+
+  // Add disconnect overlay to all chart containers
+  addDisconnectOverlays() {
+    // Add disconnect overlay to each chart container
+    this.charts.forEach((chart, id) => {
+      const canvas = document.getElementById(`${id}Chart`);
+      if (canvas) {
+        const container = canvas.parentNode;
+        
+        // Only add if not already present
+        if (!container.querySelector('.chart-disconnected')) {
+          const overlay = document.createElement('div');
+          overlay.className = 'chart-disconnected';
+          overlay.innerHTML = '<div class="disconnect-message">Simulator Disconnected</div>';
+          container.appendChild(overlay);
+          
+          // Activate after a short delay for animation
+          setTimeout(() => {
+            overlay.classList.add('active');
+          }, 50);
+        }
+      }
+    });
+    
+    // Also handle control surfaces and thrusters containers
+    ['controlSurfacesChart', 'thrustersChart'].forEach(id => {
+      const container = document.getElementById(id);
+      if (container && !container.querySelector('.chart-disconnected')) {
+        const overlay = document.createElement('div');
+        overlay.className = 'chart-disconnected';
+        overlay.innerHTML = '<div class="disconnect-message">Simulator Disconnected</div>';
+        container.appendChild(overlay);
+        
+        // Activate after a short delay for animation
+        setTimeout(() => {
+          overlay.classList.add('active');
+        }, 50);
+      }
+    });
+  }
+
+  // Stop data collection and clean up
+  stopDataCollection() {
+    this.isCollectingData = false;
+    
+    if (this.dataMonitorInterval) {
+      clearInterval(this.dataMonitorInterval);
+      this.dataMonitorInterval = null;
+    }
+    
+    // Update the vessel charts to show disconnected state
+    this.updateAllChartsWithDisconnectStatus();
+  }
+
+  // Update showConnectionStatus to handle more connection states
+  showConnectionStatus(status) {
+    const container = document.getElementById('vesselInfo');
+    if (!container) return;
+    
+    // Remove existing status indicator
+    const existingStatus = container.querySelector('.status-indicator');
+    if (existingStatus) {
+      existingStatus.remove();
+    }
+    
+    let statusClass = '';
+    let statusText = '';
+    
+    if (status === true || status === 'connected') {
+      statusClass = 'connected';
+      statusText = 'Connected';
+      // Remove disconnect overlays when connected
+      this.removeDisconnectOverlays();
+    } else if (status === 'stale') {
+      statusClass = 'stale';
+      statusText = 'Connection Stale';
+    } else {
+      statusClass = 'disconnected';
+      statusText = 'Disconnected';
+      // Add disconnect overlays when disconnected
+      this.addDisconnectOverlays();
+    }
+    
+    const statusElement = document.createElement('div');
+    statusElement.className = `status-indicator ${statusClass}`;
+    statusElement.innerHTML = `<span class="status-dot"></span><span class="status-text">${statusText}</span>`;
+    
+    container.prepend(statusElement);
+  }
+
+  // Add a disconnect annotation to a chart
+  addDisconnectAnnotation(chart) {
+    try {
+      // Check if Chart.js annotation plugin is available
+      if (!Chart.registry.plugins.get('annotation')) {
+        console.warn('Chart.js annotation plugin not registered, cannot add disconnect annotation');
+        return;
+      }
+      
+      // Only add if not already present
+      if (chart.options.plugins.annotation && 
+          chart.options.plugins.annotation.annotations && 
+          chart.options.plugins.annotation.annotations.disconnectLine) {
+        return;
+      }
+      
+      // Initialize annotation plugin options if not already present
+      if (!chart.options.plugins.annotation) {
+        chart.options.plugins.annotation = {
+          annotations: {}
+        };
+      } else if (!chart.options.plugins.annotation.annotations) {
+        chart.options.plugins.annotation.annotations = {};
+      }
+      
+      // For regular time-series charts
+      if (chart.data.labels && chart.data.labels.length > 0) {
+        const lastTimeIndex = chart.data.labels[chart.data.labels.length - 1];
+        
+        // Add a vertical line at the last timestamp
+        chart.options.plugins.annotation.annotations.disconnectLine = {
+          type: 'line',
+          xMin: lastTimeIndex,
+          xMax: lastTimeIndex,
+          borderColor: 'rgba(255, 0, 0, 0.5)',
+          borderWidth: 2,
+          borderDash: [5, 5],
+          label: {
+            content: 'Disconnected',
+            enabled: true,
+            position: 'top',
+            backgroundColor: 'rgba(255, 0, 0, 0.7)',
+            font: {
+              size: 11
+            }
+          }
+        };
+      } 
+      // For path chart
+      else if (chart.type === 'scatter' || chart.id === 'path') {
+        // If there's data in the current position dataset
+        if (chart.data.datasets.length > 1 && 
+            chart.data.datasets[1] && 
+            chart.data.datasets[1].data && 
+            chart.data.datasets[1].data.length > 0) {
+          
+          const lastPoint = chart.data.datasets[1].data[0];
+          
+          // Add a point annotation at the last position
+          chart.options.plugins.annotation.annotations.disconnectPoint = {
+            type: 'point',
+            xValue: lastPoint.x,
+            yValue: lastPoint.y,
+            backgroundColor: 'rgba(255, 0, 0, 0.7)',
+            radius: 8,
+            borderWidth: 2,
+            borderColor: 'white',
+            label: {
+              content: 'Disconnected',
+              enabled: true,
+              position: 'top',
+              backgroundColor: 'rgba(255, 0, 0, 0.7)',
+              font: {
+                size: 11
+              }
+            }
+          };
+        }
+      }
+      
+      // Update the chart with minimal animation
+      chart.update('none');
+    } catch (error) {
+      console.error('Error adding disconnect annotation:', error);
+    }
+  }
+}
+
+// Initialize the vessel manager
+const vesselManager = new VesselManager();

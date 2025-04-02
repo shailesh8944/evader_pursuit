@@ -1,7 +1,8 @@
 docker run -it --rm --privileged --name panisim \
-    --net=host \
     --env="DISPLAY" \
     --env="ROS_DOMAIN_ID=42" \
+    -p 8000:8000 \
+    -p 9090:9090 \
     --workdir="/workspaces/mavlab" \
     --volume="$(pwd)":"/workspaces/mavlab" \
     --volume="/dev/shm":"/dev/shm" \

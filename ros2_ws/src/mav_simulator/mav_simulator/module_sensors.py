@@ -82,6 +82,7 @@ class IMUSensor(BaseSensor):
         acc_bcs = state_der[0:3] + np.cross(omg_bcs, v_bcs)
         acc_s_bcs = acc_bcs + np.cross(alpha, self.location) + np.cross(omg_bcs, np.cross(omg_bcs, self.location))
         acc_sensor = kin.quat_to_rotm(orientation_quat).T @ acc_s_bcs
+        
         acc_sensor = acc_sensor + kin.quat_to_rotm(q_sensor).T @ np.array([0, 0, -self.vessel_node.vessel.g])
         acc_sensor = acc_sensor + np.random.multivariate_normal(np.zeros(3), self.lin_acc_cov)
 
