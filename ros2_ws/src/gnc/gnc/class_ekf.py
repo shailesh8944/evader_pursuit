@@ -1,7 +1,7 @@
 import numpy as np
 import scipy
 import warnings
-from ros2_ws.src.mav_simulator.mav_simulator.module_kinematics import clip, ssa
+from mav_simulator.module_kinematics import clip, ssa
 
 class EKF():   
      
@@ -10,7 +10,7 @@ class EKF():
             sampling_rate, 
             n_states=15, 
             n_inp=1, 
-            pro_noise_cov=np.eye(1), 
+            pro_noise_cov=np.eye(6), 
         ):
 
         self.sampling_rate = sampling_rate
