@@ -359,7 +359,7 @@ class Vessel:
          F_C = (C_RB + C_A) @ vel
       
         # Calculate total force vector
-        F = F_hyd + F_control + F_thrust + F_g - F_C
+        F = F_hyd + F_control + F_thrust - F_g - F_C
 
         # Calculate velocity derivatives
 
