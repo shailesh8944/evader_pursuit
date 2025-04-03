@@ -23,7 +23,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import pandas as pd
 import sys
-from mav_simulator.module_kinematics import Smat, eul_to_rotm, eul_rate_matrix, eul_to_quat
+from mav_simulator.module_kinematics import Smat, clip, eul_to_rotm, eul_rate_matrix, eul_to_quat, ssa
 import mav_simulator.module_control as con
 from mav_simulator.calculate_hydrodynamics import CalculateHydrodynamics
 from mav_simulator.terminalMessages import print_debug, print_info, print_warning, print_error
@@ -359,8 +359,8 @@ class Vessel:
          F_C = (C_RB + C_A) @ vel
       
         # Calculate total force vector
-        F = F_hyd + F_control + F_thrust - F_g - F_C
-    
+        F = F_hyd + F_control + F_thrust + F_g - F_C
+
         # Calculate velocity derivatives
 
         M = M_RB
@@ -497,8 +497,11 @@ class Vessel:
 
         for surface in self.control_surfaces['control_surfaces']:
 
+            max_delta = np.deg2rad(surface['control_surface_delta_max'])
+
             # If control surface has hydrodynamic coefficients, calculate forces from them
             if surface['control_surface_hydrodynamics']!= 'None':
+                    delta = clip(ssa(delta[surface['control_surface_id'] - 1]),max_delta)
                     for coeff_name, coeff_value in surface['control_surface_hydrodynamics'].items():
                         if 'delta' in coeff_name:
                              if not self.dim_flag:   
@@ -507,7 +510,7 @@ class Vessel:
                                 coeff_value = coeff_value * factor
                         force_dir = coeff_name.split('_')[0]
                         if force_dir in self.force_indices:
-                            tau[self.force_indices[force_dir]] += coeff_value * delta[surface['control_surface_id'] - 1]
+                            tau[self.force_indices[force_dir]] += coeff_value * delta
 
             else:
                 # If control surface has no hydrodynamic coefficients, calculate forces from Aerofoil data
@@ -542,7 +545,7 @@ class Vessel:
             
                 # Get corresponding delta for this control surface based on surface ID
                 surface_id = surface['control_surface_id']
-                surface_delta = delta[surface_id - 1]  # Subtract 1 since IDs start at 1
+                surface_delta = delta = clip(ssa(delta[surface['control_surface_id'] - 1]),max_delta) # Subtract 1 since IDs start at 1
                 
                 # Calculate effective angle of attack
                 alpha = np.arctan2(V_surface[2], V_surface[0]) + surface_delta
