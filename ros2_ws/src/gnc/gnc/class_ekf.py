@@ -11,53 +11,11 @@ class EKF():
             n_states=15, 
             n_inp=1, 
             pro_noise_cov=np.eye(1), 
-            imu_sampling_rate=100.0,
-            position_sampling_rate=1.0,
-            imu_cutoff_freq=1.0, 
-            position_cutoff_freq=1.0,
-            filter_acc=False, 
-            filter_ang_vel=False, 
-            filter_euler=False, 
-            filter_position=False,
-            filter="butterworth"
         ):
 
         self.sampling_rate = sampling_rate
         self.dt = 1/self.sampling_rate
         self.t = 0.0
-        
-        # Filter flags
-        self.filter_acc = filter_acc
-        self.filter_ang_vel = filter_ang_vel
-        self.filter_euler = filter_euler
-        self.filter_position = filter_position
-        
-        # Initialize Butterworth filter if any filtering is enabled
-        if any([filter_acc, filter_ang_vel, filter_euler]):
-            if filter == "butterworth": 
-                self.imu_filter = ButterworthFilter(
-                                    sampling_rate=imu_sampling_rate, 
-                                    cutoff_freq=imu_cutoff_freq, 
-                                    order=2
-                                )
-            elif filter == "savgol":
-                self.imu_filter = SavGolFilter(
-                                    window_length=11,
-                                    poly_order=3
-                                )
-        
-        if filter_position:
-            if filter == "butterworth": 
-                self.position_filter = ButterworthFilter(
-                                            sampling_rate=position_sampling_rate, 
-                                            cutoff_freq=position_cutoff_freq, 
-                                            order=2
-                                        )  
-            elif filter == "savgol":
-                self.position_filter = SavGolFilter(
-                                            window_length=11,
-                                            poly_order=3
-                                        )
         
         self.n_states = n_states
         self.n_inp = n_inp
@@ -163,23 +121,10 @@ class EKF():
         for i in range(3,6):
             self.x[i] = ssa(self.x[i])
 
-    def correct(self, y, Cd, R, meas_model=None, threshold=None, filter_flag=None):
+    def correct(self, y, Cd, R, meas_model=None, threshold=None, imu_ssa=False):
         """
         Modified correct method to handle acceleration filtering
-        """
-        # If this is an IMU measurement (9 measurements: 3 euler, 3 angular vel, 3 accel)
-        if filter_flag == "IMU":
-            # Apply filters based on enabled flags
-            if self.filter_euler:
-                y[0:3, 0] = self.imu_filter.filter_euler(y[0:3, 0])
-            if self.filter_ang_vel:
-                y[3:6, 0] = self.imu_filter.filter_angular_velocity(y[3:6, 0])
-            if self.filter_acc:
-                y[6:9, 0] = self.imu_filter.filter_acceleration(y[6:9, 0])
-        
-        if filter_flag == "UWB":
-            if self.filter_position:
-                y[0:3, 0] = self.position_filter.filter_position(y[0:3, 0])
+        """        
 
         I = np.eye(self.n_states)
         if np.abs(np.linalg.det(Cd @ self.P @ Cd.T + R)) > 1e-6:
@@ -190,8 +135,11 @@ class EKF():
             else:
                 change_before_K = (y - Cd @ self.x)
 
-            for i in range(3):
-                change_before_K[i] = ssa(change_before_K[i])
+            # TODO: Verify the following lines 
+            # Rishabh --> Should this not be specific to the sensor? (GPS may not need this)
+            if imu_ssa:
+                for i in range(3):
+                    change_before_K[i] = ssa(change_before_K[i])
             
             change = K @ change_before_K
             

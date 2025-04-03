@@ -9,7 +9,7 @@ book:
   repo-url: https://github.com/yourusername/mav_simulator
   repo-actions: [edit, issue]
   chapters:
-    - rawFiles/index.qmd
+    - index.qmd
     - rawFiles/setup.qmd
     - rawFiles/quickstart.qmd
     - part: "Kinematics"
