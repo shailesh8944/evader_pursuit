@@ -97,6 +97,18 @@
     .control-button:hover {
       background-color: rgba(0, 0, 0, 0.7);
     }
+    
+    #sizeControl {
+      margin-top: 15px;
+      border-top: 1px solid rgba(255, 255, 255, 0.3);
+      padding-top: 10px;
+    }
+    
+    #vesselSizeSlider {
+      width: 100%;
+      margin-top: 8px;
+      accent-color: #4CAF50;
+    }
   </style>
 </head>
 <body>
@@ -106,6 +118,10 @@
     <div id="vesselData">
       <p>Position: <span id="position">0, 0, 0</span></p>
       <p>Orientation: <span id="orientation">0°, 0°, 0°</span></p>
+    </div>
+    <div id="sizeControl">
+      <label for="vesselSizeSlider">Vessel Size: <span id="sizeValue">1.0</span>x</label>
+      <input type="range" id="vesselSizeSlider" min="0.1" max="2" step="0.1" value="1.0">
     </div>
   </div>
   
@@ -121,11 +137,26 @@
     const pathPoints = [];
     const MAX_PATH_POINTS = 1000; // Maximum number of points to keep in the path
     
+    // Vessel properties
+    const initialVesselSize = {
+      width: 10,
+      height: 5,
+      length: 20
+    };
+    let vesselSize = {...initialVesselSize};
+    let vesselScaleFactor = 1.0;
+    
     // ROS Connection
     let ros, odomTopic;
     let vesselName = '';
     let isConnected = false;
     let lastMessageTime = 0;
+    
+    // Store latest vessel state
+    let lastVesselState = {
+      position: { x: 0, y: 0, z: 0 },
+      quaternion: { x: 0, y: 0, z: 0, w: 1 }
+    };
     
     // Initialize the 3D scene
     function initScene() {
@@ -157,7 +188,7 @@
       scene.add(axesHelper);
       
       // Create vessel (as a cube)
-      const geometry = new THREE.BoxGeometry(10, 5, 20); // width, height, length
+      const geometry = new THREE.BoxGeometry(vesselSize.width, vesselSize.height, vesselSize.length);
       const material = new THREE.MeshPhongMaterial({ 
         color: 0x2196F3,
         specular: 0x111111,
@@ -166,7 +197,7 @@
       vessel = new THREE.Mesh(geometry, material);
       
       // Move pivot point to bottom center of the vessel
-      geometry.translate(0, 2.5, 0);
+      geometry.translate(0, vesselSize.height / 2, 0);
       
       scene.add(vessel);
       
@@ -197,6 +228,13 @@
       document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
       document.getElementById('resetCameraBtn').addEventListener('click', resetCamera);
       
+      // Handle size slider
+      document.getElementById('vesselSizeSlider').addEventListener('input', function(e) {
+        vesselScaleFactor = parseFloat(e.target.value);
+        document.getElementById('sizeValue').textContent = vesselScaleFactor.toFixed(1);
+        updateVesselSize();
+      });
+      
       // Start animation loop
       animate();
     }
@@ -211,9 +249,9 @@
       const origin = new THREE.Vector3(0, 0, 0);
       
       // Create arrows for each axis
-      const xAxisLength = 15;
-      const yAxisLength = 10;
-      const zAxisLength = 7;
+      const xAxisLength = 15 * vesselScaleFactor;
+      const yAxisLength = 10 * vesselScaleFactor;
+      const zAxisLength = 7 * vesselScaleFactor;
       
       // Create arrow helpers
       const xAxis = new THREE.ArrowHelper(
@@ -257,7 +295,7 @@
         const material = new THREE.SpriteMaterial({ map: texture });
         const sprite = new THREE.Sprite(material);
         sprite.position.copy(position);
-        sprite.scale.set(5, 2.5, 1);
+        sprite.scale.set(5 * vesselScaleFactor, 2.5 * vesselScaleFactor, 1);
         return sprite;
       };
       
@@ -491,6 +529,12 @@
       const qz = message.pose.pose.orientation.z;
       const qw = message.pose.pose.orientation.w;
       
+      // Store latest state
+      lastVesselState = {
+        position: { x, y, z },
+        quaternion: { x: qx, y: qy, z: qz, w: qw }
+      };
+      
       // Update vessel position
       vessel.position.set(x, z, y); // Note: Y and Z are swapped to match common 3D conventions
       
@@ -558,6 +602,54 @@
         document.getElementById('connectionStatus').className = 'status-stale';
         document.getElementById('connectionText').textContent = 'Connection Stale';
       }
+    }
+    
+    // Update vessel size based on scale factor
+    function updateVesselSize() {
+      if (!vessel) return;
+      
+      // Remember current position and orientation
+      const currentPosition = vessel.position.clone();
+      const currentQuaternion = vessel.quaternion.clone();
+      
+      // Remove old vessel and axes from the scene
+      if (vesselAxes) {
+        vessel.remove(vesselAxes);
+        vesselAxes = null;
+      }
+      scene.remove(vessel);
+      
+      // Recalculate vessel size
+      vesselSize = {
+        width: initialVesselSize.width * vesselScaleFactor,
+        height: initialVesselSize.height * vesselScaleFactor,
+        length: initialVesselSize.length * vesselScaleFactor
+      };
+      
+      // Create new geometry with updated size
+      const geometry = new THREE.BoxGeometry(vesselSize.width, vesselSize.height, vesselSize.length);
+      
+      // Move pivot point to bottom center of the vessel
+      geometry.translate(0, vesselSize.height / 2, 0);
+      
+      // Create new material (reusing same color scheme)
+      const material = new THREE.MeshPhongMaterial({ 
+        color: 0x2196F3,
+        specular: 0x111111,
+        shininess: 30
+      });
+      
+      // Create new vessel mesh
+      vessel = new THREE.Mesh(geometry, material);
+      
+      // Restore position and orientation
+      vessel.position.copy(currentPosition);
+      vessel.quaternion.copy(currentQuaternion);
+      
+      scene.add(vessel);
+      
+      // Recreate the vessel-fixed axes
+      createVesselAxes();
     }
     
     // Initialize everything

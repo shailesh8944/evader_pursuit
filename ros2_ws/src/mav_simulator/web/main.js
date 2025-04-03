@@ -1,4 +1,7 @@
 // Vessel management class
+// Global variable for tracking last message time
+let lastMessageTime = Date.now();
+
 class VesselManager {
   constructor() {
     this.vessels = new Map();
@@ -64,19 +67,11 @@ class VesselManager {
     }
     
     // Setup connection timeout detection
-    let lastMessageTime = Date.now();
+    lastMessageTime = Date.now();
     
-    // Create a topic to monitor for any messages
-    this.heartbeatTopic = new ROSLIB.Topic({
-      ros: this.ros,
-      name: '/rosout',
-      messageType: 'rosgraph_msgs/Log'
-    });
-    
-    // Listen for any message to update the last message time
-    this.heartbeatTopic.subscribe(() => {
-      lastMessageTime = Date.now();
-    });
+    // We won't subscribe to /rosout - instead we'll use the vessel-specific topics
+    // Connection health will be monitored through updates to lastMessageTime
+    // which will be updated in the handleOdometry and handleVesselState methods
     
     // Check connection status every 5 seconds
     this.heartbeatInterval = setInterval(() => {
@@ -684,7 +679,7 @@ class VesselVisualizer {
     if (this.isCollectingData) return;
     
     this.isCollectingData = true;
-    this.lastMessageTime = Date.now();
+    lastMessageTime = Date.now();
     
     // Remove any disconnect overlays when starting data collection
     this.removeDisconnectOverlays();
@@ -692,7 +687,7 @@ class VesselVisualizer {
     // Start monitoring data flow
     if (!this.dataMonitorInterval) {
       this.dataMonitorInterval = setInterval(() => {
-        const timeSinceLastMessage = Date.now() - this.lastMessageTime;
+        const timeSinceLastMessage = Date.now() - lastMessageTime;
         
         // If no messages for 3 seconds, consider connection stale
         if (timeSinceLastMessage > 3000) {
@@ -842,7 +837,7 @@ class VesselVisualizer {
 
   handleOdometry(message) {
     // Update last message time
-    this.lastMessageTime = Date.now();
+    lastMessageTime = Date.now();
     
     // Ensure we're collecting data
     if (!this.isCollectingData) {
@@ -879,6 +874,9 @@ class VesselVisualizer {
 
   handleVesselState(message) {
     console.log('Received vessel state:', message);
+    
+    // Update last message time
+    lastMessageTime = Date.now();
     
     // Check if message has data property (standard ROS message)
     if (!message.data || !Array.isArray(message.data)) {

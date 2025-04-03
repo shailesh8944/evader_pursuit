@@ -79,6 +79,9 @@ class Vessel:
         self.D = vessel_params['geometry']['depth']
         self.U = vessel_params.get('U', 0.0)  # Default to 0 if not specified
         
+
+        self.coriolis_flag = hydrodynamic_data.get('coriolis_flag',False)
+        
         # Mass parameters
         self.mass = vessel_params['inertia']['mass']
         self.CG = vessel_params['geometry']['CG']['position']
@@ -101,6 +104,8 @@ class Vessel:
             nonDim_A[3:6][:, 3:6] = nonDim_A[3:6][:, 3:6] / (0.5 * self.rho * ((self.L ) ** 5))
             print_info(f"Non-dimensionalized added mass matrix: {nonDim_A}")
             print_info(f"Dimensionalized added mass matrix: {dim_A}")
+            if self.coriolis_flag==False:
+               print_warning("Coriolis Matrix will not be used for Dynamics since flag set False")
             self.added_mass_matrix = dim_A
         else:
             self.added_mass_matrix = vessel_params['inertia']['added_mass_matrix']
@@ -115,6 +120,7 @@ class Vessel:
         # Dimensionalization flag
         self.dim_flag = hydrodynamic_data.get('dim_flag', False)
 
+       
         # Initialize hydrodynamics dictionary
         self.hydrodynamics = {}
         
@@ -336,21 +342,25 @@ class Vessel:
         # Calculate mass matrices
         M_RB = self.mass_matrix
         M_A = self.added_mass_matrix
-        C_RB, C_A = self.calculate_coriolis_matrices(vel)
+        if self.coriolis_flag:
+          C_RB, C_A = self.calculate_coriolis_matrices(vel)
         
         # Check if added mass is too large compared to rigid body mass
         if np.any(np.abs(M_A) > 2 * np.abs(M_RB)):
             M = M_RB  # Ignore added mass if too large
-            C_A = np.zeros_like(C_A)  # Ignore Coriolis added mass if too large
+            if self.coriolis_flag:
+              C_A = np.zeros_like(C_A)  # Ignore Coriolis added mass if too large
         else:
             M = M_RB + M_A
 
         # Calculate Coriolis forces
-        F_C = (C_RB + C_A) @ vel
+        F_C = np.zeros_like(F_g)
+        if self.coriolis_flag:
+         F_C = (C_RB + C_A) @ vel
       
         # Calculate total force vector
         F = F_hyd + F_control + F_thrust - F_g - F_C
-
+    
         # Calculate velocity derivatives
 
         M = M_RB

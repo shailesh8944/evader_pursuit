@@ -1,6 +1,7 @@
 hydra_file: /workspaces/mavlab/inputs/sookshma/HydRA/matlab/sookshma_hydra.json
 dim_flag: false
 cross_flow_drag: false
+coriolis_flag: false # For linear dynamic model
 
 # Surge hydrodynamic derivatives
 X_u: -0.01
