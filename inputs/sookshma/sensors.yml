@@ -1,21 +1,26 @@
 sensors:
   - 
     sensor_type: IMU
+    topic: /sookshma_00/imu
     sensor_location: [0.25, 0.01, 0.1]          # With respect to BODY frame
     sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
     publish_rate: 50
+    user_covariance: false
+    covariance: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
   
   -
-    sensor_type: GPS
+    sensor_type: UWB
+    topic: /sookshma_00/uwb
     sensor_location: [1.0, 0.01, 0.015]         # With respect to BODY frame
     sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
     publish_rate: 1
-   
-  - 
-    sensor_type: DVL
-    sensor_location: [1.0, 0.01, 0.015]         # With respect to BODY frame
-    sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
-    publish_rate: 50
+    user_covariance: false
+    covariance: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
+  # - 
+  #   sensor_type: DVL
+  #   sensor_location: [1.0, 0.01, 0.015]         # With respect to BODY frame
+  #   sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
+  #   publish_rate: 50
 
   # -
   #   sensor_type: encoders
