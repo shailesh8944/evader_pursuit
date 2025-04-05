@@ -23,10 +23,10 @@ var ros = new ROSLIB.Ros({
     messageType: 'nav_msgs/Odometry'
   });
 
-  var rudderTopic = new ROSLIB.Topic({
+  var actuatorTopic = new ROSLIB.Topic({
     ros: ros,
-    name: '/mav_rudder',
-    messageType: 'std_msgs/Float64'
+    name: '/sookshma_00/actuator_cmd',
+    messageType: 'interfaces/Actuator'
   });
   
   // Helper: convert quaternion to Euler angles
@@ -60,7 +60,6 @@ var ros = new ROSLIB.Ros({
   var pAngularVelocityCtx = document.getElementById('pAngularVelocityChart').getContext('2d');
   var qAngularVelocityCtx = document.getElementById('qAngularVelocityChart').getContext('2d');
   var rAngularVelocityCtx = document.getElementById('rAngularVelocityChart').getContext('2d');
-  var rudderCtx = document.getElementById('rudderChart').getContext('2d');
   
   // Create charts for each data type
   var pathChart = new Chart(pathCtx, {
@@ -129,16 +128,61 @@ var ros = new ROSLIB.Ros({
   var qAngularVelocityChart = createSingleVariableChart(qAngularVelocityCtx, 'Q Angular Velocity', 'red', 'blue');
   var rAngularVelocityChart = createSingleVariableChart(rAngularVelocityCtx, 'R Angular Velocity', 'red', 'blue');
 
-  var rudderChart = new Chart(rudderCtx, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [
-        { label: 'delta', data: [], borderColor: 'red', fill: false }        
-      ]
-    },
-    options: { animation: false, responsive: true, scales: { x: { display: false } } }
-  });
+  // Create actuator charts container
+  var actuatorCharts = {};
+  
+  function createActuatorChart(actuatorName) {
+    var canvas = document.createElement('canvas');
+    canvas.id = actuatorName + 'Chart';
+    document.getElementById('actuatorCharts').appendChild(canvas);
+    
+    var ctx = canvas.getContext('2d');
+    actuatorCharts[actuatorName] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { label: actuatorName, data: [], borderColor: 'red', fill: false }
+        ]
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { 
+          x: { display: false },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              maxTicksLimit: 5
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top'
+          }
+        }
+      }
+    });
+  }
+
+  function updateActuatorChart(actuatorName, value) {
+    if (!actuatorCharts[actuatorName]) {
+      createActuatorChart(actuatorName);
+    }
+    
+    var chart = actuatorCharts[actuatorName];
+    chart.data.labels.push(sampleIndex);
+    chart.data.datasets[0].data.push(value);
+    
+    if (chart.data.labels.length > 100) {
+      chart.data.labels.shift();
+      chart.data.datasets.forEach(ds => ds.data.shift());
+    }
+    chart.update();
+  }
   
   var sampleIndex = 0;
 
@@ -161,16 +205,6 @@ var ros = new ROSLIB.Ros({
       chart.data.datasets.forEach(ds => ds.data.shift());
     }
     chart.update();
-  }
-
-  function updateRudderChart(delta) {
-    rudderChart.data.labels.push(sampleIndex);
-    rudderChart.data.datasets[0].data.push(delta);
-    if (rudderChart.data.labels.length > 100) {
-      rudderChart.data.labels.shift();
-      rudderChart.data.datasets.forEach(ds => ds.data.shift());
-    }
-    rudderChart.update();
   }
   
   // Subscribe to both odometry topics
@@ -234,7 +268,8 @@ var ros = new ROSLIB.Ros({
     updateSingleVariableChart(rAngularVelocityChart, r1, r2);
   }
 
-  rudderTopic.subscribe(function (message) {
-    var delta = message.data;
-    updateRudderChart(delta);
+  actuatorTopic.subscribe(function (message) {
+    for (var i = 0; i < message.actuator_names.length; i++) {
+      updateActuatorChart(message.actuator_names[i], message.actuator_values[i]);
+    }
   });

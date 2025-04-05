@@ -50,11 +50,12 @@ class IMUSensor(BaseSensor):
         self.orientation = np.array(sensor_config['sensor_orientation'])
         
         # Noise parameters
-        self.eul_rms = np.array([1, 1, 1]) * 1e-2
+        adjust_factor = 1e0
+        self.eul_rms = np.array([1, 1, 1]) * 1e-2 * adjust_factor
         self.eul_cov = np.diag(self.eul_rms ** 2)
-        self.ang_vel_rms = np.array([1, 1, 1]) * 1e-2
+        self.ang_vel_rms = np.array([1, 1, 1]) * 1e-2 * adjust_factor
         self.ang_vel_cov = np.diag(self.ang_vel_rms ** 2)
-        self.lin_acc_rms = np.array([1, 1, 1]) * 1.5e-1
+        self.lin_acc_rms = np.array([1, 1, 1]) * 1.5e-1 * adjust_factor
         self.lin_acc_cov = np.diag(self.lin_acc_rms ** 2)
 
     def get_measurement(self,quat=False):
@@ -104,7 +105,8 @@ class GPSSensor(BaseSensor):
         self.location = np.array(sensor_config['sensor_location'])
         
         # Noise parameters
-        self.gps_rms = np.array([3, 3, 3], dtype=np.float64)
+        adjust_factor = 1e0
+        self.gps_rms = np.array([3, 3, 3], dtype=np.float64) * adjust_factor
         self.gps_cov = np.diag(self.gps_rms ** 2)
 
     def get_measurement(self, quat=False):
@@ -136,7 +138,8 @@ class UWBSensor(BaseSensor):
         self.location = np.array(sensor_config['sensor_location'])
         
         # Noise parameters
-        self.uwb_rms = np.array([1, 1, 1], dtype=np.float64)
+        adjust_factor = 1e0
+        self.uwb_rms = np.array([1, 1, 1], dtype=np.float64) * adjust_factor
         self.uwb_cov = np.diag(self.uwb_rms ** 2)
         self.uwb_cov_full = -np.eye(6)
         self.uwb_cov_full[0:3][:, 0:3] = self.uwb_cov

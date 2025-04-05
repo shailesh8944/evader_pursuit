@@ -16,14 +16,15 @@ sensors:
     publish_rate: 1
     user_covariance: false
     covariance: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
-  # - 
-  #   sensor_type: DVL
-  #   sensor_location: [1.0, 0.01, 0.015]         # With respect to BODY frame
-  #   sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
-  #   publish_rate: 50
+    
+  - 
+    sensor_type: DVL
+    sensor_location: [1.0, 0.01, 0.015]         # With respect to BODY frame
+    sensor_orientation: [1.0, 0.0, 0.0, 0.0]    # With respect to BODY frame
+    publish_rate: 50
 
-  # -
-  #   sensor_type: encoders
-  #   sensor_location: None      
-  #   sensor_orientation: None    
-  #   publish_rate: 10
+  -
+    sensor_type: encoders
+    sensor_location: None      
+    sensor_orientation: None    
+    publish_rate: 10

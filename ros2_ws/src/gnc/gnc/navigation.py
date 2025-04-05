@@ -29,7 +29,7 @@ def main():
              1/vessel.dt, 
              n_states=15, 
              n_inp=1, 
-             pro_noise_cov=8e1*np.diag([1, 1, 1, 1, 1, 1])
+             pro_noise_cov=1e2*np.diag([1, 1, 1, 1, 1, 1])
         ))
 
     rclpy.init()
@@ -39,7 +39,7 @@ def main():
     navs = []
     for vessel, ekf in zip(vessels, ekfs):
         th = calculate_threshold(vessel.dt)
-        navs.append(Navigation(vessel, ekf, llh0, th=th))
+        navs.append(Navigation(vessel, ekf, llh0, th=None))
         executor.add_node(navs[-1])
     
     try: 

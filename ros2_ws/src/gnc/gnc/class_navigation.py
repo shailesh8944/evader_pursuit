@@ -86,7 +86,7 @@ class Navigation(Node):
             self.ekf.x[9:12] = y_imu[3:6]
             self.ekf.x[12:15] = y_imu[6:9]
             self.first_imu_flag = False
-            self.get_logger().info("First IMU Measurement Obtained")
+            # self.get_logger().info("First IMU Measurement Obtained")
         else:
             self.ekf.correct(
                 y_imu, 
@@ -115,7 +115,7 @@ class Navigation(Node):
         if self.first_pos_flag or self.first_imu_flag:
             self.ekf.x[0:3] = y_gnss
             self.first_pos_flag = False
-            self.get_logger().info("First GNSS Measurement Obtained")
+            # self.get_logger().info("First GNSS Measurement Obtained")
         else:
             self.ekf.correct(
                 y_gnss, 
@@ -143,7 +143,7 @@ class Navigation(Node):
         if self.first_pos_flag or self.first_imu_flag:
             self.ekf.x[0:3] = y_uwb
             self.first_pos_flag = False
-            self.get_logger().info("First UWB Measurement Obtained")
+            # self.get_logger().info("First UWB Measurement Obtained")
         else:
             self.ekf.correct(
                 y_uwb, 

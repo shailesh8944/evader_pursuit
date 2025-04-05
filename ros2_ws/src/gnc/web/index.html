@@ -55,6 +55,30 @@
     .full-width {
       grid-column: 1 / -1;
     }
+
+    #actuatorCharts {
+      display: grid;
+      grid-template-columns: repeat(1, 1fr);
+      gap: 15px;
+    }
+
+    #actuatorCharts canvas {
+      height: 200px !important;
+      width: 100% !important;
+    }
+
+    #actuatorCharts .chart-container {
+      padding: 10px;
+      margin: 0;
+      min-height: 250px;
+    }
+
+    #actuatorCharts h3 {
+      font-size: 1.2em;
+      margin: 0 0 10px 0;
+      color: #2c3e50;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -82,17 +106,17 @@
     </div>
 
     <div class="chart-container">
-      <h2>U Velocity (m/s)</h2>
+      <h2>Surge Velocity (m/s)</h2>
       <canvas id="uVelocityChart"></canvas>
     </div>
 
     <div class="chart-container">
-      <h2>V Velocity (m/s)</h2>
+      <h2>Sway Velocity (m/s)</h2>
       <canvas id="vVelocityChart"></canvas>
     </div>
 
     <div class="chart-container">
-      <h2>W Velocity (m/s)</h2>
+      <h2>Heave Velocity (m/s)</h2>
       <canvas id="wVelocityChart"></canvas>
     </div>
 
@@ -112,23 +136,25 @@
     </div>
 
     <div class="chart-container">
-      <h2>P Angular Velocity (rad/s)</h2>
+      <h2>Roll Angular Velocity (rad/s)</h2>
       <canvas id="pAngularVelocityChart"></canvas>
     </div>
 
     <div class="chart-container">
-      <h2>Q Angular Velocity (rad/s)</h2>
+      <h2>Pitch Angular Velocity (rad/s)</h2>
       <canvas id="qAngularVelocityChart"></canvas>
     </div>
 
     <div class="chart-container">
-      <h2>R Angular Velocity (rad/s)</h2>
+      <h2>Yaw Angular Velocity (rad/s)</h2>
       <canvas id="rAngularVelocityChart"></canvas>
     </div>
 
-    <div class="chart-container">
-      <h2>Rudder (degrees)</h2>
-      <canvas id="rudderChart"></canvas>
+    <div class="chart-container full-width">
+      <h2>Actuators</h2>
+      <div id="actuatorCharts" class="chart-grid">
+        <!-- Actuator charts will be dynamically added here -->
+      </div>
     </div>
   </div>
 

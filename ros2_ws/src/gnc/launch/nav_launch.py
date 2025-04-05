@@ -24,11 +24,6 @@ def generate_launch_description():
 
     return LaunchDescription([
         Node(
-            package='mav_simulator',  # Replace with your package name
-            executable='simulate',  # Replace with your script name
-            name='mavsim',
-        ),
-        Node(
             package='gnc',
             executable='nav',
             name='nav',
