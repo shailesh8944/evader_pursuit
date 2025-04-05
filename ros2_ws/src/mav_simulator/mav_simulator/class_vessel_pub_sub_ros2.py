@@ -81,11 +81,12 @@ class Vessel_Pub_Sub():
         self.sensors = []
         if 'sensors' in vessel.vessel_config:
             for sensor_config in vessel.vessel_config['sensors'].get('sensors', []):
-                # Update sensor topic to use {topic_prefix}/{sensor_name} format
+                # Use the sensor_topic from config if available, otherwise use default topic
                 sensor_name = sensor_config.get('name', sensor_config['sensor_type'].lower())
-                sensor_topic = f'{self.topic_prefix}/{sensor_name}'
+                default_topic = f'{self.topic_prefix}/{sensor_name}'
+                sensor_topic = sensor_config.get('sensor_topic', default_topic)
                 
-                # Update sensor_config with new topic
+                # Update sensor_config with the topic
                 sensor_config['topic'] = sensor_topic
                 
                 sensor = create_sensor(sensor_config, self.vessel_id, self.topic_prefix, self)

@@ -39,9 +39,12 @@ class BaseSensor:
         self.topic_prefix = topic_prefix
         self.sensor_type = sensor_config['sensor_type']
         self.rate = sensor_config['publish_rate']
-        self.topic = None
+        # Use the specified sensor topic if available
+        self.topic = sensor_config.get('sensor_topic', None)
         self.id = sensor_config.get('id', 0)
         self.vessel_node = vessel_node
+        self.use_custom_covariance = sensor_config.get('use_custom_covariance', False)
+        self.custom_covariance = sensor_config.get('custom_covariance', {})
 
 class IMUSensor(BaseSensor):
     def __init__(self, sensor_config, vessel_id, topic_prefix, vessel_node):
@@ -49,13 +52,23 @@ class IMUSensor(BaseSensor):
         self.location = np.array(sensor_config['sensor_location'])
         self.orientation = np.array(sensor_config['sensor_orientation'])
         
-        # Noise parameters
+        # Default noise parameters
         self.eul_rms = np.array([1, 1, 1]) * 1e-2
         self.eul_cov = np.diag(self.eul_rms ** 2)
         self.ang_vel_rms = np.array([1, 1, 1]) * 1e-2
         self.ang_vel_cov = np.diag(self.ang_vel_rms ** 2)
         self.lin_acc_rms = np.array([1, 1, 1]) * 1.5e-1
         self.lin_acc_cov = np.diag(self.lin_acc_rms ** 2)
+        
+        # Override with custom covariance if provided
+        if self.use_custom_covariance and self.custom_covariance:
+            for cov_item in self.custom_covariance:
+                if 'orientation_covariance' in cov_item:
+                    self.eul_cov = np.array(cov_item['orientation_covariance']).reshape(3, 3)
+                if 'angular_velocity_covariance' in cov_item:
+                    self.ang_vel_cov = np.array(cov_item['angular_velocity_covariance']).reshape(3, 3)
+                if 'linear_acceleration_covariance' in cov_item:
+                    self.lin_acc_cov = np.array(cov_item['linear_acceleration_covariance']).reshape(3, 3)
 
     def get_measurement(self,quat=False):
         state = self.vessel_node.vessel.current_state
@@ -103,9 +116,15 @@ class GPSSensor(BaseSensor):
         super().__init__(sensor_config, vessel_id, topic_prefix, vessel_node)
         self.location = np.array(sensor_config['sensor_location'])
         
-        # Noise parameters
+        # Default noise parameters
         self.gps_rms = np.array([3, 3, 3], dtype=np.float64)
         self.gps_cov = np.diag(self.gps_rms ** 2)
+        
+        # Override with custom covariance if provided
+        if self.use_custom_covariance and self.custom_covariance:
+            for cov_item in self.custom_covariance:
+                if 'position_covariance' in cov_item:
+                    self.gps_cov = np.array(cov_item['position_covariance']).reshape(3, 3)
 
     def get_measurement(self, quat=False):
         state = self.vessel_node.vessel.current_state
@@ -225,10 +244,18 @@ class EncoderSensor(BaseSensor):
 class DVLSensor(BaseSensor):
     def __init__(self, sensor_config, vessel_id, topic_prefix, vessel_node):
         super().__init__(sensor_config, vessel_id, topic_prefix, vessel_node)
+        self.location = np.array(sensor_config['sensor_location'])
+        self.orientation = np.array(sensor_config['sensor_orientation'])
         
-        # Noise parameters - typical DVL has accuracy of ~0.2-1% of measured velocity
+        # Default noise parameters - typical DVL has accuracy of ~0.2-1% of measured velocity
         self.vel_rms = np.array([0.05, 0.05, 0.05])  # 5cm/s RMS noise in each axis
         self.vel_cov = np.diag(self.vel_rms ** 2)
+        
+        # Override with custom covariance if provided
+        if self.use_custom_covariance and self.custom_covariance:
+            for cov_item in self.custom_covariance:
+                if 'linear_velocity_covariance' in cov_item:
+                    self.vel_cov = np.array(cov_item['linear_velocity_covariance']).reshape(3, 3)
 
     def get_measurement(self, quat=False):
         state = self.vessel_node.vessel.current_state
