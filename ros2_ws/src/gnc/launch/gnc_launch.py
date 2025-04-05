@@ -1,17 +1,52 @@
 import os
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from launch import LaunchDescription
+from launch.actions import ExecuteProcess, IncludeLaunchDescription
+from launch.launch_description_sources import AnyLaunchDescriptionSource
+from launch_ros.substitutions import FindPackageShare
+from launch.substitutions import PathJoinSubstitution
+from launch_ros.actions import Node
 
 def generate_launch_description():
+
+    rosbridge_launch = PathJoinSubstitution([
+        FindPackageShare('rosbridge_server'),
+        'launch',
+        'rosbridge_websocket_launch.xml'
+    ])
+
+    # Path to the web directory in gnc package
+    web_dir = PathJoinSubstitution([
+        FindPackageShare('gnc'),
+        'web'
+    ])
+
     return LaunchDescription([
         Node(
-            package='gnc',  # Replace with your package name
-            executable='nav',  # Replace with your script name
-            name='nav'
+            package='mav_simulator',  # Replace with your package name
+            executable='simulate',  # Replace with your script name
+            name='mavsim',
         ),
         Node(
-            package='gnc',  # Replace with your package name
-            executable='gc',  # Replace with your script name
-            name='gc'
+            package='gnc',
+            executable='nav',
+            name='nav',
+            output='screen'
+        ),
+        Node(
+            package='gnc',
+            executable='gc',
+            name='gc',
+            output='screen'
+        ),
+        # Start the HTTP server to serve the web interface
+        ExecuteProcess(
+            cmd=['python3', '-m', 'http.server', '8000', '--directory', web_dir],
+            name='http_server',
+        ),
+        # Start the rosbridge server
+        IncludeLaunchDescription(
+            AnyLaunchDescriptionSource(rosbridge_launch)
         ),
     ])
