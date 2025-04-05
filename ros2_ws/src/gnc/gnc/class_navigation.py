@@ -15,8 +15,8 @@ class Navigation(Node):
         self.vessel = vessel
         self.vessel_id = vessel.vessel_id
         self.vessel_name = vessel.vessel_name
-        self.topic_prefix = f'{self.vessel_name}_{self.vessel_id:02d}'
-
+        # self.topic_prefix = f'{self.vessel_name}_{self.vessel_id:02d}'
+        self.topic_prefix = '~'
         self.ekf = ekf
         self.first_imu_flag = True
         self.first_pos_flag = True
@@ -29,7 +29,7 @@ class Navigation(Node):
             
             if sensor['sensor_type'] == 'IMU':
                 if 'topic' not in sensor:
-                    sensor['topic'] = f'{self.topic_prefix}/imu'
+                    sensor['topic'] = f'{self.topic_prefix}/imu/data'
                 # Create a closure to capture the current sensor
                 def create_imu_callback(sensor_config):
                     return lambda msg: self.imu_callback(msg, sensor_config)
@@ -43,7 +43,7 @@ class Navigation(Node):
                 self.gnss_sub = self.create_subscription(NavSatFix, sensor['topic'], create_gnss_callback(sensor), 10)
             elif sensor['sensor_type'] == 'UWB':
                 if 'topic' not in sensor:
-                    sensor['topic'] = f'{self.topic_prefix}/uwb'
+                    sensor['topic'] = f'{self.topic_prefix}/uwb_node/loc'
                 # Create a closure to capture the current sensor
                 def create_uwb_callback(sensor_config):
                     return lambda msg: self.uwb_callback(msg, sensor_config)

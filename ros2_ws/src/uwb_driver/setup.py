@@ -23,7 +23,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'uwb = uwb_driver.uwb_start:main',
+            'uwb = uwb_driver.uwb:main',
         ],
     },
 )

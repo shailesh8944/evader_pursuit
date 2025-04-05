@@ -13,15 +13,15 @@ var ros = new ROSLIB.Ros({
   // Create subscribers for two odometry topics
   var odomTopic1 = new ROSLIB.Topic({
     ros: ros,
-    name: '/sookshma_00/odometry_sim',
+    name: '/sookshma_00/nav/odometry',
     messageType: 'nav_msgs/Odometry'
   });
 
-  var odomTopic2 = new ROSLIB.Topic({
-    ros: ros,
-    name: '/sookshma_00/odometry', // Adjust this topic name as needed
-    messageType: 'nav_msgs/Odometry'
-  });
+  // var odomTopic2 = new ROSLIB.Topic({
+  //   ros: ros,
+  //   name: '/sookshma_00/nav/odometry', // Adjust this topic name as needed
+  //   messageType: 'nav_msgs/Odometry'
+  // });
 
   var actuatorTopic = new ROSLIB.Topic({
     ros: ros,
@@ -74,14 +74,14 @@ var ros = new ROSLIB.Ros({
           showLine: true,
           fill: false
         },
-        {
-          label: 'Path 2',
-          data: [],
-          borderColor: 'blue',
-          backgroundColor: 'blue',
-          showLine: true,
-          fill: false
-        }
+        // {
+        //   label: 'Path 2',
+        //   data: [],
+        //   borderColor: 'blue',
+        //   backgroundColor: 'blue',
+        //   showLine: true,
+        //   fill: false
+        // }
       ]
     },
     options: {
@@ -103,7 +103,7 @@ var ros = new ROSLIB.Ros({
         labels: [],
         datasets: [
           { label: label + ' 1', data: [], borderColor: color1, fill: false },
-          { label: label + ' 2', data: [], borderColor: color2, fill: false }
+          // { label: label + ' 2', data: [], borderColor: color2, fill: false }
         ]
       },
       options: {
@@ -188,10 +188,10 @@ var ros = new ROSLIB.Ros({
 
   function updatePathChart(x1, y1, x2, y2) {
     pathChart.data.datasets[0].data.push({x: x1, y: y1});
-    pathChart.data.datasets[1].data.push({x: x2, y: y2});
+    // pathChart.data.datasets[1].data.push({x: x2, y: y2});
     if (pathChart.data.datasets[0].data.length > 100) {
       pathChart.data.datasets[0].data.shift();
-      pathChart.data.datasets[1].data.shift();
+      // pathChart.data.datasets[1].data.shift();
     }
     pathChart.update();
   }
@@ -199,7 +199,7 @@ var ros = new ROSLIB.Ros({
   function updateSingleVariableChart(chart, value1, value2) {
     chart.data.labels.push(sampleIndex);
     chart.data.datasets[0].data.push(value1);
-    chart.data.datasets[1].data.push(value2);
+    // chart.data.datasets[1].data.push(value2);
     if (chart.data.labels.length > 100) {
       chart.data.labels.shift();
       chart.data.datasets.forEach(ds => ds.data.shift());
@@ -218,12 +218,12 @@ var ros = new ROSLIB.Ros({
     }
   });
 
-  odomTopic2.subscribe(function (message) {
-    lastMessage2 = message;
-    if (lastMessage1) {
-      processOdomMessages(lastMessage1, lastMessage2);
-    }
-  });
+  // odomTopic2.subscribe(function (message) {
+  //   lastMessage2 = message;
+  //   if (lastMessage1) {
+  //     processOdomMessages(lastMessage1, lastMessage2);
+  //   }
+  // });
 
   function processOdomMessages(message1, message2) {
     sampleIndex++;
