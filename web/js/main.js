@@ -643,34 +643,57 @@ document.addEventListener('DOMContentLoaded', function() {
         // FBX Component modal event handler
         document.getElementById('btnApplyFbxComponent')?.addEventListener('click', () => {
             const modal = document.getElementById('fbxComponentModal');
-            
-            // Verify IDs are valid before proceeding
-            if (document.getElementById('fbxControlSurfaceSettings').style.display === 'block' && 
-                document.getElementById('fbxSurfaceId').classList.contains('is-invalid')) {
-                showNotification('Control surface ID is already in use. Please use a different ID.', 'error');
-                return;
-            }
-            
-            if (document.getElementById('fbxThrusterSettings').style.display === 'block' && 
-                document.getElementById('fbxThrusterId').classList.contains('is-invalid')) {
-                showNotification('Thruster ID is already in use. Please use a different ID.', 'error');
-                return;
-            }
-            
-            if (document.getElementById('fbxSensorSettings').style.display === 'block' && 
-                document.getElementById('fbxSensorId').classList.contains('is-invalid')) {
-                showNotification('Sensor ID is already in use. Please use a different ID.', 'error');
-                return;
-            }
-            
             const objectUuid = modal?.dataset.objectUuid;
+            const object = threeScene.getObjectByProperty('uuid', objectUuid);
+            
+            // Verify IDs are valid before proceeding, but skip validation if reconfiguring the same component
+            if (document.getElementById('fbxControlSurfaceSettings').style.display === 'block') {
+                const surfaceIdInput = document.getElementById('fbxSurfaceId');
+                const id = parseInt(surfaceIdInput.value);
+                const isEditingSameComponent = object && 
+                                          object.userData.componentId === id && 
+                                          object.userData.componentType === 'controlSurface';
+                
+                // Only show error if invalid and not editing the same component
+                if (surfaceIdInput.classList.contains('is-invalid') && !isEditingSameComponent) {
+                    showNotification('Control surface ID is already in use. Please use a different ID.', 'error');
+                    return;
+                }
+            }
+            
+            if (document.getElementById('fbxThrusterSettings').style.display === 'block') {
+                const thrusterIdInput = document.getElementById('fbxThrusterId');
+                const id = parseInt(thrusterIdInput.value);
+                const isEditingSameComponent = object && 
+                                          object.userData.componentId === id && 
+                                          object.userData.componentType === 'thruster';
+                
+                // Only show error if invalid and not editing the same component
+                if (thrusterIdInput.classList.contains('is-invalid') && !isEditingSameComponent) {
+                    showNotification('Thruster ID is already in use. Please use a different ID.', 'error');
+                    return;
+                }
+            }
+            
+            if (document.getElementById('fbxSensorSettings').style.display === 'block') {
+                const sensorIdInput = document.getElementById('fbxSensorId');
+                const id = parseInt(sensorIdInput.value);
+                const isEditingSameComponent = object && 
+                                          object.userData.componentId === id && 
+                                          object.userData.componentType === 'sensor';
+                
+                // Only show error if invalid and not editing the same component
+                if (sensorIdInput.classList.contains('is-invalid') && !isEditingSameComponent) {
+                    showNotification('Sensor ID is already in use. Please use a different ID.', 'error');
+                    return;
+                }
+            }
             
             if (!objectUuid) {
                 console.error('No object UUID found in modal');
                 return;
             }
             
-            const object = threeScene.getObjectByProperty('uuid', objectUuid);
             if (!object) {
                 console.error('Object not found with UUID:', objectUuid);
                 return;
@@ -1710,8 +1733,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!vesselModel) return;
                 
                 const existingSurface = vesselModel.getControlSurface(id);
-                if (existingSurface) {
-                    // ID conflict found
+                
+                // Get the modal and check if we're reconfiguring an existing component
+                const modal = document.getElementById('fbxComponentModal');
+                const objectUuid = modal?.dataset.objectUuid;
+                const isReconfiguring = modal && objectUuid;
+                
+                // Get the current object being edited
+                let currentObject = null;
+                if (isReconfiguring) {
+                    currentObject = threeScene.getObjectByProperty('uuid', objectUuid);
+                }
+                
+                // If we're reconfiguring and the ID matches the component we're editing, don't show error
+                const isEditingSameComponent = currentObject && 
+                                             currentObject.userData.componentId === id && 
+                                             currentObject.userData.componentType === 'controlSurface';
+                
+                if (existingSurface && !isEditingSameComponent) {
+                    // ID conflict found with a different component
                     this.classList.add('is-invalid');
                     surfaceIdError.textContent = `ID ${id} is already used by ${existingSurface.control_surface_name || 'another control surface'}`;
                 } else {
@@ -1728,8 +1768,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!vesselModel) return;
                 
                 const existingThruster = vesselModel.getThruster(id);
-                if (existingThruster) {
-                    // ID conflict found
+                
+                // Get the modal and check if we're reconfiguring an existing component
+                const modal = document.getElementById('fbxComponentModal');
+                const objectUuid = modal?.dataset.objectUuid;
+                const isReconfiguring = modal && objectUuid;
+                
+                // Get the current object being edited
+                let currentObject = null;
+                if (isReconfiguring) {
+                    currentObject = threeScene.getObjectByProperty('uuid', objectUuid);
+                }
+                
+                // If we're reconfiguring and the ID matches the component we're editing, don't show error
+                const isEditingSameComponent = currentObject && 
+                                             currentObject.userData.componentId === id && 
+                                             currentObject.userData.componentType === 'thruster';
+                
+                if (existingThruster && !isEditingSameComponent) {
+                    // ID conflict found with a different component
                     this.classList.add('is-invalid');
                     thrusterIdError.textContent = `ID ${id} is already used by ${existingThruster.thruster_name || 'another thruster'}`;
                 } else {
@@ -1746,8 +1803,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!vesselModel) return;
                 
                 const existingSensor = vesselModel.getSensor(id);
-                if (existingSensor) {
-                    // ID conflict found
+                
+                // Get the modal and check if we're reconfiguring an existing component
+                const modal = document.getElementById('fbxComponentModal');
+                const objectUuid = modal?.dataset.objectUuid;
+                const isReconfiguring = modal && objectUuid;
+                
+                // Get the current object being edited
+                let currentObject = null;
+                if (isReconfiguring) {
+                    currentObject = threeScene.getObjectByProperty('uuid', objectUuid);
+                }
+                
+                // If we're reconfiguring and the ID matches the component we're editing, don't show error
+                const isEditingSameComponent = currentObject && 
+                                             currentObject.userData.componentId === id && 
+                                             currentObject.userData.componentType === 'sensor';
+                
+                if (existingSensor && !isEditingSameComponent) {
+                    // ID conflict found with a different component
                     this.classList.add('is-invalid');
                     sensorIdError.textContent = `ID ${id} is already used by ${existingSensor.sensor_name || 'another sensor'}`;
                 } else {
