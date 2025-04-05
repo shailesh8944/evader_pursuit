@@ -160,9 +160,10 @@ cython_debug/
 #.idea/
 
 # ROS specific ignores
-install/
-log/
-build/
-devel/
+ros2_ws/install/
+ros2_ws/log/
+ros2_ws/build/
+ros1_ws/build/
+ros1_ws/devel/
 .catkin_workspace
 .catkin_tools/
