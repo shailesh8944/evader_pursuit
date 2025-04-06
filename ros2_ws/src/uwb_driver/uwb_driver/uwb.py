@@ -12,8 +12,10 @@ import numpy as np
 from geometry_msgs.msg import Vector3
 from sensor_msgs.msg import Imu
 from nav_msgs.msg import Odometry
-
 from geometry_msgs.msg import PointStamped, PoseWithCovarianceStamped, Point, Quaternion
+
+from mav_simulator.class_world import World
+
 
 # USB PORT
 
@@ -57,10 +59,18 @@ def P243(r2,r4,r3):
         return [s[0],s[1]]
 
 
-class uwb_node(Node):
+class UWB(Node):
     def __init__(self):
-        super().__init__('uwb_node')
+        super().__init__('uwb')
 
+        # Get the namespace from the node
+        self.declare_parameter('vessel_id', 0)
+        self.vessel_id = self.get_parameter('vessel_id').get_parameter_value().integer_value
+
+        world = World('/workspaces/mavlab/inputs/simulation_input.yml')
+        vessels = world.vessels
+        self.topic_prefix = f'{vessels[self.vessel_id].vessel_name}_{self.vessel_id:02d}'
+        
                 # Declare and retrieve the 'uwb_url' parameter
         self.declare_parameter('uwb_url', '/dev/uwb')  # Default value
         uwb_url = self.get_parameter('uwb_url').get_parameter_value().string_value
@@ -86,18 +96,13 @@ class uwb_node(Node):
         self.ser.reset_input_buffer()
 
 
-        self.pub = self.create_publisher(Vector3, '~/loc', 10)
+        self.pub = self.create_publisher(Vector3, f'{self.topic_prefix}/uwb/loc', 10)
         self.l = self.create_timer(timer_period_sec= 0.05, callback= self.uwb_loc_pub)
-        self.imu_sub = self.create_subscription(Imu, '/imu/data', self.imu_callback, 10)
-        self.odom = self.create_publisher(PoseWithCovarianceStamped, '~/odom', 10)
+        self.odom = self.create_publisher(PoseWithCovarianceStamped, f'{self.topic_prefix}/uwb', 10)
         self.timer = self.create_timer(0.1, self.odom_callback)
-        self.imu = Imu()
         
         self.pose = None
         
-    def imu_callback(self, imu: Imu):
-        self.imu = imu
-
     def eul_to_rotm(self, eul, order='ZYX', deg=False):
         if deg:
             eul = np.radians(eul)
@@ -129,18 +134,11 @@ class uwb_node(Node):
         rotm = R_z @ R_y @ R_x
 
         return rotm
+    
     def odom_callback(self, ):
         if self.pose is None:
             return
         
-        # msg = Odometry()
-        # msg.header.frame_id = 'odom'
-        # msg.header.stamp = self.imu.header.stamp
-        
-        # msg.child_frame_id = 'velodyne'
-        # msg.pose.pose.position.x, msg.pose.pose.position.y = self.pose
-        # msg.pose.pose.orientation = self.imu.orientation
-
         msg = PoseWithCovarianceStamped()
         self.z = 0.0
         msg.header.stamp =  self.get_clock().now().to_msg()
@@ -232,7 +230,7 @@ class uwb_node(Node):
 def main(args=None):
 
     rclpy.init(args=args)
-    node = uwb_node()
+    node = UWB()
 
     try:
         node.get_logger().info(f"UWB Started")

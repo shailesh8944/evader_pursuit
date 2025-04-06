@@ -62,13 +62,13 @@ class IMUSensor(BaseSensor):
         
         # Override with custom covariance if provided
         if self.use_custom_covariance and self.custom_covariance:
-            for cov_item in self.custom_covariance:
-                if 'orientation_covariance' in cov_item:
-                    self.eul_cov = np.array(cov_item['orientation_covariance']).reshape(3, 3)
-                if 'angular_velocity_covariance' in cov_item:
-                    self.ang_vel_cov = np.array(cov_item['angular_velocity_covariance']).reshape(3, 3)
-                if 'linear_acceleration_covariance' in cov_item:
-                    self.lin_acc_cov = np.array(cov_item['linear_acceleration_covariance']).reshape(3, 3)
+            # for cov_item in self.custom_covariance:
+            if 'orientation_covariance' in self.custom_covariance:
+                self.eul_cov = np.array(self.custom_covariance['orientation_covariance']).reshape(3, 3)
+            if 'angular_velocity_covariance' in self.custom_covariance:
+                self.ang_vel_cov = np.array(self.custom_covariance['angular_velocity_covariance']).reshape(3, 3)
+            if 'linear_acceleration_covariance' in self.custom_covariance:
+                self.lin_acc_cov = np.array(self.custom_covariance['linear_acceleration_covariance']).reshape(3, 3)
 
     def get_measurement(self,quat=False):
         state = self.vessel_node.vessel.current_state
@@ -122,9 +122,9 @@ class GPSSensor(BaseSensor):
         
         # Override with custom covariance if provided
         if self.use_custom_covariance and self.custom_covariance:
-            for cov_item in self.custom_covariance:
-                if 'position_covariance' in cov_item:
-                    self.gps_cov = np.array(cov_item['position_covariance']).reshape(3, 3)
+            # for cov_item in self.custom_covariance:
+            if 'position_covariance' in self.custom_covariance:
+                self.gps_cov = np.array(self.custom_covariance['position_covariance']).reshape(3, 3)
 
     def get_measurement(self, quat=False):
         state = self.vessel_node.vessel.current_state
@@ -253,9 +253,9 @@ class DVLSensor(BaseSensor):
         
         # Override with custom covariance if provided
         if self.use_custom_covariance and self.custom_covariance:
-            for cov_item in self.custom_covariance:
-                if 'linear_velocity_covariance' in cov_item:
-                    self.vel_cov = np.array(cov_item['linear_velocity_covariance']).reshape(3, 3)
+            # for cov_item in self.custom_covariance:
+            if 'linear_velocity_covariance' in self.custom_covariance:
+                self.vel_cov = np.array(self.custom_covariance['linear_velocity_covariance']).reshape(3, 3)
 
     def get_measurement(self, quat=False):
         state = self.vessel_node.vessel.current_state

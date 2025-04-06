@@ -11,6 +11,7 @@ from launch.substitutions import PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from mav_simulator.class_world import World
 
 def generate_launch_description():
 
@@ -19,38 +20,20 @@ def generate_launch_description():
         'launch',
         'rosbridge_websocket_launch.xml'
     ])
-    asv_name = 'sookshma_00' 
+    
     # Path to the web directory in gnc package
     web_dir = PathJoinSubstitution([
         FindPackageShare('gnc'),
         'web'
-    ])
-        
-    
-            
+    ])      
     
     return LaunchDescription([
         Node(
             package='gnc',
             executable='nav',
             name='nav',
-            namespace=asv_name,
             output='screen'
         ),
-        Node(
-            package='uwb_driver',
-            executable='uwb',
-            namespace=asv_name,
-            name= 'uwb_node' ) , 
-            
-        GroupAction([
-            PushRosNamespace(asv_name),  # Ensure namespace applies
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    os.path.join(FindPackageShare("sbg_driver").find("sbg_driver"), "launch", "sbg_device_launch.py")
-                )
-            )
-        ]),
         # Start the HTTP server to serve the web interface
         ExecuteProcess(
             cmd=['python3', '-m', 'http.server', '8000', '--directory', web_dir],

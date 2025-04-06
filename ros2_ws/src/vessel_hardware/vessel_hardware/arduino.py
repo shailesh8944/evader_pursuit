@@ -7,10 +7,19 @@ import numpy as np
 import serial
 import threading
 import time
+from mav_simulator.class_world import World
 
 class ArduinoSerialNode(Node):
     def __init__(self):
         super().__init__('arduino_serial_node')
+        
+        # Get the namespace from the node
+        self.declare_parameter('vessel_id', 0)
+        self.vessel_id = self.get_parameter('vessel_id').get_parameter_value().integer_value
+
+        world = World('/workspaces/mavlab/inputs/simulation_input.yml')
+        vessels = world.vessels
+        self.topic_prefix = f'{vessels[self.vessel_id].vessel_name}_{self.vessel_id:02d}'
         
         # Declare parameters for serial port and baud rate
         self.declare_parameter('serial_port', '/dev/arduino')
@@ -30,12 +39,12 @@ class ArduinoSerialNode(Node):
         # Subscribe to the Actuator topic
         self.subscription = self.create_subscription(
             Actuator,
-            '/sookshma/actuator_cmd',
+            f'{self.topic_prefix}/actuator_cmd',
             self.actuator_callback,
             10)
         
         # Publisher for the thrust command topic (for logging/monitoring)
-        self.publisher = self.create_publisher(String, '/sookshma/thrust_monitor', 10)
+        self.publisher = self.create_publisher(String, f'{self.topic_prefix}/thrust_monitor', 10)
         
         # Setup serial connection
         self.connect_to_arduino()
@@ -181,6 +190,7 @@ class ArduinoSerialNode(Node):
 
 
 def main(args=None):
+
     rclpy.init(args=args)
     
     arduino_node = ArduinoSerialNode()

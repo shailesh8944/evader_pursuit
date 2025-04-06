@@ -7,6 +7,11 @@ from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
+from mav_simulator.class_world import World
+from launch.substitutions import LaunchConfiguration
+from launch.actions import GroupAction
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch_ros.actions import PushRosNamespace
 
 def generate_launch_description():
 
@@ -27,6 +32,7 @@ def generate_launch_description():
             package='mav_simulator',  # Replace with your package name
             executable='simulate',  # Replace with your script name
             name='mavsim',
+            output='screen'
         ),
         Node(
             package='gnc',
@@ -39,7 +45,7 @@ def generate_launch_description():
             executable='gc',
             name='gc',
             output='screen'
-        ),
+        ),        
         # Start the HTTP server to serve the web interface
         ExecuteProcess(
             cmd=['python3', '-m', 'http.server', '8000', '--directory', web_dir],

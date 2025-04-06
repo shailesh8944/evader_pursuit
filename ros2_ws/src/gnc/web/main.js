@@ -5,29 +5,60 @@ var ros = new ROSLIB.Ros({
 
 ros.on('connection', function () {
   console.log('Connected to rosbridge.');
+  // Get all topics once connected
+  getTopics();
 });
 ros.on('error', function (error) {
   console.error('Error connecting to rosbridge: ', error);
 });
 
-// Create subscribers for two odometry topics
-var odomTopic1 = new ROSLIB.Topic({
-  ros: ros,
-  name: '/sookshma_00/nav/odometry',
-  messageType: 'nav_msgs/Odometry'
-});
+// Store all active subscribers
+var odomSubscribers = {};
+var actuatorSubscribers = {};
 
-// var odomTopic2 = new ROSLIB.Topic({
-//   ros: ros,
-//   name: '/sookshma_00/nav/odometry', // Adjust this topic name as needed
-//   messageType: 'nav_msgs/Odometry'
-// });
-
-var actuatorTopic = new ROSLIB.Topic({
-  ros: ros,
-  name: '/sookshma_00/actuator_cmd',
-  messageType: 'interfaces/Actuator'
-});
+// Get all topics and filter for odometry and actuator topics
+function getTopics() {
+  ros.getTopics(function(topics) {
+    var odomTopics = topics.topics.filter(topic => topic.endsWith('/odometry'));
+    var actuatorTopics = topics.topics.filter(topic => topic.endsWith('/actuator_cmd'));
+    
+    // Subscribe to all odometry topics
+    odomTopics.forEach(topic => {
+      if (!odomSubscribers[topic]) {
+        var subscriber = new ROSLIB.Topic({
+          ros: ros,
+          name: topic,
+          messageType: 'nav_msgs/Odometry'
+        });
+        
+        subscriber.subscribe(function(message) {
+          processOdomMessage(topic, message);
+        });
+        
+        odomSubscribers[topic] = subscriber;
+        console.log('Subscribed to odometry topic:', topic);
+      }
+    });
+    
+    // Subscribe to all actuator topics
+    actuatorTopics.forEach(topic => {
+      if (!actuatorSubscribers[topic]) {
+        var subscriber = new ROSLIB.Topic({
+          ros: ros,
+          name: topic,
+          messageType: 'interfaces/Actuator'
+        });
+        
+        subscriber.subscribe(function(message) {
+          processActuatorMessage(topic, message);
+        });
+        
+        actuatorSubscribers[topic] = subscriber;
+        console.log('Subscribed to actuator topic:', topic);
+      }
+    });
+  });
+}
 
 // Helper: convert quaternion to Euler angles
 function quaternionToEuler(q) {
@@ -65,24 +96,7 @@ var rAngularVelocityCtx = document.getElementById('rAngularVelocityChart').getCo
 var pathChart = new Chart(pathCtx, {
   type: 'scatter',
   data: {
-    datasets: [
-      {
-        label: 'Path 1',
-        data: [],
-        borderColor: 'red',
-        backgroundColor: 'red',
-        showLine: true,
-        fill: false
-      },
-      // {
-      //   label: 'Path 2',
-      //   data: [],
-      //   borderColor: 'blue',
-      //   backgroundColor: 'blue',
-      //   showLine: true,
-      //   fill: false
-      // }
-    ]
+    datasets: []
   },
   options: {
     animation: false,
@@ -90,21 +104,18 @@ var pathChart = new Chart(pathCtx, {
     aspectRatio: 1,
     scales: {
       x: { display: true, title: { display: true, text: 'X Position' } },
-      // y: { display: true, title: { display: true, text: 'Y Position' } }
+      y: { display: true, title: { display: true, text: 'Y Position' } }
     }
   }
 });
 
 // Create individual charts for each variable
-function createSingleVariableChart(ctx, label, color1, color2) {
+function createSingleVariableChart(ctx, label) {
   return new Chart(ctx, {
     type: 'line',
     data: {
       labels: [],
-      datasets: [
-        { label: label + ' 1', data: [], borderColor: color1, fill: false },
-        // { label: label + ' 2', data: [], borderColor: color2, fill: false }
-      ]
+      datasets: []
     },
     options: {
       animation: false,
@@ -115,23 +126,23 @@ function createSingleVariableChart(ctx, label, color1, color2) {
 }
 
 // Create all individual charts
-var xPositionChart = createSingleVariableChart(xPositionCtx, 'X Position', 'red', 'blue');
-var yPositionChart = createSingleVariableChart(yPositionCtx, 'Y Position', 'red', 'blue');
-var zPositionChart = createSingleVariableChart(zPositionCtx, 'Z Position', 'red', 'blue');
-var uVelocityChart = createSingleVariableChart(uVelocityCtx, 'U Velocity', 'red', 'blue');
-var vVelocityChart = createSingleVariableChart(vVelocityCtx, 'V Velocity', 'red', 'blue');
-var wVelocityChart = createSingleVariableChart(wVelocityCtx, 'W Velocity', 'red', 'blue');
-var rollChart = createSingleVariableChart(rollCtx, 'Roll', 'red', 'blue');
-var pitchChart = createSingleVariableChart(pitchCtx, 'Pitch', 'red', 'blue');
-var yawChart = createSingleVariableChart(yawCtx, 'Yaw', 'red', 'blue');
-var pAngularVelocityChart = createSingleVariableChart(pAngularVelocityCtx, 'P Angular Velocity', 'red', 'blue');
-var qAngularVelocityChart = createSingleVariableChart(qAngularVelocityCtx, 'Q Angular Velocity', 'red', 'blue');
-var rAngularVelocityChart = createSingleVariableChart(rAngularVelocityCtx, 'R Angular Velocity', 'red', 'blue');
+var xPositionChart = createSingleVariableChart(xPositionCtx, 'X Position');
+var yPositionChart = createSingleVariableChart(yPositionCtx, 'Y Position');
+var zPositionChart = createSingleVariableChart(zPositionCtx, 'Z Position');
+var uVelocityChart = createSingleVariableChart(uVelocityCtx, 'U Velocity');
+var vVelocityChart = createSingleVariableChart(vVelocityCtx, 'V Velocity');
+var wVelocityChart = createSingleVariableChart(wVelocityCtx, 'W Velocity');
+var rollChart = createSingleVariableChart(rollCtx, 'Roll');
+var pitchChart = createSingleVariableChart(pitchCtx, 'Pitch');
+var yawChart = createSingleVariableChart(yawCtx, 'Yaw');
+var pAngularVelocityChart = createSingleVariableChart(pAngularVelocityCtx, 'P Angular Velocity');
+var qAngularVelocityChart = createSingleVariableChart(qAngularVelocityCtx, 'Q Angular Velocity');
+var rAngularVelocityChart = createSingleVariableChart(rAngularVelocityCtx, 'R Angular Velocity');
 
 // Create actuator charts container
 var actuatorCharts = {};
 
-function createActuatorChart(actuatorName) {
+function createActuatorChart(actuatorName, topicName) {
   var canvas = document.createElement('canvas');
   canvas.id = actuatorName + 'Chart';
   document.getElementById('actuatorCharts').appendChild(canvas);
@@ -141,9 +152,7 @@ function createActuatorChart(actuatorName) {
     type: 'line',
     data: {
       labels: [],
-      datasets: [
-        { label: actuatorName, data: [], borderColor: 'red', fill: false }
-      ]
+      datasets: []
     },
     options: {
       animation: false,
@@ -168,14 +177,28 @@ function createActuatorChart(actuatorName) {
   });
 }
 
-function updateActuatorChart(actuatorName, value) {
+function updateActuatorChart(actuatorName, topicName, value) {
   if (!actuatorCharts[actuatorName]) {
-    createActuatorChart(actuatorName);
+    createActuatorChart(actuatorName, topicName);
   }
   
   var chart = actuatorCharts[actuatorName];
+  var datasetIndex = chart.data.datasets.findIndex(ds => ds.label === topicName);
+  
+  if (datasetIndex === -1) {
+    // Generate a random color for the new dataset
+    var color = '#' + Math.floor(Math.random()*16777215).toString(16);
+    chart.data.datasets.push({
+      label: topicName,
+      data: [],
+      borderColor: color,
+      fill: false
+    });
+    datasetIndex = chart.data.datasets.length - 1;
+  }
+  
   chart.data.labels.push(sampleIndex);
-  chart.data.datasets[0].data.push(value);
+  chart.data.datasets[datasetIndex].data.push(value);
   
   if (chart.data.labels.length > 100) {
     chart.data.labels.shift();
@@ -186,20 +209,48 @@ function updateActuatorChart(actuatorName, value) {
 
 var sampleIndex = 0;
 
-function updatePathChart(x1, y1) {
-  pathChart.data.datasets[0].data.push({x: x1, y: y1});
-  // pathChart.data.datasets[1].data.push({x: x2, y: y2});
-  if (pathChart.data.datasets[0].data.length > 100) {
-    pathChart.data.datasets[0].data.shift();
-    // pathChart.data.datasets[1].data.shift();
+function updatePathChart(topicName, x, y) {
+  var datasetIndex = pathChart.data.datasets.findIndex(ds => ds.label === topicName);
+  
+  if (datasetIndex === -1) {
+    // Generate a random color for the new dataset
+    var color = '#' + Math.floor(Math.random()*16777215).toString(16);
+    pathChart.data.datasets.push({
+      label: topicName,
+      data: [],
+      borderColor: color,
+      backgroundColor: color,
+      showLine: true,
+      fill: false
+    });
+    datasetIndex = pathChart.data.datasets.length - 1;
+  }
+  
+  pathChart.data.datasets[datasetIndex].data.push({x: x, y: y});
+  if (pathChart.data.datasets[datasetIndex].data.length > 100) {
+    pathChart.data.datasets[datasetIndex].data.shift();
   }
   pathChart.update();
 }
 
-function updateSingleVariableChart(chart, value1) {
+function updateSingleVariableChart(chart, topicName, value) {
+  var datasetIndex = chart.data.datasets.findIndex(ds => ds.label === topicName);
+  
+  if (datasetIndex === -1) {
+    // Generate a random color for the new dataset
+    var color = '#' + Math.floor(Math.random()*16777215).toString(16);
+    chart.data.datasets.push({
+      label: topicName,
+      data: [],
+      borderColor: color,
+      fill: false
+    });
+    datasetIndex = chart.data.datasets.length - 1;
+  }
+  
   chart.data.labels.push(sampleIndex);
-  chart.data.datasets[0].data.push(value1);
-  // chart.data.datasets[1].data.push(value2);
+  chart.data.datasets[datasetIndex].data.push(value);
+  
   if (chart.data.labels.length > 100) {
     chart.data.labels.shift();
     chart.data.datasets.forEach(ds => ds.data.shift());
@@ -207,66 +258,39 @@ function updateSingleVariableChart(chart, value1) {
   chart.update();
 }
 
-// Subscribe to both odometry topics
-var lastMessage1 = null;
-
-odomTopic1.subscribe(function (message) {
-  lastMessage1 = message;
-  processOdomMessages(lastMessage1);
-});
-
-// odomTopic2.subscribe(function (message) {
-//   lastMessage2 = message;
-//   if (lastMessage1) {
-//     processOdomMessages(lastMessage1, lastMessage2);
-//   }
-// });
-
-function processOdomMessages(message1) {
+function processOdomMessage(topicName, message) {
   sampleIndex++;
   
-  // Extract data from first message
-  var x1 = message1.pose.pose.position.x;
-  var y1 = message1.pose.pose.position.y;
-  var z1 = message1.pose.pose.position.z;
-  var u1 = message1.twist.twist.linear.x;
-  var v1 = message1.twist.twist.linear.y;
-  var w1 = message1.twist.twist.linear.z;
-  var p1 = message1.twist.twist.angular.x;
-  var q1 = message1.twist.twist.angular.y;
-  var r1 = message1.twist.twist.angular.z;
-  var euler1 = quaternionToEuler(message1.pose.pose.orientation);
-  
-  // Extract data from second message
-  // var x2 = message2.pose.pose.position.x;
-  // var y2 = message2.pose.pose.position.y;
-  // var z2 = message2.pose.pose.position.z;
-  // var u2 = message2.twist.twist.linear.x;
-  // var v2 = message2.twist.twist.linear.y;
-  // var w2 = message2.twist.twist.linear.z;
-  // var p2 = message2.twist.twist.angular.x;
-  // var q2 = message2.twist.twist.angular.y;
-  // var r2 = message2.twist.twist.angular.z;
-  // var euler2 = quaternionToEuler(message2.pose.pose.orientation);
+  // Extract data from message
+  var x = message.pose.pose.position.x;
+  var y = message.pose.pose.position.y;
+  var z = message.pose.pose.position.z;
+  var u = message.twist.twist.linear.x;
+  var v = message.twist.twist.linear.y;
+  var w = message.twist.twist.linear.z;
+  var p = message.twist.twist.angular.x;
+  var q = message.twist.twist.angular.y;
+  var r = message.twist.twist.angular.z;
+  var euler = quaternionToEuler(message.pose.pose.orientation);
   
   // Update all charts
-  updatePathChart(x1, y1);
-  updateSingleVariableChart(xPositionChart, x1);
-  updateSingleVariableChart(yPositionChart, y1);
-  updateSingleVariableChart(zPositionChart, z1);
-  updateSingleVariableChart(uVelocityChart, u1);
-  updateSingleVariableChart(vVelocityChart, v1);
-  updateSingleVariableChart(wVelocityChart, w1);
-  updateSingleVariableChart(rollChart, euler1.roll);
-  updateSingleVariableChart(pitchChart, euler1.pitch);
-  updateSingleVariableChart(yawChart, euler1.yaw);
-  updateSingleVariableChart(pAngularVelocityChart, p1);
-  updateSingleVariableChart(qAngularVelocityChart, q1);
-  updateSingleVariableChart(rAngularVelocityChart, r1);
+  updatePathChart(topicName, x, y);
+  updateSingleVariableChart(xPositionChart, topicName, x);
+  updateSingleVariableChart(yPositionChart, topicName, y);
+  updateSingleVariableChart(zPositionChart, topicName, z);
+  updateSingleVariableChart(uVelocityChart, topicName, u);
+  updateSingleVariableChart(vVelocityChart, topicName, v);
+  updateSingleVariableChart(wVelocityChart, topicName, w);
+  updateSingleVariableChart(rollChart, topicName, euler.roll);
+  updateSingleVariableChart(pitchChart, topicName, euler.pitch);
+  updateSingleVariableChart(yawChart, topicName, euler.yaw);
+  updateSingleVariableChart(pAngularVelocityChart, topicName, p);
+  updateSingleVariableChart(qAngularVelocityChart, topicName, q);
+  updateSingleVariableChart(rAngularVelocityChart, topicName, r);
 }
 
-actuatorTopic.subscribe(function (message) {
+function processActuatorMessage(topicName, message) {
   for (var i = 0; i < message.actuator_names.length; i++) {
-    updateActuatorChart(message.actuator_names[i], message.actuator_values[i]);
+    updateActuatorChart(message.actuator_names[i], topicName, message.actuator_values[i]);
   }
-});
+}

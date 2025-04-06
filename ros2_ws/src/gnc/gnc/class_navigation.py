@@ -16,17 +16,7 @@ class Navigation(Node):
         self.vessel_id = vessel.vessel_id
         self.vessel_name = vessel.vessel_name
         
-        # Get the namespace from the node
-        self.namespace = self.get_namespace()
-        # self.get_logger().info(f"Node namespace: {self.namespace}")
-        
-        # Use the namespace for topic prefixing
-        # If namespace is just '/', use empty string or a default
-        if self.namespace == '/':
-            self.topic_prefix = f'{self.vessel_name}_{self.vessel_id:02d}'  # or some default
-        else:
-            # Remove leading '/' if present to avoid double slashes
-            self.topic_prefix = self.namespace.lstrip('/')
+        self.topic_prefix = f'{self.vessel_name}_{self.vessel_id:02d}'
             
         # self.get_logger().info(f"Using topic prefix: {self.topic_prefix}")
         
@@ -43,7 +33,7 @@ class Navigation(Node):
             if sensor['sensor_type'] == 'IMU':
                 if 'topic' not in sensor:
                     # Use absolute topic path with namespace
-                    sensor['topic'] = f'/{self.topic_prefix}/imu/data' if self.topic_prefix else '/imu/data'
+                    sensor['topic'] = f'/{self.topic_prefix}/imu' if self.topic_prefix else '/imu'
                 # Create a closure to capture the current sensor
                 def create_imu_callback(sensor_config):
                     return lambda msg: self.imu_callback(msg, sensor_config)
@@ -57,7 +47,7 @@ class Navigation(Node):
                 self.gnss_sub = self.create_subscription(NavSatFix, sensor['topic'], create_gnss_callback(sensor), 10)
             elif sensor['sensor_type'] == 'UWB':
                 if 'topic' not in sensor:
-                    sensor['topic'] = f'/{self.topic_prefix}/uwb_node/odom' if self.topic_prefix else '/uwb_node/odom'
+                    sensor['topic'] = f'/{self.topic_prefix}/uwb' if self.topic_prefix else '/uwb'
                 # Create a closure to capture the current sensor
                 def create_uwb_callback(sensor_config):
                     return lambda msg: self.uwb_callback(msg, sensor_config)

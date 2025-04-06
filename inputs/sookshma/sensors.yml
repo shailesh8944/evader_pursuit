@@ -3,7 +3,7 @@
 sensors:
   - 
     sensor_type: IMU
-    sensor_topic: /sookshma/imu
+    # sensor_topic: /sookshma/imu
     sensor_location: [0.25, 0.01, 0.1]          
     sensor_orientation: [1.0, 0.0, 0.0, 0.0]
     publish_rate: 50        
@@ -25,7 +25,7 @@ sensors:
 
   -
     sensor_type: UWB
-    sensor_topic: /sookshma/uwb
+    # sensor_topic: /sookshma/uwb/odom
     sensor_location: [1.0, 0.01, 0.015]
     sensor_orientation: [1.0, 0.0, 0.0, 0.0]   
     publish_rate: 1
