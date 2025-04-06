@@ -64,14 +64,10 @@ class UWB(Node):
         super().__init__('uwb')
 
         # Get the namespace from the node
-        self.declare_parameter('vessel_id', 0)
-        self.vessel_id = self.get_parameter('vessel_id').get_parameter_value().integer_value
+        self.declare_parameter('topic_prefix', '')
+        self.topic_prefix = self.get_parameter('topic_prefix').get_parameter_value().string_value
 
-        world = World('/workspaces/mavlab/inputs/simulation_input.yml')
-        vessels = world.vessels
-        self.topic_prefix = f'{vessels[self.vessel_id].vessel_name}_{self.vessel_id:02d}'
-        
-                # Declare and retrieve the 'uwb_url' parameter
+        # Declare and retrieve the 'uwb_url' parameter
         self.declare_parameter('uwb_url', '/dev/uwb')  # Default value
         uwb_url = self.get_parameter('uwb_url').get_parameter_value().string_value
 
@@ -102,6 +98,9 @@ class UWB(Node):
         self.timer = self.create_timer(0.1, self.odom_callback)
         
         self.pose = None
+        self.x = 0.0
+        self.y = 0.0
+        self.z = 0.0
         
     def eul_to_rotm(self, eul, order='ZYX', deg=False):
         if deg:
@@ -183,8 +182,18 @@ class UWB(Node):
                         fs = P243(dis['r2'],dis['r4'],dis['r3'])
                     print(fs)
                     uwbmsg = Vector3()
-                    uwbmsg.x = fs[0]
-                    uwbmsg.y = fs[1]
+
+                    x_ned, y_ned, z = self.eul_to_rotm([
+                    #0, 0, 0
+                        np.pi, 0, -np.pi/2
+                    ])@np.array([fs[0], fs[1], 0])
+
+                    uwbmsg.x = x_ned+B
+                    uwbmsg.y = y_ned+L
+                    self.x = x_ned+B
+                    self.y = y_ned+L
+                    # uwbmsg.x = fs[0]
+                    # uwbmsg.y = fs[1]
                     self.pose = fs
                     self.pub.publish(uwbmsg)
                     

@@ -1,1 +1,1 @@
-docker exec -it jetson_docker_2 bash
+docker exec -it panisim bash

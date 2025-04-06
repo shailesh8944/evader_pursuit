@@ -10,12 +10,15 @@ def calculate_threshold(dt):
         th = np.full(15, np.inf)
                 
         # Thresholds for positions
-        th[0] = np.inf * dt
-        th[1] = np.inf * dt
+        th[0] = np.sqrt(th[6]**2 + th[7]**2) * dt
+        th[1] = np.sqrt(th[6]**2 + th[7]**2) * dt
         th[2] = 1 / 1000000
 
-        th[6:9] = th[0:3] * dt
-        th[12:15] = th[6:9] * dt
+        th[3:6] = np.linalg.norm(th[9:12]) * dt
+
+        th[6:9] = th[12:15] * dt
+        th[9:12] = np.inf * dt
+        th[12:15] = np.inf * dt
 
         return th
 
@@ -39,7 +42,7 @@ def main():
     navs = []
     for vessel, ekf in zip(vessels, ekfs):
         th = calculate_threshold(vessel.dt)
-        navs.append(Navigation(vessel, ekf, llh0, th=None))
+        navs.append(Navigation(vessel, ekf, llh0, th=th))
         executor.add_node(navs[-1])
     
     try: 

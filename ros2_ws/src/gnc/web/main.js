@@ -1,6 +1,6 @@
 // Connect to rosbridge websocket (adjust the URL as needed)
 var ros = new ROSLIB.Ros({
-  url: 'ws://localhost:9090'
+  url: 'ws://192.168.0.226:9090'
 });
 
 ros.on('connection', function () {
@@ -68,7 +68,12 @@ function quaternionToEuler(q) {
   var roll = Math.atan2(sinr_cosp, cosr_cosp) * 180 / Math.PI;
 
   var sinp = 2 * (w * y - z * x);
-  var pitch = Math.abs(sinp) >= 1 ? Math.sign(sinp) * Math.PI / 2 : Math.asin(sinp) * 180 / Math.PI;
+  var pitch;
+  if (Math.abs(sinp) >= 1) {
+    pitch = Math.sign(sinp) * 90; // 90 degrees (π/2 in radians converted to degrees)
+  } else {
+    pitch = Math.asin(sinp) * 180 / Math.PI;
+  }
 
   var siny_cosp = 2 * (w * z + x * y);
   var cosy_cosp = 1 - 2 * (y * y + z * z);

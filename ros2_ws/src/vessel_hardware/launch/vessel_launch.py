@@ -1,42 +1,63 @@
 import os
+import yaml
+
 from launch import LaunchDescription
-from launch_ros.actions import Node
-from launch import LaunchDescription
-from launch.actions import ExecuteProcess, IncludeLaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
-from launch_ros.actions import  PushRosNamespace
-from launch.launch_description_sources import AnyLaunchDescriptionSource
-from launch_ros.substitutions import FindPackageShare
-from launch.substitutions import PathJoinSubstitution
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
+from launch.substitutions import LaunchConfiguration, TextSubstitution, PathJoinSubstitution
+from launch_ros.actions import PushRosNamespace
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import Node
-from mav_simulator.class_world import World
+
 
 def generate_launch_description():
-    asv_id = LaunchConfiguration('vessel_id') 
-    world = World('/workspaces/mavlab/inputs/simulation_input.yml')
-    vessels = world.vessels
-    asv_name = f"{vessels[int(asv_id)].vessel_name}_{int(asv_id):02d}"
+    # Declare the launch argument
+    vessel_id_arg = DeclareLaunchArgument(
+        'vessel_id',
+        default_value='0',
+        description='ID of the vessel'
+    )
+
+    vessel_id = LaunchConfiguration('vessel_id')
+
+    # Load the YAML file statically
+    with open('/workspaces/mavlab/inputs/simulation_input.yml', 'r') as file:
+        data = yaml.safe_load(file)
+
+    # Create a static mapping from ID to name
+    prefix_map = {}
+    for idx, agent in enumerate(data['agents']):
+        prefix_map[str(idx)] = agent['name']
+
+    # Get the prefix for the current vessel_id
+    topic_prefix = TextSubstitution(text=prefix_map.get(vessel_id, f"{prefix_map['0']}_00"))
 
     return LaunchDescription([
+        vessel_id_arg,
+
         Node(
             package='uwb_driver',
             executable='uwb',
-            name= 'uwb', 
-            parameters=[{'vessel_id': asv_id}]
-            ) , 
+            name='uwb', 
+            parameters=[{'topic_prefix': topic_prefix}]
+        ),
+        
         Node(
             package='vessel_hardware',
             executable='arduino',
-            parameters=[{'vessel_id': asv_id}]
-            ),
+            parameters=[{'topic_prefix': topic_prefix}]
+        ),
+
         GroupAction([
-            PushRosNamespace(asv_name),  # Ensure namespace applies
+            PushRosNamespace(topic_prefix),
             IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    os.path.join(FindPackageShare("sbg_driver").find("sbg_driver"), "launch", "sbg_device_launch.py")
-                )
+                PythonLaunchDescriptionSource([
+                    PathJoinSubstitution([
+                        FindPackageShare("sbg_driver"), 
+                        "launch", 
+                        "sbg_device_launch.py"
+                    ])
+                ])
             )
-        ]),        
+        ])
     ])

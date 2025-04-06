@@ -11,14 +11,12 @@ from mav_simulator.class_world import World
 from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
-    asv_id = LaunchConfiguration('vessel_id')
 
     return LaunchDescription([
         Node(
             package='gnc',
             executable='gc',
             name='gc',
-            parameters=[{'vessel_id': asv_id}],
             output='screen'
         ),
     ])

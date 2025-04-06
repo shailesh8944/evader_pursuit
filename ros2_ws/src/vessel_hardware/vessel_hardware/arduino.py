@@ -14,13 +14,9 @@ class ArduinoSerialNode(Node):
         super().__init__('arduino_serial_node')
         
         # Get the namespace from the node
-        self.declare_parameter('vessel_id', 0)
-        self.vessel_id = self.get_parameter('vessel_id').get_parameter_value().integer_value
+        self.declare_parameter('topic_prefix', '')
+        self.topic_prefix = self.get_parameter('topic_prefix').get_parameter_value().string_value
 
-        world = World('/workspaces/mavlab/inputs/simulation_input.yml')
-        vessels = world.vessels
-        self.topic_prefix = f'{vessels[self.vessel_id].vessel_name}_{self.vessel_id:02d}'
-        
         # Declare parameters for serial port and baud rate
         self.declare_parameter('serial_port', '/dev/arduino')
         self.declare_parameter('baud_rate', 115200)
@@ -108,7 +104,7 @@ class ArduinoSerialNode(Node):
         thrust_command_msg = String()
         thrust_command_msg.data = f"{rudder:.2f},{propeller:.2f}"
         self.publisher.publish(thrust_command_msg)
-        self.get_logger().info(f"Command received: {thrust_command_msg.data}")
+        # self.get_logger().info(f"Command received: {thrust_command_msg.data}")
 
     def send_command(self, command):
         """Send command to Arduino via serial"""

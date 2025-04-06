@@ -33,7 +33,7 @@ class Navigation(Node):
             if sensor['sensor_type'] == 'IMU':
                 if 'topic' not in sensor:
                     # Use absolute topic path with namespace
-                    sensor['topic'] = f'/{self.topic_prefix}/imu' if self.topic_prefix else '/imu'
+                    sensor['topic'] = f'/{self.topic_prefix}/imu/data' if self.topic_prefix else '/imu/data'
                 # Create a closure to capture the current sensor
                 def create_imu_callback(sensor_config):
                     return lambda msg: self.imu_callback(msg, sensor_config)
@@ -69,7 +69,6 @@ class Navigation(Node):
         imu_eul = quat_to_eul(imu_quat)
         imu_acc = np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
         imu_omg = np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
-
         imu_acc = quat_to_rotm(imu_quat) @ imu_acc - np.array([0, 0, -9.81])
         
         y_imu = np.concatenate((imu_eul, imu_acc, imu_omg))[:, np.newaxis]
@@ -90,8 +89,10 @@ class Navigation(Node):
             R_imu[6:9, 6:9] = np.array(msg.linear_acceleration_covariance).reshape(3, 3)
         
         Cd_imu = imu_mat(self.ekf.x[:, 0], r_bs_b=r_bs_b, Theta_bs=Theta_bs)
+        
 
         if self.first_pos_flag or self.first_imu_flag:
+            self.get_logger().info(f"Roll: {imu_eul[0] * 180 / np.pi:.2f} deg, Pitch: {imu_eul[1] * 180 / np.pi:.2f} deg, Yaw: {imu_eul[2] * 180 / np.pi:.2f} deg")
             self.ekf.x[3:6] = y_imu[0:3]
             self.ekf.x[9:12] = y_imu[3:6]
             self.ekf.x[12:15] = y_imu[6:9]
@@ -105,7 +106,8 @@ class Navigation(Node):
                 meas_model=lambda x: imu_model(x, r_bs_b=r_bs_b, Theta_bs=Theta_bs), 
                 threshold=self.th,
                 imu_ssa=True
-            )        
+            )
+            # self.get_logger().info(f"state: {self.ekf.x[:, 0]}")
         
     def gnss_callback(self, msg, sensor):
         
@@ -161,7 +163,8 @@ class Navigation(Node):
                 Cd_uwb, 
                 R_uwb, 
                 meas_model=lambda x: gnss_model(x, r_bs_b=r_bs_b, Theta_bs=Theta_bs), 
-                threshold=self.th
+                threshold=self.th,
+                imu_ssa=False
             )
         
     def update_odometry(self):
