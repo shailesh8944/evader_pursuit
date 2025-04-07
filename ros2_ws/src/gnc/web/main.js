@@ -1,6 +1,7 @@
 // Connect to rosbridge websocket (adjust the URL as needed)
 var ros = new ROSLIB.Ros({
   url: 'ws://192.168.0.226:9090'
+  // url: 'ws://localhost:9090'
 });
 
 ros.on('connection', function () {
@@ -19,7 +20,7 @@ var actuatorSubscribers = {};
 // Get all topics and filter for odometry and actuator topics
 function getTopics() {
   ros.getTopics(function(topics) {
-    var odomTopics = topics.topics.filter(topic => topic.endsWith('/odometry'));
+    var odomTopics = topics.topics.filter(topic => topic.endsWith('/odometry') || topic.endsWith('/odometry_sim'));
     var actuatorTopics = topics.topics.filter(topic => topic.endsWith('/actuator_cmd'));
     
     // Subscribe to all odometry topics

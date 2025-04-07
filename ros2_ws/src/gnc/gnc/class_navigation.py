@@ -18,7 +18,7 @@ class Navigation(Node):
         
         self.topic_prefix = f'{self.vessel_name}_{self.vessel_id:02d}'
             
-        # self.get_logger().info(f"Using topic prefix: {self.topic_prefix}")
+        self.get_logger().info(f"Thresholds: {th}")
         
         self.ekf = ekf
         self.first_imu_flag = True
@@ -91,13 +91,14 @@ class Navigation(Node):
         Cd_imu = imu_mat(self.ekf.x[:, 0], r_bs_b=r_bs_b, Theta_bs=Theta_bs)
         
 
-        if self.first_pos_flag or self.first_imu_flag:
-            self.get_logger().info(f"Roll: {imu_eul[0] * 180 / np.pi:.2f} deg, Pitch: {imu_eul[1] * 180 / np.pi:.2f} deg, Yaw: {imu_eul[2] * 180 / np.pi:.2f} deg")
+        if self.first_pos_flag or self.first_imu_flag:            
             self.ekf.x[3:6] = y_imu[0:3]
             self.ekf.x[9:12] = y_imu[3:6]
             self.ekf.x[12:15] = y_imu[6:9]
-            self.first_imu_flag = False
-            # self.get_logger().info("First IMU Measurement Obtained")
+            
+            if self.first_imu_flag:
+                self.get_logger().info(f"\nFirst IMU Measurement Obtained: {self.ekf.x[:, 0]} \n\n")
+                self.first_imu_flag = False
         else:
             self.ekf.correct(
                 y_imu, 
@@ -106,8 +107,8 @@ class Navigation(Node):
                 meas_model=lambda x: imu_model(x, r_bs_b=r_bs_b, Theta_bs=Theta_bs), 
                 threshold=self.th,
                 imu_ssa=True
-            )
-            # self.get_logger().info(f"state: {self.ekf.x[:, 0]}")
+            )            
+            self.get_logger().info(f"IMU correction state: {self.ekf.x[:, 0]} \n")
         
     def gnss_callback(self, msg, sensor):
         
@@ -155,8 +156,10 @@ class Navigation(Node):
 
         if self.first_pos_flag or self.first_imu_flag:
             self.ekf.x[0:3] = y_uwb
-            self.first_pos_flag = False
-            # self.get_logger().info("First UWB Measurement Obtained")
+
+            if self.first_pos_flag:
+                self.get_logger().info(f"\nFirst UWB Measurement Obtained: {self.ekf.x[:, 0]} \n\n")
+                self.first_pos_flag = False
         else:
             self.ekf.correct(
                 y_uwb, 
@@ -166,7 +169,8 @@ class Navigation(Node):
                 threshold=self.th,
                 imu_ssa=False
             )
-        
+            self.get_logger().info(f"UWB correction state: {self.ekf.x[:, 0]} \n")
+
     def update_odometry(self):
 
         Amat, Emat = state_mats(self.ekf.x.flatten())

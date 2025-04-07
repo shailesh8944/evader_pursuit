@@ -135,8 +135,6 @@ class EKF():
             else:
                 change_before_K = (y - Cd @ self.x)
 
-            # TODO: Verify the following lines 
-            # Rishabh --> Should this not be specific to the sensor? (GPS may not need this)
             if imu_ssa:
                 for i in range(3):
                     change_before_K[i] = ssa(change_before_K[i])
