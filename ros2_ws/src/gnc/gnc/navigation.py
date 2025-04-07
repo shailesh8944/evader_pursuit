@@ -1,6 +1,6 @@
 import numpy as np
 from class_navigation import Navigation
-from class_ekf import EKF
+from gnc.class_ekf import EKF
 from mav_simulator.class_world import World
 from rclpy.executors import MultiThreadedExecutor
 import rclpy
