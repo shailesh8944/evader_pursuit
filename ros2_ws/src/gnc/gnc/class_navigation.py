@@ -74,7 +74,7 @@ class Navigation(Node):
         y_imu = np.concatenate((imu_eul, imu_acc, imu_omg))[:, np.newaxis]
         
         r_bs_b = np.array(sensor['sensor_location'])
-        Theta_bs = quat_to_eul(np.array(sensor['sensor_orientation']))
+        Theta_bs = np.array(sensor['sensor_orientation'])
 
         if sensor['use_custom_covariance']:
             # self.get_logger().info(f"{sensor['custom_covariance']}")
@@ -116,7 +116,7 @@ class Navigation(Node):
         y_gnss = llh_to_ned(gnss_pos, self.llh0)[:, np.newaxis]
 
         r_bs_b = np.array(sensor['sensor_location'])
-        Theta_bs = quat_to_eul(np.array(sensor['sensor_orientation']))
+        Theta_bs = np.array(sensor['sensor_orientation'])
 
         if sensor['use_custom_covariance']:
             R_gnss = np.array(sensor['custom_covariance']['position_covariance']).reshape(3, 3)
@@ -143,7 +143,7 @@ class Navigation(Node):
         y_uwb = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z])[:, np.newaxis]
 
         r_bs_b = np.array(sensor['sensor_location'])
-        Theta_bs = quat_to_eul(np.array(sensor['sensor_orientation']))
+        Theta_bs = np.array(sensor['sensor_orientation'])
 
         if sensor['use_custom_covariance']:
             # self.get_logger().info(f"{sensor['custom_covariance']}")
