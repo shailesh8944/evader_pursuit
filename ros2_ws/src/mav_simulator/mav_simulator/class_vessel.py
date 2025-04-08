@@ -24,7 +24,6 @@ from scipy.integrate import solve_ivp
 import pandas as pd
 import sys
 from mav_simulator.module_kinematics import Smat, clip, eul_to_rotm, eul_rate_matrix, eul_to_quat, ssa
-import mav_simulator.module_control as con
 from mav_simulator.calculate_hydrodynamics import CalculateHydrodynamics
 from mav_simulator.terminalMessages import print_debug, print_info, print_warning, print_error
 

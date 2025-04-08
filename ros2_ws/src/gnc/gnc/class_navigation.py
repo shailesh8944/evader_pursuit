@@ -1,6 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
+from mav_simulator.terminalMessages import print_info
 from sensor_msgs.msg import Imu, NavSatFix
 from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion
 
@@ -26,28 +27,25 @@ class Navigation(Node):
         for sensor in self.vessel.vessel_config['sensors']['sensors']:
             
             self.sensors.append(sensor)
-            
+            print_info(f"Sensor: {sensor}")
             if sensor['sensor_type'] == 'IMU':
-                if 'topic' not in sensor:
-                    sensor['topic'] = f'{self.topic_prefix}/imu'
+                sensor_topic = sensor.get('sensor_topic', f'{self.topic_prefix}/imu')
                 # Create a closure to capture the current sensor
                 def create_imu_callback(sensor_config):
                     return lambda msg: self.imu_callback(msg, sensor_config)
-                self.imu_sub = self.create_subscription(Imu, sensor['topic'], create_imu_callback(sensor), 10)
+                self.imu_sub = self.create_subscription(Imu, sensor_topic, create_imu_callback(sensor), 10)
             elif sensor['sensor_type'] == 'GPS':
-                if 'topic' not in sensor:
-                    sensor['topic'] = f'{self.topic_prefix}/gps'
+                sensor_topic = sensor.get('sensor_topic', f'{self.topic_prefix}/gps')
                 # Create a closure to capture the current sensor
                 def create_gnss_callback(sensor_config):
                     return lambda msg: self.gnss_callback(msg, sensor_config)
-                self.gnss_sub = self.create_subscription(NavSatFix, sensor['topic'], create_gnss_callback(sensor), 10)
+                self.gnss_sub = self.create_subscription(NavSatFix, sensor_topic, create_gnss_callback(sensor), 10)
             elif sensor['sensor_type'] == 'UWB':
-                if 'topic' not in sensor:
-                    sensor['topic'] = f'{self.topic_prefix}/uwb'
+                sensor_topic = sensor.get('sensor_topic', f'{self.topic_prefix}/uwb')
                 # Create a closure to capture the current sensor
                 def create_uwb_callback(sensor_config):
                     return lambda msg: self.uwb_callback(msg, sensor_config)
-                self.uwb_sub = self.create_subscription(PoseWithCovarianceStamped, sensor['topic'], create_uwb_callback(sensor), 10)
+                self.uwb_sub = self.create_subscription(PoseWithCovarianceStamped, sensor_topic, create_uwb_callback(sensor), 10)
         
         self.odom_pub = self.create_publisher(Odometry, f'{self.topic_prefix}/odometry', 10)
 
@@ -70,9 +68,11 @@ class Navigation(Node):
         
         r_bs_b = np.array(sensor['sensor_location'])
         Theta_bs = np.array(sensor['sensor_orientation'])
-
-        if sensor['user_covariance']:
-            R_imu = np.array(sensor['covariance']).reshape(9, 9)
+        if sensor['use_custom_covariance'] and sensor['custom_covariance'][0]['orientation_covariance'] is not None:
+            R_imu = np.zeros((9, 9))
+            R_imu[0:3, 0:3] = np.array(sensor['custom_covariance'][0]['orientation_covariance']).reshape(3, 3)
+            R_imu[3:6, 3:6] = np.array(sensor['custom_covariance'][0]['angular_velocity_covariance']).reshape(3, 3)
+            R_imu[6:9, 6:9] = np.array(sensor['custom_covariance'][0]['linear_acceleration_covariance']).reshape(3, 3)
         else:
             R_imu = np.zeros((9, 9))
             R_imu[0:3, 0:3] = np.array(msg.orientation_covariance).reshape(3, 3)
@@ -105,8 +105,8 @@ class Navigation(Node):
         r_bs_b = np.array(sensor['sensor_location'])
         Theta_bs = np.array(sensor['sensor_orientation'])
 
-        if sensor['user_covariance']:
-            R_gnss = np.array(sensor['covariance']).reshape(3, 3)
+        if sensor['use_custom_covariance'] and sensor['custom_covariance'][0]['position_covariance'] is not None:
+            R_gnss = np.array(sensor['custom_covariance'][0]['position_covariance']).reshape(3, 3)
         else:
             R_gnss = np.array(msg.position_covariance).reshape(3, 3)
 
@@ -132,8 +132,8 @@ class Navigation(Node):
         r_bs_b = np.array(sensor['sensor_location'])
         Theta_bs = np.array(sensor['sensor_orientation'])
 
-        if sensor['user_covariance']:
-            R_uwb = np.array(sensor['covariance']).reshape(3, 3)
+        if sensor['use_custom_covariance'] and sensor['custom_covariance'][0]['position_covariance'] is not None:
+            R_uwb = np.array(sensor['custom_covariance'][0]['position_covariance']).reshape(3, 3)
         else:
             R_uwb = np.zeros((3, 3))
             R_uwb[0:3, 0:3] = np.array(msg.pose.covariance).reshape(6, 6)[0:3, 0:3]

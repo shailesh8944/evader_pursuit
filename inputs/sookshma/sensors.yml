@@ -24,14 +24,14 @@ sensors:
       - position_covariance: [0.00000001,  0.        ,  0.        ,  0.        ,  0.00000001,  0.        ,  0.        ,  0.        ,  0.00000001]
    
   - 
-    sensor_type: DVL
-    sensor_topic: /sookshma/dvl
+    sensor_type: UWB
+    sensor_topic: /sookshma/uwb
     sensor_location: [1.0, 0.01, 0.015]         
     sensor_orientation: [1.0, 0.0, 0.0, 0.0]    
     publish_rate: 50
     use_custom_covariance: true 
     custom_covariance:
-      - linear_velocity_covariance: [0.04533883, -0.05014115,  0.        , -0.05014115,  0.05869406,  0.        ,  0.,          0.,          0.00000001]
+      - position_covariance: [0.04533883, -0.05014115,  0.        , -0.05014115,  0.05869406,  0.        ,  0.,          0.,          0.00000001]
 
   # -
   #   sensor_type: encoders
