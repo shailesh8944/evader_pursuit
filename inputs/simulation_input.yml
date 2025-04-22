@@ -27,7 +27,7 @@ nagents: 1
 
 agents:
   - 
-    name: kurma
+    name: sookshma
     type: usv
     U: 0.5 # For dinmensionalization of hydrodynamic coefficients
     maintain_speed: true

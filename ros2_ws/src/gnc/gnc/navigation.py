@@ -53,7 +53,7 @@ def main():
     navs = []
     for vessel, ekf in zip(vessels, ekfs):
         th, _ = calculate_threshold(vessel.dt)        
-        navs.append(Navigation(vessel, ekf, llh0, th=th))
+        navs.append(Navigation(vessel, ekf, llh0, th=None))
         executor.add_node(navs[-1])
     
     try: 

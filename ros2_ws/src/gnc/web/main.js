@@ -1,7 +1,7 @@
 // Connect to rosbridge websocket (adjust the URL as needed)
 var ros = new ROSLIB.Ros({
-  // url: 'ws://192.168.0.226:9090'
-  url: 'ws://localhost:9090'
+  url: 'ws://192.168.0.226:9090'
+ // url: 'ws://localhost:9090'
 });
 
 ros.on('connection', function () {

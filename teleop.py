@@ -9,7 +9,7 @@ class TeleopNode(Node):
     def __init__(self):
         super().__init__('asv_teleop_node')
         
-        self.publisher = self.create_publisher(Actuator, '/sookshma/actuator_cmd', 10)
+        self.publisher = self.create_publisher(Actuator, '/sookshma_00/actuator_cmd', 10)
         self.propeller = 0.0  # Throttle
         self.rudder = 0.0  # Steering
         
