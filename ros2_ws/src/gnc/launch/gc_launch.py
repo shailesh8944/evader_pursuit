@@ -7,8 +7,11 @@ from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
+from mav_simulator.class_world import World
+from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
+
     return LaunchDescription([
         Node(
             package='gnc',

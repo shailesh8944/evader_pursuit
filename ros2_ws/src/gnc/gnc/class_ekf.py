@@ -52,7 +52,7 @@ class EKF():
     def jacobian(self, fun, x0):
         f0 = fun(x0)
         jacob = np.zeros((np.size(f0),np.size(x0)))
-        eps = 1e-4
+        eps = 1e-6
 
         for i in range(np.size(x0)):
             x2 = np.copy(x0)
@@ -135,8 +135,6 @@ class EKF():
             else:
                 change_before_K = (y - Cd @ self.x)
 
-            # TODO: Verify the following lines 
-            # Rishabh --> Should this not be specific to the sensor? (GPS may not need this)
             if imu_ssa:
                 for i in range(3):
                     change_before_K[i] = ssa(change_before_K[i])
@@ -152,8 +150,11 @@ class EKF():
 
             for i in range(3,6):
                 self.x[i] = ssa(self.x[i])
+            
+            # warnings.warn(f"Current roll: {self.x[3]*180/np.pi}, Current change: {change_before_K[0]*180/np.pi}, Change shape: {np.shape(y)}\n\n")
+
         else:
-            warnings.warn("WARNING: Singular Matrix!! No correction performed")
+            warnings.warn(f"WARNING: Singular Matrix!! No correction performed")
 
         if self.debug:
             print("Current x (after correction):")

@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 
 """
 Rudder control module for vessel simulation.
@@ -72,32 +73,46 @@ def pid_control(t, state, waypoints, waypoint_idx, ye_int=0.0):
     # Unit vector of waypoint line
     wp_unit_vec = np.array([wp_xn - wp_xn1, wp_yn - wp_yn1, 0.0])
     wp_unit_vec = wp_unit_vec / np.linalg.norm(wp_unit_vec)
+    pi_p = np.arctan2(wp_unit_vec[1], wp_unit_vec[0])
 
     # Vector from previous waypoint to current position
     r_vec = np.array([x - wp_xn1, y - wp_yn1, 0.0])
 
+  
+
     # Along-track and cross-track errors
     xe = np.dot(r_vec, wp_unit_vec)
     ye = np.cross(wp_unit_vec, r_vec)[2]
+    
+
+  
 
     # Derivative of cross-track error
     x_dot, y_dot = u * np.cos(psi) - v * np.sin(psi), u * np.sin(psi) + v * np.cos(psi)
     ye_dot = np.cross(wp_unit_vec, np.array([x_dot, y_dot, 0.0]))[2]
 
     # PID controller parameters
-    Kp_out = 0.5  # Proportional gain for outer loop
-    Ki_out = 0.1  # Integral gain for outer loop
+    Kp_out = 1.0  # Proportional gain for outer loop
+    Ki_out = 0.0  # Integral gain for outer loop
     
-    psi_des = Kp_out * (0.0 - ye) + Ki_out * (0.0 - ye_int)
+    # psi_des = Kp_out * (0.0 - ye) + Ki_out * (0.0 - ye_int)
+    Delta = 1/Kp_out
+    psi_des = pi_p - np.arctan2(ye, Delta)
+
+
+    # warnings.warn(f"psi des: {psi_des*180/np.pi:.2f} ye :{ye:.2f} ye_int: {ye_int:.2f}")
+
     r_des = Kp_out * ye_dot + Ki_out * ye
     r_des = 0.0
 
     # psi_des = 90.0 * np.pi / 180.0;
 
-    Kp_in = 0.5  # Proportional gain for inner loop
-    Kd_in = 0.2  # Derivative gain for inner loop
+    Kp_in = -1.0  # Proportional gain for inner loop
+    Kd_in = 0.0  # Derivative gain for inner loop
 
     delta_c = Kp_in * ssa(psi_des - psi) + Kd_in * (r_des - r)
+    warnings.warn(f"psi des: {psi_des*180/np.pi:.2f} ye :{ye:.2f} ye_int: {ye_int:.2f} delta_c {delta_c*180/np.pi:.2f}")
+
 
     #===========================================================================
     
