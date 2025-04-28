@@ -1,7 +1,6 @@
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
-from mav_simulator.terminalMessages import print_info
 from sensor_msgs.msg import Imu, NavSatFix
 from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion
 
@@ -16,8 +15,11 @@ class Navigation(Node):
         self.vessel = vessel
         self.vessel_id = vessel.vessel_id
         self.vessel_name = vessel.vessel_name
+        
         self.topic_prefix = f'{self.vessel_name}_{self.vessel_id:02d}'
-
+            
+        # self.get_logger().info(f"Thresholds: {th}")
+        
         self.ekf = ekf
         self.first_imu_flag = True
         self.first_pos_flag = True
@@ -27,27 +29,33 @@ class Navigation(Node):
         for sensor in self.vessel.vessel_config['sensors']['sensors']:
             
             self.sensors.append(sensor)
-            print_info(f"Sensor: {sensor}")
+            
             if sensor['sensor_type'] == 'IMU':
-                sensor_topic = sensor.get('sensor_topic', f'{self.topic_prefix}/imu')
+                if 'sensor_topic' not in sensor:
+                    # Use absolute topic path with namespace
+                    sensor['sensor_topic'] = f'/{self.topic_prefix}/imu/data' if self.topic_prefix else '/imu/data'
                 # Create a closure to capture the current sensor
                 def create_imu_callback(sensor_config):
                     return lambda msg: self.imu_callback(msg, sensor_config)
-                self.imu_sub = self.create_subscription(Imu, sensor_topic, create_imu_callback(sensor), 10)
+                self.imu_sub = self.create_subscription(Imu, sensor['sensor_topic'], create_imu_callback(sensor), 10)
             elif sensor['sensor_type'] == 'GPS':
-                sensor_topic = sensor.get('sensor_topic', f'{self.topic_prefix}/gps')
+                if 'sensor_topic' not in sensor:
+                    sensor['sensor_topic'] = f'/{self.topic_prefix}/gps' if self.topic_prefix else '/gps'
                 # Create a closure to capture the current sensor
                 def create_gnss_callback(sensor_config):
                     return lambda msg: self.gnss_callback(msg, sensor_config)
-                self.gnss_sub = self.create_subscription(NavSatFix, sensor_topic, create_gnss_callback(sensor), 10)
+                self.gnss_sub = self.create_subscription(NavSatFix, sensor['sensor_topic'], create_gnss_callback(sensor), 10)
             elif sensor['sensor_type'] == 'UWB':
-                sensor_topic = sensor.get('sensor_topic', f'{self.topic_prefix}/uwb')
+                if 'sensor_topic' not in sensor:
+                    sensor['sensor_topic'] = f'/{self.topic_prefix}/uwb' if self.topic_prefix else '/uwb'
                 # Create a closure to capture the current sensor
                 def create_uwb_callback(sensor_config):
                     return lambda msg: self.uwb_callback(msg, sensor_config)
-                self.uwb_sub = self.create_subscription(PoseWithCovarianceStamped, sensor_topic, create_uwb_callback(sensor), 10)
+                self.uwb_sub = self.create_subscription(PoseWithCovarianceStamped, sensor['sensor_topic'], create_uwb_callback(sensor), 10)
         
-        self.odom_pub = self.create_publisher(Odometry, f'{self.topic_prefix}/odometry', 10)
+        self.odom_pub = self.create_publisher(Odometry, 
+                                             f'/{self.topic_prefix}/odometry' if self.topic_prefix else '/odometry', 
+                                             10)
 
         self.create_timer(self.vessel.dt, self.update_odometry)
 
@@ -61,18 +69,19 @@ class Navigation(Node):
         imu_eul = quat_to_eul(imu_quat)
         imu_acc = np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
         imu_omg = np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
-
         imu_acc = quat_to_rotm(imu_quat) @ imu_acc - np.array([0, 0, -9.81])
         
         y_imu = np.concatenate((imu_eul, imu_acc, imu_omg))[:, np.newaxis]
         
         r_bs_b = np.array(sensor['sensor_location'])
         Theta_bs = np.array(sensor['sensor_orientation'])
-        if sensor['use_custom_covariance'] and sensor['custom_covariance'][0]['orientation_covariance'] is not None:
+
+        if sensor['use_custom_covariance']:
+            # self.get_logger().info(f"{sensor['custom_covariance']}")
             R_imu = np.zeros((9, 9))
-            R_imu[0:3, 0:3] = np.array(sensor['custom_covariance'][0]['orientation_covariance']).reshape(3, 3)
-            R_imu[3:6, 3:6] = np.array(sensor['custom_covariance'][0]['angular_velocity_covariance']).reshape(3, 3)
-            R_imu[6:9, 6:9] = np.array(sensor['custom_covariance'][0]['linear_acceleration_covariance']).reshape(3, 3)
+            R_imu[0:3, 0:3] = np.array(sensor['custom_covariance']['orientation_covariance']).reshape(3, 3)
+            R_imu[3:6, 3:6] = np.array(sensor['custom_covariance']['angular_velocity_covariance']).reshape(3, 3)
+            R_imu[6:9, 6:9] = np.array(sensor['custom_covariance']['linear_acceleration_covariance']).reshape(3, 3)
         else:
             R_imu = np.zeros((9, 9))
             R_imu[0:3, 0:3] = np.array(msg.orientation_covariance).reshape(3, 3)
@@ -80,13 +89,16 @@ class Navigation(Node):
             R_imu[6:9, 6:9] = np.array(msg.linear_acceleration_covariance).reshape(3, 3)
         
         Cd_imu = imu_mat(self.ekf.x[:, 0], r_bs_b=r_bs_b, Theta_bs=Theta_bs)
+        
 
-        if self.first_pos_flag or self.first_imu_flag:
+        if self.first_pos_flag or self.first_imu_flag:            
             self.ekf.x[3:6] = y_imu[0:3]
             self.ekf.x[9:12] = y_imu[3:6]
             self.ekf.x[12:15] = y_imu[6:9]
-            self.first_imu_flag = False
-            # self.get_logger().info("First IMU Measurement Obtained")
+            
+            if self.first_imu_flag:
+                # self.get_logger().info(f"\nFirst IMU Measurement Obtained: {self.ekf.x[:, 0]} \n\n")
+                self.first_imu_flag = False
         else:
             self.ekf.correct(
                 y_imu, 
@@ -95,7 +107,8 @@ class Navigation(Node):
                 meas_model=lambda x: imu_model(x, r_bs_b=r_bs_b, Theta_bs=Theta_bs), 
                 threshold=self.th,
                 imu_ssa=True
-            )        
+            )            
+            # self.get_logger().info(f"IMU correction state: {self.ekf.x[:, 0]} \n")
         
     def gnss_callback(self, msg, sensor):
         
@@ -105,8 +118,8 @@ class Navigation(Node):
         r_bs_b = np.array(sensor['sensor_location'])
         Theta_bs = np.array(sensor['sensor_orientation'])
 
-        if sensor['use_custom_covariance'] and sensor['custom_covariance'][0]['position_covariance'] is not None:
-            R_gnss = np.array(sensor['custom_covariance'][0]['position_covariance']).reshape(3, 3)
+        if sensor['use_custom_covariance']:
+            R_gnss = np.array(sensor['custom_covariance']['position_covariance']).reshape(3, 3)
         else:
             R_gnss = np.array(msg.position_covariance).reshape(3, 3)
 
@@ -132,8 +145,9 @@ class Navigation(Node):
         r_bs_b = np.array(sensor['sensor_location'])
         Theta_bs = np.array(sensor['sensor_orientation'])
 
-        if sensor['use_custom_covariance'] and sensor['custom_covariance'][0]['position_covariance'] is not None:
-            R_uwb = np.array(sensor['custom_covariance'][0]['position_covariance']).reshape(3, 3)
+        if sensor['use_custom_covariance']:
+            # self.get_logger().info(f"{sensor['custom_covariance']}")
+            R_uwb = np.array(sensor['custom_covariance']['position_covariance']).reshape(3, 3)
         else:
             R_uwb = np.zeros((3, 3))
             R_uwb[0:3, 0:3] = np.array(msg.pose.covariance).reshape(6, 6)[0:3, 0:3]
@@ -142,17 +156,21 @@ class Navigation(Node):
 
         if self.first_pos_flag or self.first_imu_flag:
             self.ekf.x[0:3] = y_uwb
-            self.first_pos_flag = False
-            # self.get_logger().info("First UWB Measurement Obtained")
+
+            if self.first_pos_flag:
+                # self.get_logger().info(f"\nFirst UWB Measurement Obtained: {self.ekf.x[:, 0]} \n\n")
+                self.first_pos_flag = False
         else:
             self.ekf.correct(
                 y_uwb, 
                 Cd_uwb, 
                 R_uwb, 
                 meas_model=lambda x: gnss_model(x, r_bs_b=r_bs_b, Theta_bs=Theta_bs), 
-                threshold=self.th
+                threshold=self.th,
+                imu_ssa=False
             )
-        
+            # self.get_logger().info(f"UWB correction state: {self.ekf.x[:, 0]} \n")           
+
     def update_odometry(self):
 
         Amat, Emat = state_mats(self.ekf.x.flatten())
@@ -200,5 +218,4 @@ class Navigation(Node):
         odom_msg.twist.covariance = twist_cov.flatten()
 
         self.odom_pub.publish(odom_msg)
-        
         
