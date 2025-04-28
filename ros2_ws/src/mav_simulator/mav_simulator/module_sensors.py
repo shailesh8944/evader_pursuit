@@ -154,11 +154,18 @@ class UWBSensor(BaseSensor):
         super().__init__(sensor_config, vessel_id, topic_prefix, vessel_node)
         self.location = np.array(sensor_config['sensor_location'])
         
-        # Noise parameters
+        # Default noise parameters
         self.uwb_rms = np.array([1, 1, 1], dtype=np.float64)
         self.uwb_cov = np.diag(self.uwb_rms ** 2)
         self.uwb_cov_full = -np.eye(6)
         self.uwb_cov_full[0:3][:, 0:3] = self.uwb_cov
+        
+        # Override with custom covariance if provided
+        if self.use_custom_covariance and self.custom_covariance:
+            for cov_item in self.custom_covariance:
+                if 'position_covariance' in cov_item:
+                    self.uwb_cov = np.array(cov_item['position_covariance']).reshape(3, 3)
+                    self.uwb_cov_full[0:3][:, 0:3] = self.uwb_cov
 
     def get_measurement(self, quat=False):
         state = self.vessel_node.vessel.current_state
