@@ -1,6 +1,0 @@
-source;share/uwb_driver/hook/pythonpath.ps1
-source;share/uwb_driver/hook/pythonpath.dsv
-source;share/uwb_driver/hook/pythonpath.sh
-source;share/uwb_driver/hook/ament_prefix_path.ps1
-source;share/uwb_driver/hook/ament_prefix_path.dsv
-source;share/uwb_driver/hook/ament_prefix_path.sh
