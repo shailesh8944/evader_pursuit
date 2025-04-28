@@ -1,1 +1,0 @@
-python3 -m http.server 8000 --directory /workspaces/mavlab/ros2_ws/src/mav_simulator/web

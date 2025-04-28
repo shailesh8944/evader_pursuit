@@ -1,4 +1,0 @@
-start_location: [0, 0, 0]
-start_orientation: [0, 0, 0]
-start_velocity: [0.5, 0, 0, 0, 0, 0]
-use_quaternion: false

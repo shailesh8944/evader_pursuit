@@ -1,3 +1,0 @@
-# Control mode
-control_surface_control_type: fixed_rudder  
-thruster_control_type: fixed_rpm
