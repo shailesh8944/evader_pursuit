@@ -1,0 +1,219 @@
+# Simulation
+
+## Overview
+
+The MAV Simulator provides two main ways to run simulations:
+
+1. **ROS2-integrated simulation** (`simulate.py`) - For distributed systems and external interfaces
+2. **Standalone simulation** (`simulate_noros.py`) - For simplified testing and debugging
+
+::: {.callout-note}
+Choose the simulation mode based on your needs: ROS2 integration for complex systems or standalone mode for quicker tests.
+:::
+
+## Simulation Configuration
+
+The simulator is configured through YAML files that specify:
+
+- Vessel parameters (dimensions, mass, inertia, etc.)
+- Hydrodynamic coefficients
+- Environment settings (water density, current, etc.)
+- Simulation parameters (timestep, duration, etc.)
+
+### Sample Configuration File Structure
+
+```yaml
+simulation:
+  name: "USV Simulation"
+  time_step: 0.01
+  duration: 100.0
+  environment:
+    water_density: 1025.0
+    gravity: 9.81
+    
+agents:
+  - name: "usv1"
+    vessel_config:
+      name: "USV1"
+      geometry:
+        length: 5.0
+        breadth: 2.0
+        depth: 1.0
+        CG: [0.0, 0.0, 0.0]
+        CB: [0.0, 0.0, 0.1]
+        gyration: [0.4, 0.4, 0.2]
+      inertia:
+        mass: 1000.0
+        buoyancy_mass: 1000.0
+    hydrodynamics:
+      hydra_file: "path/to/hydra_file.json"
+      dim_flag: true
+    sensors:
+      - type: "gps"
+        rate: 10.0
+        noise_std: 0.5
+      - type: "imu"
+        rate: 100.0
+        accel_noise_std: 0.01
+        gyro_noise_std: 0.001
+```
+
+## Running Standalone Simulation
+
+The standalone simulation mode runs without ROS2 dependencies, making it simpler to use for quick tests.
+
+```python
+from mav_simulator.simulate_noros import simulate
+
+# Run simulation
+simulate()
+```
+
+### Flow of Standalone Simulation
+
+```{mermaid}
+sequenceDiagram
+    participant Main as Main Program
+    participant Input as read_input
+    participant Vessel as Vessel Class
+    participant Hydro as Hydrodynamics
+    
+    Main->>Input: read_input(config_file)
+    Input-->>Main: sim_params, agents
+    Main->>Vessel: create(params, hydro_data)
+    Main->>Vessel: reset()
+    
+    loop For each time step
+        Main->>Vessel: step()
+        Vessel->>Hydro: calculate forces
+        Vessel->>Vessel: update state
+        Main->>Main: display progress
+    end
+```
+
+### Sample Output
+
+```
+Starting simulation...
+Time [s] | Position [x, y, z] | Velocity [u, v, w]
+------------------------------------------------------------
+0.00     | [0.00, 0.00, 0.00] | [0.00, 0.00, 0.00]
+0.10     | [0.05, 0.00, 0.00] | [0.50, 0.00, 0.00]
+0.20     | [0.15, 0.00, 0.00] | [1.00, 0.00, 0.00]
+...
+```
+
+## Running ROS2 Simulation
+
+The ROS2 simulation mode enables integration with the broader ROS2 ecosystem, including external controllers, visualization tools, and other nodes.
+
+### Requirements
+
+- ROS2 installation (Foxy or newer)
+- MAV simulator package built in a ROS2 workspace
+- ROS2 environment set up
+
+### Starting the Simulation
+
+```bash
+# In a terminal with ROS2 environment sourced
+ros2 run mav_simulator simulate.py
+```
+
+### Flow of ROS2 Simulation
+
+```{mermaid}
+sequenceDiagram
+    participant Main as Main Program
+    participant World as World Class
+    participant WorldNode as World_Node
+    participant VesselNode as Vessel_Pub_Sub
+    participant ROSThread as ROS Thread
+    
+    Main->>World: create(config_file)
+    Main->>WorldNode: create(world_rate)
+    Main->>World: set_node(world_node)
+    Main->>World: start_vessel_ros_nodes()
+    World->>VesselNode: create for each vessel
+    Main->>ROSThread: start(world_node)
+    
+    par Simulation and ROS Communication
+        loop Simulation Thread
+            World->>World: step()
+            World->>VesselNode: publish data
+        end
+        loop ROS Thread
+            ROSThread->>WorldNode: spin()
+            WorldNode->>VesselNode: handle callbacks
+            VesselNode->>World: forward commands
+        end
+    end
+```
+
+## Visualizing Results
+
+The simulator includes tools for visualizing results:
+
+- **plot_results.py** - For standalone simulation visualization
+- **RViz** - For ROS2 simulation visualization
+
+### Using plot_results
+
+```python
+from mav_simulator.plot_results import plot_trajectory, plot_forces
+
+# Plot vessel trajectory
+plot_trajectory(vessel.history)
+
+# Plot forces acting on the vessel
+plot_forces(vessel.force_history)
+```
+
+### Using RViz with ROS2 Simulation
+
+1. Start the simulation with ROS2
+2. Launch RViz:
+   ```bash
+   ros2 run rviz2 rviz2 -d path/to/mav_config.rviz
+   ```
+3. Add relevant displays (Odometry, MarkerArray, etc.)
+
+## Advanced Simulation Features
+
+### Controlling Vessels During Simulation
+
+```python
+# Set rudder angle (delta) in radians
+vessel.delta_c = 0.1  # ~5.7 degrees
+
+# Set propeller speed
+vessel.n_c = 1000  # RPM
+```
+
+### Recording Simulation Data
+
+```python
+# Access recorded history after simulation
+position_history = vessel.history[:, 6:9]  # [x, y, z]
+velocity_history = vessel.history[:, 0:3]  # [u, v, w]
+time_history = vessel.time_history
+
+# Save to CSV
+import pandas as pd
+df = pd.DataFrame({
+    'time': time_history,
+    'x': position_history[:, 0],
+    'y': position_history[:, 1],
+    'z': position_history[:, 2],
+    'u': velocity_history[:, 0],
+    'v': velocity_history[:, 1],
+    'w': velocity_history[:, 2]
+})
+df.to_csv('simulation_results.csv', index=False)
+```
+
+## Troubleshooting
+
+- **Simulation instability**: Reduce the timestep in the configuration file
+- **NaN values in simulation**: Check for division by zero or invalid parameters
+- **ROS2 communication issues**: Verify topic names and message types 

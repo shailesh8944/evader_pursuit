@@ -1,0 +1,33 @@
+# Control Module
+
+This page will contain documentation for the control module (`module_control.py`).
+
+:::{.callout-note}
+This page is under construction. Check back later for complete documentation.
+:::
+
+## Overview
+
+The Control module provides algorithms and utilities for implementing various control strategies for marine autonomous vehicles.
+
+## Features
+
+- PID controllers
+- LQR controllers
+- Guidance algorithms
+- Path following
+- Dynamic positioning
+
+## Usage Example
+
+```python
+import numpy as np
+from mav_simulator.module_control import PIDController
+
+# Create a PID controller
+pid = PIDController(Kp=1.0, Ki=0.1, Kd=0.2)
+
+# Use the controller
+error = 5.0  # Current error
+control_output = pid.update(error, dt=0.1)
+``` 

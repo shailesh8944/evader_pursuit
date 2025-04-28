@@ -1,0 +1,181 @@
+# ROS2 Integration
+
+## Overview
+
+The MAV Simulator provides seamless integration with ROS2 (Robot Operating System 2), enabling distributed robotics applications, external control systems, visualization, and data recording.
+
+::: {.callout-important}
+The ROS2 integration allows the simulator to connect with the broader robotics ecosystem while maintaining real-time performance.
+:::
+
+## Core Components
+
+The ROS2 integration consists of two primary classes:
+
+1. `Vessel_Pub_Sub` in `class_vessel_pub_sub_ros2.py` - Handles per-vessel communication
+2. `World_Node` in `class_world_node_ros2.py` - Manages the ROS2 node and coordination
+
+```{mermaid}
+graph LR
+    subgraph "MAV Simulator"
+        V[Vessel]
+        W[World]
+    end
+    
+    subgraph "ROS2 Interface"
+        VP[Vessel_Pub_Sub]
+        WN[World_Node]
+    end
+    
+    subgraph "ROS2 Ecosystem"
+        VIS[Visualization Tools]
+        CTRL[External Controllers]
+        SENS[Sensor Processing]
+        LOG[Data Logging]
+    end
+    
+    V --- VP
+    W --- WN
+    WN --- VP
+    
+    VP --> VIS
+    VP --> LOG
+    CTRL --> VP
+    VP --> SENS
+```
+
+## Vessel Publisher/Subscriber Interface
+
+The `Vessel_Pub_Sub` class handles all ROS2 communication for a vessel, including:
+
+- Publishing vessel state as odometry messages
+- Publishing sensor data (IMU, GPS, DVL, cameras, etc.)
+- Subscribing to actuator commands (thruster, rudder)
+- Message conversion between simulator data structures and ROS2 messages
+
+### Topics and Messages
+
+Each vessel publishes to and subscribes to a set of topics with a consistent naming convention:
+
+| Topic | Type | Description |
+|-------|------|-------------|
+| `/{vessel_name}_{id}/odom` | `nav_msgs/Odometry` | Vessel position and velocity |
+| `/{vessel_name}_{id}/pose` | `geometry_msgs/PoseWithCovarianceStamped` | Vessel pose with uncertainties |
+| `/{vessel_name}_{id}/gps` | `sensor_msgs/NavSatFix` | GPS position data |
+| `/{vessel_name}_{id}/imu` | `sensor_msgs/Imu` | IMU measurements |
+| `/{vessel_name}_{id}/dvl` | `interfaces/DVL` | Doppler Velocity Log data |
+| `/{vessel_name}_{id}/actuators` | `interfaces/Actuator` | Actuator commands |
+
+### Initialization
+
+```python
+def __init__(self, vessel, world_node):
+    """Initialize the vessel interface.
+    
+    Args:
+        vessel: The vessel object this interface is for
+        world_node: The ROS2 node to use for communication
+    """
+```
+
+The constructor initializes the interface with references to the vessel object and the ROS2 node. It sets up all publishers and subscribers based on the vessel's configuration.
+
+### Publishing Data
+
+```python
+def publish_odometry(self):
+    """Publish the vessel's current state as odometry message"""
+```
+
+This method creates and publishes odometry messages containing the vessel's current state, including position, orientation, and velocity.
+
+```python
+def _publish_sensor(self, sensor):
+    """Publish data from a specific sensor"""
+```
+
+This method handles the publication of sensor data at the appropriate rates.
+
+### Receiving Commands
+
+```python
+def actuator_callback(self, msg):
+    """Process actuator commands received from ROS2"""
+```
+
+This callback handles incoming actuator commands and forwards them to the vessel object.
+
+## World Node
+
+The `World_Node` class serves as the central point for ROS2 integration:
+
+```python
+class World_Node(Node):
+    """ROS2 node for MAV simulator world"""
+    
+    def __init__(self, world, node_name='mav_world'):
+        """Initialize the world node"""
+```
+
+It is responsible for:
+
+- Creating and managing the ROS2 node
+- Creating interface objects for each vessel
+- Handling clock synchronization
+- Coordinating simulation steps with ROS2 communication
+
+## Usage Example
+
+To use the ROS2 integration:
+
+```python
+import rclpy
+from mav_simulator.class_vessel import Vessel
+from mav_simulator.class_world import World
+from mav_simulator.class_vessel_pub_sub_ros2 import Vessel_Pub_Sub
+from mav_simulator.class_world_node_ros2 import World_Node
+
+# Initialize ROS2
+rclpy.init()
+
+# Create world and vessel objects
+world = World()
+vessel = Vessel(vessel_params, hydro_data, vessel_id=1)
+
+# Create ROS2 node and interface
+world_node = World_Node(world)
+vessel_interface = Vessel_Pub_Sub(vessel, world_node)
+
+# Run simulation
+try:
+    # Main ROS2 loop
+    while rclpy.ok():
+        world.step()
+        rclpy.spin_once(world_node, timeout_sec=0.001)
+finally:
+    # Clean up
+    world_node.destroy_node()
+    rclpy.shutdown()
+```
+
+## Custom Messages
+
+The simulator uses several custom message types defined in the `interfaces` package:
+
+- `Actuator` - Commands for vessel actuators
+- `DVL` - Doppler Velocity Log measurements
+
+## Visualizing with RViz
+
+The simulator's ROS2 integration works seamlessly with RViz for visualization:
+
+1. Start the simulator with ROS2 enabled
+2. Launch RViz with an appropriate configuration
+3. Add displays for the published topics
+
+## Best Practices
+
+- Use appropriate QoS settings for reliable communication
+- Consider network bandwidth when configuring sensor publication rates
+- Use transforms for coordinate frame consistency
+- Set realistic time scaling for real-time simulation 

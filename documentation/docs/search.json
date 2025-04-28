@@ -1,0 +1,493 @@
+[
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Pani Simulator",
+    "section": "",
+    "text": "Pani Simulator\nPani (which means \\(\\textit{water}\\) in Hindi) is a high fidelity marine vessel simulator. It is built in a manner such that minimum backend edits are required by the user and the simulator can be both configured and run in an intuitive lightweight GUI application which runs on the web. An attempt to make it as “Microsoft’s Flight Simualtor” but for marine vessels has been made.\nThe simulator can be used to configure a new marine vessel, simulate sensors such as DVL, IMU, LiDAR and Camera, and control the vessel either via remote input or custom files for autonomous tasks. The simulator supports multiple agents which is useful for swarm autonomy tasks or to develop better collision avoidance algorithms.\nThe project has been made open source to allow for further development of this simulator and add additional features to make it more versatile.",
+    "crumbs": [
+      "Pani Simulator"
+    ]
+  },
+  {
+    "objectID": "index.html#overview",
+    "href": "index.html#overview",
+    "title": "Pani Simulator",
+    "section": "Overview",
+    "text": "Overview\nThe Simulator is majorly divided into two parts:\n\nVessel Configurator\nVessel Simulation\n\nThe Vessel Configurator is what allows you to configure a new marine vessel. You can load a FBX Geometry file, select individual components such as control surfaces, thrusters, sensors and configure their parameters via the interactive GUI. There are also options to enter the non-linear hydrodynamics coefficients for the vessel (which we plan to integrate with our in-house system identification algorithm, in future), set vessel geometry parameters and specify initial conditions. This is also where you will setup the simulation parameters such as time, time-step, geofence, GPS datum and physical constansts (gravity, density etc). It also supports the output from our in-house hydrodynamics program , which gives the added mass coefficients and wave hydrodynamics of the vessel. Once you are done with the vessel configuration, the program auto generates the imput files required for the simulation to run.\nThe Vessel Simulation is where the actual simulation takes place. It follows the dynamics as per the parameters you set in the Vessel Configurator. This is where you can also custom code your control and guidance algorithms which will publish the required data in ROS2 to make the vessel run. The various sensors are modelled with real world physics whose outputs you can see in the ROS2 terminal, or from the GUI.",
+    "crumbs": [
+      "Pani Simulator"
+    ]
+  },
+  {
+    "objectID": "index.html#how-to-use-this-documentation",
+    "href": "index.html#how-to-use-this-documentation",
+    "title": "Pani Simulator",
+    "section": "How to Use This Documentation",
+    "text": "How to Use This Documentation\nNavigate through the sections using the sidebar. The documentation discusses the Setup, theory on the Kinematics and Dynamics used in the simulator, the coordinate systems used for various components (control surfaces, thrusters, sensors and Body centre), the python simulator backend and how to use the Panisim vessel configurator and the Panisim vessel simulator.",
+    "crumbs": [
+      "Pani Simulator"
+    ]
+  },
+  {
+    "objectID": "rawFiles/setup.html",
+    "href": "rawFiles/setup.html",
+    "title": "Setup",
+    "section": "",
+    "text": "Prerequisites",
+    "crumbs": [
+      "Setup"
+    ]
+  },
+  {
+    "objectID": "rawFiles/setup.html#prerequisites",
+    "href": "rawFiles/setup.html#prerequisites",
+    "title": "Setup",
+    "section": "",
+    "text": "Git installed on your system\nDocker installed on your system\nBasic understanding of terminal commands\nPython version 3.10 or higher",
+    "crumbs": [
+      "Setup"
+    ]
+  },
+  {
+    "objectID": "rawFiles/setup.html#cloning-the-repository",
+    "href": "rawFiles/setup.html#cloning-the-repository",
+    "title": "Setup",
+    "section": "Cloning the Repository",
+    "text": "Cloning the Repository\n\nOpen a terminal window\nClone the repository using the following command:\ngit clone https://github.com/MarineAutonomy/makara.git\nNavigate to the cloned repository:\ncd makara\nSwitch to the mavymini branch:\ngit checkout mavymini",
+    "crumbs": [
+      "Setup"
+    ]
+  },
+  {
+    "objectID": "rawFiles/setup.html#building-the-docker-image",
+    "href": "rawFiles/setup.html#building-the-docker-image",
+    "title": "Setup",
+    "section": "Building the Docker Image",
+    "text": "Building the Docker Image\nBefore running the simulator, you need to build the Docker image:\n\nEnsure you’re in the root directory of the cloned repository\nBuild the Docker image by executing:\n./ros2_devdocker.sh\nWait for the build process to complete (this may take several minutes depending on your internet connection and system performance)",
+    "crumbs": [
+      "Setup"
+    ]
+  },
+  {
+    "objectID": "rawFiles/setup.html#troubleshooting",
+    "href": "rawFiles/setup.html#troubleshooting",
+    "title": "Setup",
+    "section": "Troubleshooting",
+    "text": "Troubleshooting\n\nDocker issues: Ensure Docker is installed and running on your system\nPermission issues: If you encounter permission errors when running scripts, try prefixing the commands with sudo",
+    "crumbs": [
+      "Setup"
+    ]
+  },
+  {
+    "objectID": "rawFiles/quickstart.html",
+    "href": "rawFiles/quickstart.html",
+    "title": "Quickstart",
+    "section": "",
+    "text": "After building the Docker image, you can start the simulator:\n\nFrom the root directory of the repository, run the following script in your terminal:\n./ros2_simulator.sh\nOnce the simulator starts, it will display the ROS2 topics available in the terminal. You should see an output similar to this:\n==================================================\n🚀 ROS2 Simulation Started Successfully!\n==================================================\n\n📡 Available ROS2 Topics:\n------------------------------\n/mavymini2_01/actuator_cmd\n/mavymini2_01/dvl\n/mavymini2_01/encoders\n/mavymini2_01/gps\n/mavymini2_01/imu\n/mavymini2_01/odometry_sim\n/mavymini_00/actuator_cmd\n/mavymini_00/dvl\n/mavymini_00/encoders\n/mavymini_00/gps\n/mavymini_00/imu\n/mavymini_00/odometry_sim\n/parameter_events\n/rosout\nTo inspect the data published on these topics, follow these steps:\n\nOpen a new terminal window.\nEnter the Docker container by executing the following command in :\n\ndocker exec -it panisim bash\n\nSubscribe to a specific topic using the ros2 topic echo command. Replace &lt;topic_name&gt; with the actual topic you want to inspect.\n\nros2 topic echo &lt;topic_name&gt;\nFor example, to view the odometry data for mavymini_00, you would use:\nros2 topic echo /mavymini_00/odometry_sim\n\n\n\n\n\n\n\nNote\n\n\n\nThe specific topic names may vary depending on the agents activated in your /inputs/simulation_input.yml configuration file.",
+    "crumbs": [
+      "Quickstart"
+    ]
+  },
+  {
+    "objectID": "rawFiles/quickstart.html#view-topic-data",
+    "href": "rawFiles/quickstart.html#view-topic-data",
+    "title": "Quickstart",
+    "section": "🔍 View Topic Data:",
+    "text": "🔍 View Topic Data:\n\nOpen a new terminal: docker exec -it panisim bash\nSubscribe to a topic: ros2 topic echo \n\n📝 Example: ros2 topic echo /vessel_0/odometry_sim\n==================================================\n\n3. To view topic data, open a new terminal and run:\n   ```bash\n   docker exec -it panisim bash\n\nSubscribe to a topic using:\nros2 topic echo &lt;topic_name&gt;\nFor example:\nros2 topic echo /mavymini_00/odometry_sim",
+    "crumbs": [
+      "Quickstart"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Introduction/intro.html",
+    "href": "rawFiles/Introduction/intro.html",
+    "title": "Introduction",
+    "section": "",
+    "text": "The",
+    "crumbs": [
+      "Introduction"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Introduction/intro.html#key-features",
+    "href": "rawFiles/Introduction/intro.html#key-features",
+    "title": "Introduction",
+    "section": "Key Features",
+    "text": "Key Features\n\nRealistic Physics: Advanced hydrodynamic modeling based on vessel hull forms\nModular Architecture: Easy integration of custom vessel models, sensors, and controllers\nROS2 Integration: Native support for Robot Operating System 2 (ROS2) for distributed robotics applications\nConfigurable Environments: Simulate different sea states, current patterns, and environmental conditions\nVisualization Tools: Built-in plotting capabilities for analyzing simulation results",
+    "crumbs": [
+      "Introduction"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Introduction/intro.html#system-architecture",
+    "href": "rawFiles/Introduction/intro.html#system-architecture",
+    "title": "Introduction",
+    "section": "System Architecture",
+    "text": "System Architecture\nThe simulator consists of several interconnected modules:\n\n\n\n\n\nflowchart TB\n    classDef core fill:#f9f,stroke:#333,stroke-width:2px\n    classDef utils fill:#bbf,stroke:#333,stroke-width:1px\n    classDef ros fill:#bfb,stroke:#333,stroke-width:1px\n    \n    Vessel[class_vessel.py]:::core\n    Kinematics[module_kinematics.py]:::core\n    Control[module_control.py]:::core\n    Sensors[module_sensors.py]:::core\n    World[class_world.py]:::core\n    \n    Hydro[calculate_hydrodynamics.py]:::utils\n    Grid[class_grid.py]:::utils\n    Sim[simulate.py/simulate_noros.py]:::utils\n    Plot[plot_results.py]:::utils\n    CrossFlow[generate_cross_flow.py]:::utils\n    \n    ROS[class_vessel_pub_sub_ros2.py]:::ros\n    ROSWorld[class_world_node_ros2.py]:::ros\n    \n    Vessel --&gt; Kinematics\n    Vessel --&gt; Control\n    Vessel --&gt; Sensors\n    Vessel &lt;--&gt; World\n    Vessel &lt;--&gt; Hydro\n    \n    Vessel --&gt; ROS\n    World --&gt; ROSWorld\n    \n    Grid --&gt; World\n    Sim --&gt; Vessel\n    Sim --&gt; World\n    Plot --&gt; Sim\n    CrossFlow --&gt; Hydro",
+    "crumbs": [
+      "Introduction"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Introduction/intro.html#getting-started",
+    "href": "rawFiles/Introduction/intro.html#getting-started",
+    "title": "Introduction",
+    "section": "Getting Started",
+    "text": "Getting Started\nTo use the MAV Simulator, you need to:\n\nInstall the required dependencies\nConfigure vessel parameters\nSet up environment conditions\nRun simulations with or without ROS2 integration\n\nThe following sections provide detailed information about each component of the simulator and how to utilize them for your specific marine autonomous vehicle simulation needs.",
+    "crumbs": [
+      "Introduction"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Kinematics/kinematics.html",
+    "href": "rawFiles/Kinematics/kinematics.html",
+    "title": "2  Kinematics Module",
+    "section": "",
+    "text": "2.1 Overview\nThe Kinematics module (module_kinematics.py) provides a comprehensive set of mathematical functions for handling coordinate transformations, rotation representations, and kinematic calculations essential for marine vehicle simulation.",
+    "crumbs": [
+      "Kinematics",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Kinematics Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Kinematics/kinematics.html#overview",
+    "href": "rawFiles/Kinematics/kinematics.html#overview",
+    "title": "2  Kinematics Module",
+    "section": "",
+    "text": "Tip\n\n\n\nThis module serves as the mathematical foundation for all spatial transformations in the simulator.",
+    "crumbs": [
+      "Kinematics",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Kinematics Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Kinematics/kinematics.html#coordinate-frames",
+    "href": "rawFiles/Kinematics/kinematics.html#coordinate-frames",
+    "title": "2  Kinematics Module",
+    "section": "2.2 Coordinate Frames",
+    "text": "2.2 Coordinate Frames\nThe module supports transformations between multiple coordinate systems:\n\nEarth Centered Inertial (ECI) frame - {i}\nEarth Centered Earth Fixed (ECEF) frame - {e}\nNorth-East-Down (NED) frame - {n}\nBody frame - {b}\nFlow frame - {f}",
+    "crumbs": [
+      "Kinematics",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Kinematics Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Kinematics/kinematics.html#function-categories",
+    "href": "rawFiles/Kinematics/kinematics.html#function-categories",
+    "title": "2  Kinematics Module",
+    "section": "2.3 Function Categories",
+    "text": "2.3 Function Categories\n\n2.3.1 Rotation Representation Conversions\n\n\n\n\n\ngraph TD\n    EA[Euler Angles] -- eul_to_rotm --&gt; RM[Rotation Matrix]\n    RM -- rotm_to_eul --&gt; EA\n    EA -- eul_to_quat --&gt; Q[Quaternion]\n    Q -- quat_to_eul --&gt; EA\n    Q -- quat_to_rotm --&gt; RM\n    RM -- rotm_to_quat --&gt; Q\n\n\n\n\n\n\n\n\n\n\n\n\n\nFunction\nDescription\n\n\n\n\neul_to_rotm(eul, order='ZYX', deg=False)\nConverts Euler angles to rotation matrix\n\n\nrotm_to_eul(rotm, order='ZYX', prev_eul=None, deg=False, silent=True)\nConverts rotation matrix to Euler angles\n\n\neul_to_quat(eul, order='ZYX', deg=False)\nConverts Euler angles to quaternion\n\n\nquat_to_eul(quat, order='ZYX', deg=False, prev_quat=None, silent=True)\nConverts quaternion to Euler angles\n\n\nquat_to_rotm(quat)\nConverts quaternion to rotation matrix\n\n\nrotm_to_quat(rotm)\nConverts rotation matrix to quaternion\n\n\n\n\n\n2.3.2 Quaternion Operations\n\n\n\n\n\n\n\nFunction\nDescription\n\n\n\n\nquat_multiply(q1, q2)\nMultiplies two quaternions\n\n\nquat_conjugate(quat)\nComputes the conjugate of a quaternion\n\n\nrotate_vec_by_quat(vec_a, q_a_b)\nRotates a vector using a quaternion\n\n\n\n\n\n2.3.3 Rate Calculations\n\n\n\n\n\n\n\nFunction\nDescription\n\n\n\n\neul_rate_matrix(eul, order='ZYX', deg=False)\nComputes the Euler rate matrix\n\n\nquat_rate_matrix(quat)\nComputes the quaternion rate matrix\n\n\neul_rate(eul, w, order='ZYX')\nCalculates Euler angle rates from angular velocity\n\n\nquat_rate(quat, w)\nCalculates quaternion rates from angular velocity\n\n\ndeul_dquat(quat)\nComputes the Jacobian of Euler angles with respect to quaternion\n\n\ndquat_deul(quat)\nComputes the Jacobian of quaternion with respect to Euler angles\n\n\n\n\n\n2.3.4 Navigation Functions\n\n\n\n\n\n\n\nFunction\nDescription\n\n\n\n\nssa(ang, deg=False)\nConverts angles to smallest signed angle\n\n\nclip(value, threshold)\nClips a value to a specified threshold\n\n\nned_to_llh(ned, llh0)\nConverts NED coordinates to latitude/longitude/height\n\n\nllh_to_ned(llh, llh0)\nConverts latitude/longitude/height to NED coordinates\n\n\ngenerate_waypoints()\nGenerates waypoints for navigation\n\n\nrotm_ned_to_ecef(llh)\nComputes rotation matrix from NED to ECEF frame\n\n\n\n\n\n2.3.5 Utility Functions\n\n\n\nFunction\nDescription\n\n\n\n\nSmat(vec)\nCreates a skew-symmetric matrix from a vector",
+    "crumbs": [
+      "Kinematics",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Kinematics Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Kinematics/kinematics.html#usage-examples",
+    "href": "rawFiles/Kinematics/kinematics.html#usage-examples",
+    "title": "2  Kinematics Module",
+    "section": "2.4 Usage Examples",
+    "text": "2.4 Usage Examples\n\n2.4.1 Coordinate Transformations\nimport numpy as np\nfrom mav_simulator.module_kinematics import eul_to_rotm, llh_to_ned\n\n# Convert Euler angles to rotation matrix\neuler_angles = np.array([0.1, 0.2, 0.3])  # [roll, pitch, yaw] in radians\nR = eul_to_rotm(euler_angles)  # Rotation matrix\n\n# Convert latitude, longitude, height to NED coordinates\nreference_point = np.array([60.0, 10.0, 0.0])  # [lat, lon, height]\ntarget_point = np.array([60.001, 10.001, 10.0])  # [lat, lon, height]\nned_coords = llh_to_ned(target_point, reference_point)\n\n\n2.4.2 Rotation Representations\nfrom mav_simulator.module_kinematics import eul_to_quat, quat_to_rotm\n\n# Convert from Euler angles to quaternion\neuler_angles = np.array([0.1, 0.2, 0.3])  # [roll, pitch, yaw] in radians\nquaternion = eul_to_quat(euler_angles)\n\n# Convert from quaternion to rotation matrix\nR = quat_to_rotm(quaternion)",
+    "crumbs": [
+      "Kinematics",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Kinematics Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Kinematics/kinematics.html#mathematical-foundation",
+    "href": "rawFiles/Kinematics/kinematics.html#mathematical-foundation",
+    "title": "2  Kinematics Module",
+    "section": "2.5 Mathematical Foundation",
+    "text": "2.5 Mathematical Foundation\nThe module implements standard kinematic relationships for rigid body motion. Some key equations include:\n\n2.5.1 Euler Rate Equation\n\\[\\dot{\\boldsymbol{\\eta}} = \\mathbf{T}(\\boldsymbol{\\eta}) \\boldsymbol{\\omega}\\]\nWhere: - \\(\\dot{\\boldsymbol{\\eta}}\\) is the rate of change of Euler angles - \\(\\mathbf{T}(\\boldsymbol{\\eta})\\) is the Euler rate matrix - \\(\\boldsymbol{\\omega}\\) is the angular velocity vector\n\n\n2.5.2 Quaternion Rate Equation\n\\[\\dot{\\mathbf{q}} = \\frac{1}{2} \\mathbf{E}(\\mathbf{q}) \\boldsymbol{\\omega}\\]\nWhere: - \\(\\dot{\\mathbf{q}}\\) is the rate of change of the quaternion - \\(\\mathbf{E}(\\mathbf{q})\\) is the quaternion rate matrix - \\(\\boldsymbol{\\omega}\\) is the angular velocity vector",
+    "crumbs": [
+      "Kinematics",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Kinematics Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Kinematics/kinematics.html#best-practices",
+    "href": "rawFiles/Kinematics/kinematics.html#best-practices",
+    "title": "2  Kinematics Module",
+    "section": "2.6 Best Practices",
+    "text": "2.6 Best Practices\n\nPrefer quaternions over Euler angles for attitude integration to avoid gimbal lock\nUse the ssa() function to normalize angles when working with Euler angles\nBe consistent with the rotation order convention throughout your code (the default is ‘ZYX’)\nWhen transforming between frames, always keep track of the reference frames involved",
+    "crumbs": [
+      "Kinematics",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Kinematics Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Dynamics/hydrodynamics.html",
+    "href": "rawFiles/Dynamics/hydrodynamics.html",
+    "title": "3  Hydrodynamics Module",
+    "section": "",
+    "text": "3.1 Overview\nThis page will contain documentation for the hydrodynamics module (class_hydro.py).\nThe Hydrodynamics module provides hydrodynamic models and calculations for marine vessels, including:",
+    "crumbs": [
+      "Dynamics",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Hydrodynamics Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Dynamics/hydrodynamics.html#overview",
+    "href": "rawFiles/Dynamics/hydrodynamics.html#overview",
+    "title": "3  Hydrodynamics Module",
+    "section": "",
+    "text": "Added mass and inertia\nCoriolis and centripetal forces\nDamping forces\nRestoring forces\nWave and current effects",
+    "crumbs": [
+      "Dynamics",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Hydrodynamics Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Dynamics/hydrodynamics.html#features",
+    "href": "rawFiles/Dynamics/hydrodynamics.html#features",
+    "title": "3  Hydrodynamics Module",
+    "section": "3.2 Features",
+    "text": "3.2 Features\n\nHydrodynamic coefficient calculations\nForce and moment computations\nEnvironmental force modeling\nState-dependent force calculations\nIntegration with vessel dynamics",
+    "crumbs": [
+      "Dynamics",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Hydrodynamics Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Dynamics/hydrodynamics.html#usage-example",
+    "href": "rawFiles/Dynamics/hydrodynamics.html#usage-example",
+    "title": "3  Hydrodynamics Module",
+    "section": "3.3 Usage Example",
+    "text": "3.3 Usage Example\nfrom mav_simulator.class_hydro import Hydrodynamics\n\n# Create hydrodynamics instance\nhydro = Hydrodynamics(hydro_data)\n\n# Calculate forces and moments\nforces, moments = hydro.calculate_forces(\n    velocity=[u, v, w],\n    angular_velocity=[p, q, r],\n    position=[x, y, z],\n    orientation=[phi, theta, psi]\n)\n\n# Apply forces to vessel\nvessel.apply_forces(forces, moments)",
+    "crumbs": [
+      "Dynamics",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Hydrodynamics Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Dynamics/vessel.html",
+    "href": "rawFiles/Dynamics/vessel.html",
+    "title": "4  Vessel Module",
+    "section": "",
+    "text": "4.1 Overview\nThe Vessel module (class_vessel.py) is the core component of the MAV simulator. It provides a comprehensive representation of marine vessel dynamics with complete 6-DOF (Degrees of Freedom) modeling.",
+    "crumbs": [
+      "Dynamics",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Vessel Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Dynamics/vessel.html#overview",
+    "href": "rawFiles/Dynamics/vessel.html#overview",
+    "title": "4  Vessel Module",
+    "section": "",
+    "text": "Note\n\n\n\nThis module serves as the foundation of the entire simulation environment, handling vessel state, forces, and dynamics.",
+    "crumbs": [
+      "Dynamics",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Vessel Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Dynamics/vessel.html#class-structure",
+    "href": "rawFiles/Dynamics/vessel.html#class-structure",
+    "title": "4  Vessel Module",
+    "section": "4.2 Class Structure",
+    "text": "4.2 Class Structure\n\n\n\n\n\nclassDiagram\n    class Vessel {\n        +float g\n        +float rho\n        +float L, B, D\n        +float U\n        +float mass\n        +numpy.ndarray CG\n        +numpy.ndarray mass_matrix\n        +numpy.ndarray added_mass_matrix\n        +__init__(vessel_params, hydrodynamic_data, vessel_id, ros_flag)\n        +vessel_ode(t, state)\n        +hydrodynamic_forces(vel)\n        +control_forces(delta, stall_angle, Cl, Cd)\n        +thruster_forces(n_prop)\n        +step()\n        +reset()\n        +simulate()\n        +gravitational_forces(phi, theta)\n        +calculate_coriolis_matrices(vel)\n        -_dimensionalize_coefficients(rho, L, U)\n    }",
+    "crumbs": [
+      "Dynamics",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Vessel Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Dynamics/vessel.html#key-attributes",
+    "href": "rawFiles/Dynamics/vessel.html#key-attributes",
+    "title": "4  Vessel Module",
+    "section": "4.3 Key Attributes",
+    "text": "4.3 Key Attributes\n\n\n\n\n\n\n\n\nAttribute\nType\nDescription\n\n\n\n\ng\nfloat\nGravitational acceleration\n\n\nrho\nfloat\nWater density\n\n\nL, B, D\nfloat\nLength, breadth, and depth of the vessel\n\n\nmass\nfloat\nVessel mass\n\n\nCG\nnumpy.ndarray\nCenter of gravity coordinates\n\n\nmass_matrix\nnumpy.ndarray\nRigid body mass matrix\n\n\nadded_mass_matrix\nnumpy.ndarray\nAdded mass coefficients from hydrodynamic analysis",
+    "crumbs": [
+      "Dynamics",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Vessel Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Dynamics/vessel.html#main-methods",
+    "href": "rawFiles/Dynamics/vessel.html#main-methods",
+    "title": "4  Vessel Module",
+    "section": "4.4 Main Methods",
+    "text": "4.4 Main Methods\n\n4.4.1 Initialization\ndef __init__(self, vessel_params: Dict, hydrodynamic_data: Dict, vessel_id: int, ros_flag: bool = True):\nThe constructor initializes the vessel with parameters and hydrodynamic data. It sets up:\n\nBasic vessel parameters (dimensions, mass, etc.)\nInertia properties\nHydrodynamic coefficients\nInitial state\n\n\n\n4.4.2 Dynamic Model\ndef vessel_ode(self, t, state):\nThis method implements the vessel’s equations of motion as a system of first-order ordinary differential equations (ODEs). It computes:\n\nRigid body forces\nHydrodynamic forces\nControl forces (rudder, thruster)\nEnvironmental forces\nState derivatives for integration\n\n\n\n4.4.3 Force Components\nThe vessel’s total forces are composed of several components:\n\nHydrodynamic Forces: hydrodynamic_forces(vel) - Computes forces from added mass, damping, and other hydrodynamic effects\nControl Forces: control_forces(delta, stall_angle, Cl, Cd) - Calculates forces from control surfaces like rudders\nThruster Forces: thruster_forces(n_prop) - Determines propulsion forces\nGravitational Forces: gravitational_forces(phi, theta) - Handles weight and buoyancy\n\n\n\n4.4.4 Simulation Methods\n\nStep: step() - Advances the simulation by one time step\nReset: reset() - Resets the vessel to its initial state\nSimulate: simulate() - Runs a complete simulation",
+    "crumbs": [
+      "Dynamics",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Vessel Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Dynamics/vessel.html#usage-example",
+    "href": "rawFiles/Dynamics/vessel.html#usage-example",
+    "title": "4  Vessel Module",
+    "section": "4.5 Usage Example",
+    "text": "4.5 Usage Example\n# Example of creating and using a vessel\nimport numpy as np\nfrom mav_simulator.class_vessel import Vessel\n\n# Define vessel parameters\nvessel_params = {\n    'name': 'USV1',\n    'gravity': 9.81,\n    'density': 1025.0,\n    'geometry': {\n        'length': 5.0,\n        'breadth': 2.0,\n        'depth': 1.0,\n        'CG': np.array([0.0, 0.0, 0.0]),\n        'CB': np.array([0.0, 0.0, 0.1]),\n        'gyration': np.array([0.4, 0.4, 0.2])\n    },\n    'inertia': {\n        'mass': 1000.0,\n        'buoyancy_mass': 1000.0,\n        'inertia_matrix': \"None\",\n        'added_mass_matrix': \"None\"\n    },\n    'gps_datum': [0.0, 0.0]\n}\n\n# Define hydrodynamic data\nhydro_data = {\n    'hydra_file': 'path/to/hydra_file.json',\n    'dim_flag': True\n}\n\n# Create vessel\nvessel = Vessel(vessel_params, hydro_data, vessel_id=1)\n\n# Run simulation\nvessel.simulate()",
+    "crumbs": [
+      "Dynamics",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Vessel Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Dynamics/vessel.html#integration-with-other-modules",
+    "href": "rawFiles/Dynamics/vessel.html#integration-with-other-modules",
+    "title": "4  Vessel Module",
+    "section": "4.6 Integration with Other Modules",
+    "text": "4.6 Integration with Other Modules\nThe Vessel class interacts with several other modules:\n\nKinematics Module: For coordinate transformations and attitude representation\nControl Module: For implementing control algorithms\nHydrodynamics Calculation: For computing vessel-specific hydrodynamic coefficients",
+    "crumbs": [
+      "Dynamics",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Vessel Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Dynamics/vessel.html#customization",
+    "href": "rawFiles/Dynamics/vessel.html#customization",
+    "title": "4  Vessel Module",
+    "section": "4.7 Customization",
+    "text": "4.7 Customization\nThe Vessel class can be extended or customized by:\n\nModifying vessel parameters in the configuration dictionary\nSubclassing to implement specialized vessel types\nImplementing custom force components for specific simulation scenarios",
+    "crumbs": [
+      "Dynamics",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Vessel Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Navigation/sensors.html",
+    "href": "rawFiles/Navigation/sensors.html",
+    "title": "5  Sensors Module",
+    "section": "",
+    "text": "5.1 Overview\nThis page will contain documentation for the sensors module (module_sensors.py).\nThe Sensors module provides classes and functions for simulating various sensors used in marine autonomous vehicles.",
+    "crumbs": [
+      "Navigation",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Sensors Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Navigation/sensors.html#supported-sensors",
+    "href": "rawFiles/Navigation/sensors.html#supported-sensors",
+    "title": "5  Sensors Module",
+    "section": "5.2 Supported Sensors",
+    "text": "5.2 Supported Sensors\n\nGPS\nIMU (Inertial Measurement Unit)\nDVL (Doppler Velocity Log)\nCompass\nDepth sensor\nCamera\nLIDAR\nRADAR",
+    "crumbs": [
+      "Navigation",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Sensors Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/Navigation/sensors.html#usage-example",
+    "href": "rawFiles/Navigation/sensors.html#usage-example",
+    "title": "5  Sensors Module",
+    "section": "5.3 Usage Example",
+    "text": "5.3 Usage Example\nfrom mav_simulator.module_sensors import create_sensor\n\n# Create a GPS sensor\ngps_config = {\n    'type': 'gps',\n    'rate': 10.0,  # Hz\n    'noise_std': 1.5  # meters\n}\ngps = create_sensor(gps_config)\n\n# Get sensor reading\nvessel_state = {...}  # Current vessel state\ngps_reading = gps.measure(vessel_state)\n\n\n\n:::{#quarto-navigation-envelope .hidden}\n[Pani Simulator]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyLXRpdGxl\"}\n[Pani Simulator]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1uYXZiYXItdGl0bGU=\"}\n[&lt;span class='chapter-number'&gt;6&lt;/span&gt;  &lt;span class='chapter-title'&gt;ROS2 Integration&lt;/span&gt;]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1uZXh0\"}\n[&lt;span class='chapter-number'&gt;4&lt;/span&gt;  &lt;span class='chapter-title'&gt;Vessel Module&lt;/span&gt;]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1wcmV2\"}\n[Pani Simulator]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyOi9pbmRleC5odG1sUGFuaS1TaW11bGF0b3I=\"}\n[Setup]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyOi9yYXdGaWxlcy9zZXR1cC5odG1sU2V0dXA=\"}\n[Quickstart]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyOi9yYXdGaWxlcy9xdWlja3N0YXJ0Lmh0bWxRdWlja3N0YXJ0\"}\n[&lt;span class='chapter-number'&gt;1&lt;/span&gt;  &lt;span class='chapter-title'&gt;Introduction&lt;/span&gt;]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyOi9yYXdGaWxlcy9JbnRyb2R1Y3Rpb24vaW50cm8uaHRtbDxzcGFuLWNsYXNzPSdjaGFwdGVyLW51bWJlcic+MTwvc3Bhbj4tLTxzcGFuLWNsYXNzPSdjaGFwdGVyLXRpdGxlJz5JbnRyb2R1Y3Rpb248L3NwYW4+\"}\n[Kinematics]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyOnF1YXJ0by1zaWRlYmFyLXNlY3Rpb24tMQ==\"}\n[&lt;span class='chapter-number'&gt;2&lt;/span&gt;  &lt;span class='chapter-title'&gt;Kinematics Module&lt;/span&gt;]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyOi9yYXdGaWxlcy9LaW5lbWF0aWNzL2tpbmVtYXRpY3MuaHRtbDxzcGFuLWNsYXNzPSdjaGFwdGVyLW51bWJlcic+Mjwvc3Bhbj4tLTxzcGFuLWNsYXNzPSdjaGFwdGVyLXRpdGxlJz5LaW5lbWF0aWNzLU1vZHVsZTwvc3Bhbj4=\"}\n[Dynamics]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyOnF1YXJ0by1zaWRlYmFyLXNlY3Rpb24tMg==\"}\n[&lt;span class='chapter-number'&gt;3&lt;/span&gt;  &lt;span class='chapter-title'&gt;Hydrodynamics Module&lt;/span&gt;]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyOi9yYXdGaWxlcy9EeW5hbWljcy9oeWRyb2R5bmFtaWNzLmh0bWw8c3Bhbi1jbGFzcz0nY2hhcHRlci1udW1iZXInPjM8L3NwYW4+LS08c3Bhbi1jbGFzcz0nY2hhcHRlci10aXRsZSc+SHlkcm9keW5hbWljcy1Nb2R1bGU8L3NwYW4+\"}\n[&lt;span class='chapter-number'&gt;4&lt;/span&gt;  &lt;span class='chapter-title'&gt;Vessel Module&lt;/span&gt;]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyOi9yYXdGaWxlcy9EeW5hbWljcy92ZXNzZWwuaHRtbDxzcGFuLWNsYXNzPSdjaGFwdGVyLW51bWJlcic+NDwvc3Bhbj4tLTxzcGFuLWNsYXNzPSdjaGFwdGVyLXRpdGxlJz5WZXNzZWwtTW9kdWxlPC9zcGFuPg==\"}\n[Navigation]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyOnF1YXJ0by1zaWRlYmFyLXNlY3Rpb24tMw==\"}\n[&lt;span class='chapter-number'&gt;5&lt;/span&gt;  &lt;span class='chapter-title'&gt;Sensors Module&lt;/span&gt;]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyOi9yYXdGaWxlcy9OYXZpZ2F0aW9uL3NlbnNvcnMuaHRtbDxzcGFuLWNsYXNzPSdjaGFwdGVyLW51bWJlcic+NTwvc3Bhbj4tLTxzcGFuLWNsYXNzPSdjaGFwdGVyLXRpdGxlJz5TZW5zb3JzLU1vZHVsZTwvc3Bhbj4=\"}\n[ROS2 Integration]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyOnF1YXJ0by1zaWRlYmFyLXNlY3Rpb24tNA==\"}\n[&lt;span class='chapter-number'&gt;6&lt;/span&gt;  &lt;span class='chapter-title'&gt;ROS2 Integration&lt;/span&gt;]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWludC1zaWRlYmFyOi9yYXdGaWxlcy9ST1MyL3JvczJfaW50ZWdyYXRpb24uaHRtbDxzcGFuLWNsYXNzPSdjaGFwdGVyLW51bWJlcic+Njwvc3Bhbj4tLTxzcGFuLWNsYXNzPSdjaGFwdGVyLXRpdGxlJz5ST1MyLUludGVncmF0aW9uPC9zcGFuPg==\"}\n[Navigation]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWJyZWFkY3J1bWJzLU5hdmlnYXRpb24=\"}\n[&lt;span class='chapter-number'&gt;5&lt;/span&gt;  &lt;span class='chapter-title'&gt;Sensors Module&lt;/span&gt;]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLWJyZWFkY3J1bWJzLTxzcGFuLWNsYXNzPSdjaGFwdGVyLW51bWJlcic+NTwvc3Bhbj4tLTxzcGFuLWNsYXNzPSdjaGFwdGVyLXRpdGxlJz5TZW5zb3JzLU1vZHVsZTwvc3Bhbj4=\"}\n:::\n\n\n\n:::{#quarto-meta-markdown .hidden}\n[[5]{.chapter-number}  [Sensors Module]{.chapter-title} – Pani Simulator]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLW1ldGF0aXRsZQ==\"}\n[[5]{.chapter-number}  [Sensors Module]{.chapter-title} – Pani Simulator]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLXR3aXR0ZXJjYXJkdGl0bGU=\"}\n[[5]{.chapter-number}  [Sensors Module]{.chapter-title} – Pani Simulator]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLW9nY2FyZHRpdGxl\"}\n[Pani Simulator]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLW1ldGFzaXRlbmFtZQ==\"}\n[]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLXR3aXR0ZXJjYXJkZGVzYw==\"}\n[]{.hidden .quarto-markdown-envelope-contents render-id=\"cXVhcnRvLW9nY2FyZGRkZXNj\"}\n:::\n\n\n\n\n&lt;!-- --&gt;\n\n::: {.quarto-embedded-source-code}\n```````````````````{.markdown shortcodes=\"false\"}\n# Sensors Module\n\nThis page will contain documentation for the sensors module (`module_sensors.py`).\n\n:::{.callout-note}\nThis page is under construction. Check back later for complete documentation.\n:::\n\n## Overview\n\nThe Sensors module provides classes and functions for simulating various sensors used in marine autonomous vehicles.\n\n## Supported Sensors\n\n- GPS\n- IMU (Inertial Measurement Unit)\n- DVL (Doppler Velocity Log)\n- Compass\n- Depth sensor\n- Camera\n- LIDAR\n- RADAR\n\n## Usage Example\n\n```python\nfrom mav_simulator.module_sensors import create_sensor\n\n# Create a GPS sensor\ngps_config = {\n    'type': 'gps',\n    'rate': 10.0,  # Hz\n    'noise_std': 1.5  # meters\n}\ngps = create_sensor(gps_config)\n\n# Get sensor reading\nvessel_state = {...}  # Current vessel state\ngps_reading = gps.measure(vessel_state)\n:::",
+    "crumbs": [
+      "Navigation",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Sensors Module</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/ROS2/ros2_integration.html",
+    "href": "rawFiles/ROS2/ros2_integration.html",
+    "title": "6  ROS2 Integration",
+    "section": "",
+    "text": "6.1 Overview\nThe MAV Simulator provides seamless integration with ROS2 (Robot Operating System 2), enabling distributed robotics applications, external control systems, visualization, and data recording.",
+    "crumbs": [
+      "ROS2 Integration",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>ROS2 Integration</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/ROS2/ros2_integration.html#overview",
+    "href": "rawFiles/ROS2/ros2_integration.html#overview",
+    "title": "6  ROS2 Integration",
+    "section": "",
+    "text": "Important\n\n\n\nThe ROS2 integration allows the simulator to connect with the broader robotics ecosystem while maintaining real-time performance.",
+    "crumbs": [
+      "ROS2 Integration",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>ROS2 Integration</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/ROS2/ros2_integration.html#core-components",
+    "href": "rawFiles/ROS2/ros2_integration.html#core-components",
+    "title": "6  ROS2 Integration",
+    "section": "6.2 Core Components",
+    "text": "6.2 Core Components\nThe ROS2 integration consists of two primary classes:\n\nVessel_Pub_Sub in class_vessel_pub_sub_ros2.py - Handles per-vessel communication\nWorld_Node in class_world_node_ros2.py - Manages the ROS2 node and coordination\n\n\n\n\n\n\ngraph LR\n    subgraph \"MAV Simulator\"\n        V[Vessel]\n        W[World]\n    end\n    \n    subgraph \"ROS2 Interface\"\n        VP[Vessel_Pub_Sub]\n        WN[World_Node]\n    end\n    \n    subgraph \"ROS2 Ecosystem\"\n        VIS[Visualization Tools]\n        CTRL[External Controllers]\n        SENS[Sensor Processing]\n        LOG[Data Logging]\n    end\n    \n    V --- VP\n    W --- WN\n    WN --- VP\n    \n    VP --&gt; VIS\n    VP --&gt; LOG\n    CTRL --&gt; VP\n    VP --&gt; SENS",
+    "crumbs": [
+      "ROS2 Integration",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>ROS2 Integration</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/ROS2/ros2_integration.html#vessel-publishersubscriber-interface",
+    "href": "rawFiles/ROS2/ros2_integration.html#vessel-publishersubscriber-interface",
+    "title": "6  ROS2 Integration",
+    "section": "6.3 Vessel Publisher/Subscriber Interface",
+    "text": "6.3 Vessel Publisher/Subscriber Interface\nThe Vessel_Pub_Sub class handles all ROS2 communication for a vessel, including:\n\nPublishing vessel state as odometry messages\nPublishing sensor data (IMU, GPS, DVL, cameras, etc.)\nSubscribing to actuator commands (thruster, rudder)\nMessage conversion between simulator data structures and ROS2 messages\n\n\n6.3.1 Topics and Messages\nEach vessel publishes to and subscribes to a set of topics with a consistent naming convention:\n\n\n\n\n\n\n\n\nTopic\nType\nDescription\n\n\n\n\n/{vessel_name}_{id}/odom\nnav_msgs/Odometry\nVessel position and velocity\n\n\n/{vessel_name}_{id}/pose\ngeometry_msgs/PoseWithCovarianceStamped\nVessel pose with uncertainties\n\n\n/{vessel_name}_{id}/gps\nsensor_msgs/NavSatFix\nGPS position data\n\n\n/{vessel_name}_{id}/imu\nsensor_msgs/Imu\nIMU measurements\n\n\n/{vessel_name}_{id}/dvl\ninterfaces/DVL\nDoppler Velocity Log data\n\n\n/{vessel_name}_{id}/actuators\ninterfaces/Actuator\nActuator commands\n\n\n\n\n\n6.3.2 Initialization\ndef __init__(self, vessel, world_node):\n    \"\"\"Initialize the vessel interface.\n    \n    Args:\n        vessel: The vessel object this interface is for\n        world_node: The ROS2 node to use for communication\n    \"\"\"\nThe constructor initializes the interface with references to the vessel object and the ROS2 node. It sets up all publishers and subscribers based on the vessel’s configuration.\n\n\n6.3.3 Publishing Data\ndef publish_odometry(self):\n    \"\"\"Publish the vessel's current state as odometry message\"\"\"\nThis method creates and publishes odometry messages containing the vessel’s current state, including position, orientation, and velocity.\ndef _publish_sensor(self, sensor):\n    \"\"\"Publish data from a specific sensor\"\"\"\nThis method handles the publication of sensor data at the appropriate rates.\n\n\n6.3.4 Receiving Commands\ndef actuator_callback(self, msg):\n    \"\"\"Process actuator commands received from ROS2\"\"\"\nThis callback handles incoming actuator commands and forwards them to the vessel object.",
+    "crumbs": [
+      "ROS2 Integration",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>ROS2 Integration</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/ROS2/ros2_integration.html#world-node",
+    "href": "rawFiles/ROS2/ros2_integration.html#world-node",
+    "title": "6  ROS2 Integration",
+    "section": "6.4 World Node",
+    "text": "6.4 World Node\nThe World_Node class serves as the central point for ROS2 integration:\nclass World_Node(Node):\n    \"\"\"ROS2 node for MAV simulator world\"\"\"\n    \n    def __init__(self, world, node_name='mav_world'):\n        \"\"\"Initialize the world node\"\"\"\nIt is responsible for:\n\nCreating and managing the ROS2 node\nCreating interface objects for each vessel\nHandling clock synchronization\nCoordinating simulation steps with ROS2 communication",
+    "crumbs": [
+      "ROS2 Integration",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>ROS2 Integration</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/ROS2/ros2_integration.html#usage-example",
+    "href": "rawFiles/ROS2/ros2_integration.html#usage-example",
+    "title": "6  ROS2 Integration",
+    "section": "6.5 Usage Example",
+    "text": "6.5 Usage Example\nTo use the ROS2 integration:\nimport rclpy\nfrom mav_simulator.class_vessel import Vessel\nfrom mav_simulator.class_world import World\nfrom mav_simulator.class_vessel_pub_sub_ros2 import Vessel_Pub_Sub\nfrom mav_simulator.class_world_node_ros2 import World_Node\n\n# Initialize ROS2\nrclpy.init()\n\n# Create world and vessel objects\nworld = World()\nvessel = Vessel(vessel_params, hydro_data, vessel_id=1)\n\n# Create ROS2 node and interface\nworld_node = World_Node(world)\nvessel_interface = Vessel_Pub_Sub(vessel, world_node)\n\n# Run simulation\ntry:\n    # Main ROS2 loop\n    while rclpy.ok():\n        world.step()\n        rclpy.spin_once(world_node, timeout_sec=0.001)\nfinally:\n    # Clean up\n    world_node.destroy_node()\n    rclpy.shutdown()",
+    "crumbs": [
+      "ROS2 Integration",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>ROS2 Integration</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/ROS2/ros2_integration.html#custom-messages",
+    "href": "rawFiles/ROS2/ros2_integration.html#custom-messages",
+    "title": "6  ROS2 Integration",
+    "section": "6.6 Custom Messages",
+    "text": "6.6 Custom Messages\nThe simulator uses several custom message types defined in the interfaces package:\n\nActuator - Commands for vessel actuators\nDVL - Doppler Velocity Log measurements",
+    "crumbs": [
+      "ROS2 Integration",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>ROS2 Integration</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/ROS2/ros2_integration.html#visualizing-with-rviz",
+    "href": "rawFiles/ROS2/ros2_integration.html#visualizing-with-rviz",
+    "title": "6  ROS2 Integration",
+    "section": "6.7 Visualizing with RViz",
+    "text": "6.7 Visualizing with RViz\nThe simulator’s ROS2 integration works seamlessly with RViz for visualization:\n\nStart the simulator with ROS2 enabled\nLaunch RViz with an appropriate configuration\nAdd displays for the published topics",
+    "crumbs": [
+      "ROS2 Integration",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>ROS2 Integration</span>"
+    ]
+  },
+  {
+    "objectID": "rawFiles/ROS2/ros2_integration.html#best-practices",
+    "href": "rawFiles/ROS2/ros2_integration.html#best-practices",
+    "title": "6  ROS2 Integration",
+    "section": "6.8 Best Practices",
+    "text": "6.8 Best Practices\n\nUse appropriate QoS settings for reliable communication\nConsider network bandwidth when configuring sensor publication rates\nUse transforms for coordinate frame consistency\nSet realistic time scaling for real-time simulation",
+    "crumbs": [
+      "ROS2 Integration",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>ROS2 Integration</span>"
+    ]
+  },
+  {
+    "objectID": "index.html#key-features",
+    "href": "index.html#key-features",
+    "title": "Pani Simulator",
+    "section": "Key Features",
+    "text": "Key Features\n\nRealistic Physics: Follows dyanmics modelling as defined by Fossen’s \nModular Architecture: Easy integration of custom vessel models, sensors, and controllers\nROS2 Integration: Native support for Robot Operating System 2 (ROS2) for distributed robotics applications\nWeb Application: Lightweight web application for configuring and running the simulation\nMultiple Agents: Simulate multiple vessels in the same environment",
+    "crumbs": [
+      "Pani Simulator"
+    ]
+  }
+]

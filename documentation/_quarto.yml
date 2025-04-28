@@ -1,0 +1,51 @@
+project:
+  type: book
+  output-dir: ./docs
+
+book:
+  title: "Pani Simulator"
+  author: "Rishabh Sharma"
+  date: "3/24/2024"
+  repo-url: https://github.com/yourusername/mav_simulator
+  repo-actions: [edit, issue]
+  chapters:
+    - index.qmd
+    - rawFiles/setup.qmd
+    - rawFiles/quickstart.qmd
+    - part: "Kinematics"
+      chapters:
+        - rawFiles/Kinematics/KinematicsEquations.qmd
+        - rawFiles/Kinematics/KinematicsModule.qmd
+    - part: "Dynamics"  
+      chapters:
+      - rawFiles/Dynamics/hydrodynamics.qmd
+      - rawFiles/Dynamics/vessel.qmd
+      # - ./rawFiles/Control/control.qmd
+    - part: "Navigation"
+      chapters:
+        - rawFiles/Navigation/sensors.qmd
+    - part: "ROS2 Integration"
+      chapters:
+      - rawFiles/ROS2/ros2_integration.qmd
+
+bibliography: references.bib
+
+format:
+  html:
+    theme:
+      light: cosmo
+      dark: cyborg
+    toc: true
+    code-fold: true
+    code-tools: true
+    code-link: true
+    code-copy: true
+    highlight-style: github
+  pdf:
+    documentclass: scrreprt
+
+execute:
+  enabled: false
+
+
+

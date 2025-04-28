@@ -1,0 +1,64 @@
+# Setup
+
+## Prerequisites
+
+- Git installed on your system
+- Docker installed on your system
+- Basic understanding of terminal commands
+- Python version 3.10 or higher
+
+## Cloning the Repository
+
+1. Open a terminal window
+2. Clone the repository using the following command:
+   ```bash
+   git clone https://github.com/MarineAutonomy/makara.git
+   ```
+3. Navigate to the cloned repository:
+   ```bash
+   cd makara
+   ```
+4. Switch to the mavymini branch:
+   ```bash
+   git checkout mavymini
+   ```
+
+## Building the Docker Image
+
+Before running the simulator, you need to build the Docker image:
+
+1. Ensure you're in the root directory of the cloned repository
+2. Build the Docker image by executing:
+   ```bash
+   ./ros2_devdocker.sh
+   ```
+3. Wait for the build process to complete (this may take several minutes depending on your internet connection and system performance)
+
+## Running the Simulator (Quickstart)
+
+After building the Docker image, you can start the simulator:
+
+1. From the root directory of the repository, run:
+   ```bash
+   ./ros2_simulator.sh
+   ```
+2. The simulator will start and the ROS2 topics will be printed in the terminal
+
+3. To view topic data, open a new terminal and run:
+   ```bash
+   docker exec -it panisim bash
+   ```
+4. Subscribe to a topic using:
+   ```bash
+   ros2 topic echo <topic_name>
+   ```
+   For example:
+   ```bash
+   ros2 topic echo /mavymini_00/odometry_sim
+   ```
+
+
+## Troubleshooting
+
+- **Docker issues**: Ensure Docker is installed and running on your system
+- **Permission issues**: If you encounter permission errors when running scripts, try prefixing the commands with `sudo`

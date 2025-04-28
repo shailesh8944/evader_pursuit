@@ -1,0 +1,45 @@
+# Hydrodynamics Module
+
+This page will contain documentation for the hydrodynamics module (`class_hydro.py`).
+
+:::{.callout-note}
+This page is under construction. Check back later for complete documentation.
+:::
+
+## Overview
+
+The Hydrodynamics module provides hydrodynamic models and calculations for marine vessels, including:
+
+- Added mass and inertia
+- Coriolis and centripetal forces
+- Damping forces
+- Restoring forces
+- Wave and current effects
+
+## Features
+
+- Hydrodynamic coefficient calculations
+- Force and moment computations
+- Environmental force modeling
+- State-dependent force calculations
+- Integration with vessel dynamics
+
+## Usage Example
+
+```python
+from mav_simulator.class_hydro import Hydrodynamics
+
+# Create hydrodynamics instance
+hydro = Hydrodynamics(hydro_data)
+
+# Calculate forces and moments
+forces, moments = hydro.calculate_forces(
+    velocity=[u, v, w],
+    angular_velocity=[p, q, r],
+    position=[x, y, z],
+    orientation=[phi, theta, psi]
+)
+
+# Apply forces to vessel
+vessel.apply_forces(forces, moments)
+``` 

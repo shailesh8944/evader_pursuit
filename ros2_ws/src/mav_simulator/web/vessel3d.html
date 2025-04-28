@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>3D Vessel Visualization</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/roslibjs/1.1.0/roslib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: 'Roboto', sans-serif;
+    }
+    
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      background-color: rgba(0, 0, 0, 0.5);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      pointer-events: none;
+    }
+    
+    #connectionStatus {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    
+    .status-connected {
+      background-color: #4CAF50;
+      box-shadow: 0 0 5px #4CAF50;
+      animation: pulse 2s infinite;
+    }
+    
+    .status-disconnected {
+      background-color: #f44336;
+      box-shadow: 0 0 5px #f44336;
+    }
+    
+    .status-stale {
+      background-color: #FF9800;
+      box-shadow: 0 0 5px #FF9800;
+    }
+    
+    .fullscreen-button {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 8px 12px;
+      background-color: rgba(0, 0, 0, 0.5);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    
+    .fullscreen-button:hover {
+      background-color: rgba(0, 0, 0, 0.7);
+    }
+    
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); }
+      70% { box-shadow: 0 0 0 5px rgba(76, 175, 80, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+    }
+    
+    .control-buttons {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .control-button {
+      padding: 8px 12px;
+      background-color: rgba(0, 0, 0, 0.5);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s;
+    }
+    
+    .control-button:hover {
+      background-color: rgba(0, 0, 0, 0.7);
+    }
+    
+    #sizeControl {
+      margin-top: 15px;
+      border-top: 1px solid rgba(255, 255, 255, 0.3);
+      padding-top: 10px;
+      pointer-events: auto; /* Allow interaction with size controls */
+    }
+    
+    #vesselDimensions {
+      margin-top: 15px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      pointer-events: auto; /* Allow interaction with dimension inputs */
+    }
+    
+    #vesselDimensions label {
+      font-size: 12px;
+    }
+    
+    #vesselDimensions input {
+      width: 100%;
+      padding: 4px;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+    
+    .dimension-control {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #applyDimensions {
+      grid-column: span 2;
+      margin-top: 5px;
+      padding: 4px;
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    
+    #applyDimensions:hover {
+      background-color: #0b7dda;
+    }
+    
+    #vesselSizeSlider {
+      width: 100%;
+      margin-top: 8px;
+      accent-color: #4CAF50;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <span id="connectionStatus" class="status-disconnected"></span>
+    <span id="connectionText">Disconnected</span>
+    <div id="vesselData">
+      <p>Position: <span id="position">0, 0, 0</span></p>
+      <p>Orientation: <span id="orientation">0°, 0°, 0°</span></p>
+    </div>
+    <div id="sizeControl">
+      <label for="vesselSizeSlider">Vessel Size: <span id="sizeValue">1.0</span>x</label>
+      <input type="range" id="vesselSizeSlider" min="0.1" max="2" step="0.1" value="1.0">
+      <button id="applySize" style="margin-top:5px; width:100%; padding:3px; cursor:pointer;">Apply Size</button>
+    </div>
+    <div id="vesselDimensions">
+      <div class="dimension-control">
+        <label for="vesselLength">Length (X-axis):</label>
+        <input type="number" id="vesselLength" min="1" max="100" value="20">
+      </div>
+      <div class="dimension-control">
+        <label for="vesselWidth">Width (Y-axis):</label>
+        <input type="number" id="vesselWidth" min="1" max="100" value="10">
+      </div>
+      <div class="dimension-control">
+        <label for="vesselHeight">Height (Z-axis):</label>
+        <input type="number" id="vesselHeight" min="1" max="100" value="5">
+      </div>
+      <button id="applyDimensions">Apply Dimensions</button>
+    </div>
+  </div>
+  
+  <div class="control-buttons">
+    <button id="fullscreenBtn" class="control-button">Fullscreen</button>
+    <button id="resetCameraBtn" class="control-button">Reset Camera</button>
+  </div>
+  
+  <script>
+    // Initialize ThreeJS Scene
+    let scene, camera, renderer, vessel, vesselPath, controls;
+    let vesselAxes; // Object to hold vessel-fixed axes
+    const pathPoints = [];
+    const MAX_PATH_POINTS = 1000; // Maximum number of points to keep in the path
+    
+    // Vessel properties
+    const initialVesselSize = {
+      width: 10,  // Y direction (breadth)
+      height: 5,  // Z direction (depth)
+      length: 20  // X direction (length)
+    };
+    let vesselSize = {...initialVesselSize};
+    let vesselScaleFactor = 1.0;
+    
+    // ROS Connection
+    let ros, odomTopic;
+    let vesselName = '';
+    let isConnected = false;
+    let lastMessageTime = 0;
+    
+    // Store latest vessel state
+    let lastVesselState = {
+      position: { x: 0, y: 0, z: 0 },
+      quaternion: { x: 0, y: 0, z: 0, w: 1 }
+    };
+    
+    // Initialize the 3D scene
+    function initScene() {
+      // Create scene
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+      
+      // Create camera
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(50, 50, 50);
+      camera.lookAt(0, 0, 0);
+      
+      // Create renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+      
+      // Add OrbitControls
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.25;
+      
+      // Add world axes only
+      const axesHelper = new THREE.AxesHelper(50);
+      scene.add(axesHelper);
+      
+      // Create vessel (as a cube)
+      createVessel();
+      
+      // Create path line from origin
+      const pathMaterial = new THREE.LineBasicMaterial({ 
+        color: 0xFF4081, 
+        linewidth: 2
+      });
+      const pathGeometry = new THREE.BufferGeometry();
+      
+      // Add origin to path points
+      pathPoints.push(new THREE.Vector3(0, 0, 0));
+      pathGeometry.setFromPoints(pathPoints);
+      
+      vesselPath = new THREE.Line(pathGeometry, pathMaterial);
+      scene.add(vesselPath);
+      
+      // Add lighting
+      const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
+      scene.add(ambientLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+      directionalLight.position.set(1, 1, 1).normalize();
+      scene.add(directionalLight);
+      
+      // Handle window resize
+      window.addEventListener('resize', onWindowResize);
+      
+      // Handle buttons
+      document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+      document.getElementById('resetCameraBtn').addEventListener('click', resetCamera);
+      
+      // Handle size controls
+      const sizeSlider = document.getElementById('vesselSizeSlider');
+      const sizeValue = document.getElementById('sizeValue');
+      const applyButton = document.getElementById('applySize');
+      
+      // Update size value display when slider changes
+      sizeSlider.addEventListener('input', function(e) {
+        const newSize = parseFloat(e.target.value);
+        sizeValue.textContent = newSize.toFixed(1);
+      });
+      
+      // Apply size when button is clicked
+      applyButton.addEventListener('click', function() {
+        const newSize = parseFloat(sizeSlider.value);
+        console.log("Applying new vessel size:", newSize);
+        vesselScaleFactor = newSize;
+        updateVesselSize();
+      });
+      
+      // Handle custom dimensions
+      const lengthInput = document.getElementById('vesselLength');
+      const widthInput = document.getElementById('vesselWidth');
+      const heightInput = document.getElementById('vesselHeight');
+      const applyDimensionsButton = document.getElementById('applyDimensions');
+      
+      // Set initial values from initialVesselSize
+      lengthInput.value = initialVesselSize.length;
+      widthInput.value = initialVesselSize.width;
+      heightInput.value = initialVesselSize.height;
+      
+      // Apply custom dimensions
+      applyDimensionsButton.addEventListener('click', function() {
+        // Read values from inputs
+        const newLength = parseFloat(lengthInput.value) || initialVesselSize.length;
+        const newWidth = parseFloat(widthInput.value) || initialVesselSize.width;
+        const newHeight = parseFloat(heightInput.value) || initialVesselSize.height;
+        
+        console.log("Applying custom dimensions:", { length: newLength, width: newWidth, height: newHeight });
+        
+        // Update initial dimensions
+        initialVesselSize.length = newLength;
+        initialVesselSize.width = newWidth;
+        initialVesselSize.height = newHeight;
+        
+        // Reset scale factor when using custom dimensions
+        vesselScaleFactor = 1.0;
+        sizeSlider.value = vesselScaleFactor;
+        sizeValue.textContent = vesselScaleFactor.toFixed(1);
+        
+        // Apply the new dimensions
+        updateVesselSize();
+      });
+      
+      // Start animation loop
+      animate();
+    }
+    
+    // Create vessel
+    function createVessel() {
+      // Calculate vessel dimensions based on scale factor
+      vesselSize = {
+        width: initialVesselSize.width * vesselScaleFactor,
+        height: initialVesselSize.height * vesselScaleFactor,
+        length: initialVesselSize.length * vesselScaleFactor
+      };
+      
+      // Create box geometry
+      const geometry = new THREE.BoxGeometry(vesselSize.length, vesselSize.height, vesselSize.width);
+      
+      // Move pivot point to bottom center of the vessel
+      geometry.translate(0, vesselSize.height / 2, 0);
+      
+      const material = new THREE.MeshPhongMaterial({ 
+        color: 0x2196F3,
+        specular: 0x111111,
+        shininess: 30
+      });
+      
+      // Create mesh
+      vessel = new THREE.Mesh(geometry, material);
+      scene.add(vessel);
+      
+      // Create vessel-fixed axes
+      createVesselAxes();
+    }
+    
+    // Create vessel-fixed axes
+    function createVesselAxes() {
+      // Create a vessel-fixed coordinate system
+      // X-axis (red) - forward/surge/roll
+      // Y-axis (green) - right/starboard/pitch/sway
+      // Z-axis (blue) - downward/heave/yaw
+
+      const origin = new THREE.Vector3(0, 0, 0);
+      
+      // Create arrows for each axis
+      const xAxisLength = 15 * vesselScaleFactor;
+      const yAxisLength = 10 * vesselScaleFactor;
+      const zAxisLength = 7 * vesselScaleFactor;
+      
+      // Create arrow helpers
+      const xAxis = new THREE.ArrowHelper(
+        new THREE.Vector3(1, 0, 0), 
+        origin, 
+        xAxisLength, 
+        0xFF0000, // Red
+        xAxisLength * 0.2, 
+        xAxisLength * 0.1
+      );
+      
+      const yAxis = new THREE.ArrowHelper(
+        new THREE.Vector3(0, 0, 1), // Y-axis points to right/starboard (Z in three.js due to coordinate conversion)
+        origin, 
+        yAxisLength, 
+        0x00FF00, // Green
+        yAxisLength * 0.2, 
+        yAxisLength * 0.1
+      );
+      
+      const zAxis = new THREE.ArrowHelper(
+        new THREE.Vector3(0, -1, 0), // Z-axis points downward (negative Y in three.js)
+        origin, 
+        zAxisLength, 
+        0x0000FF, // Blue
+        zAxisLength * 0.2, 
+        zAxisLength * 0.1
+      );
+      
+      // Create axis labels
+      const createLabel = (text, position, color) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 32;
+        const context = canvas.getContext('2d');
+        context.fillStyle = color;
+        context.font = '24px Arial';
+        context.fillText(text, 4, 24);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(material);
+        sprite.position.copy(position);
+        sprite.scale.set(5 * vesselScaleFactor, 2.5 * vesselScaleFactor, 1);
+        return sprite;
+      };
+      
+      const xLabel = createLabel('X', new THREE.Vector3(xAxisLength + 2, 0, 0), '#ff0000');
+      const yLabel = createLabel('Y', new THREE.Vector3(0, 0, yAxisLength + 2), '#00ff00');
+      const zLabel = createLabel('Z', new THREE.Vector3(0, -(zAxisLength + 2), 0), '#0000ff');
+      
+      // Create a group to hold the axes
+      vesselAxes = new THREE.Group();
+      vesselAxes.add(xAxis);
+      vesselAxes.add(yAxis);
+      vesselAxes.add(zAxis);
+      vesselAxes.add(xLabel);
+      vesselAxes.add(yLabel);
+      vesselAxes.add(zLabel);
+      
+      // Add the axes to the vessel
+      vessel.add(vesselAxes);
+    }
+    
+    // Reset camera to focus on vessel
+    function resetCamera() {
+      // Get vessel position
+      const vesselPosition = vessel.position.clone();
+      
+      // Set camera position to be 50 units away from vessel
+      const offset = new THREE.Vector3(30, 30, 30);
+      camera.position.copy(vesselPosition).add(offset);
+      
+      // Look at vessel
+      controls.target.copy(vesselPosition);
+      controls.update();
+    }
+    
+    // Handle window resize
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    
+    // Toggle fullscreen mode
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          console.error(`Error attempting to enable fullscreen: ${err.message}`);
+        });
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+    
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+      
+      // Check connection status
+      checkConnectionStatus();
+    }
+    
+    // Connect to ROS
+    function connectToROS() {
+      ros = new ROSLIB.Ros({
+        url: 'ws://localhost:9090'
+      });
+      
+      ros.on('connection', () => {
+        console.log('Connected to rosbridge');
+        document.getElementById('connectionStatus').className = 'status-connected';
+        document.getElementById('connectionText').textContent = 'Connected';
+        isConnected = true;
+        
+        // Try to find vessels after connection
+        setTimeout(discoverVessels, 1000);
+      });
+      
+      ros.on('error', (error) => {
+        console.error('Error connecting to rosbridge:', error);
+        document.getElementById('connectionStatus').className = 'status-disconnected';
+        document.getElementById('connectionText').textContent = 'Connection Error';
+        isConnected = false;
+      });
+      
+      ros.on('close', () => {
+        console.log('Connection to rosbridge closed');
+        document.getElementById('connectionStatus').className = 'status-disconnected';
+        document.getElementById('connectionText').textContent = 'Disconnected';
+        isConnected = false;
+        
+        // Try to reconnect after a delay
+        setTimeout(connectToROS, 3000);
+      });
+    }
+    
+    // Discover available vessels
+    function discoverVessels() {
+      try {
+        if (typeof ros.getTopicsAndTypes === 'function') {
+          ros.getTopicsAndTypes(processTopics);
+        } else if (typeof ros.getTopics === 'function') {
+          ros.getTopics(processTopicsLegacy);
+        } else {
+          console.warn('No topic discovery methods available, using fallback');
+          useFirstFoundVessel();
+        }
+      } catch (error) {
+        console.error('Error discovering vessels:', error);
+        useFirstFoundVessel();
+      }
+    }
+    
+    // Process topics to find vessels
+    function processTopics(result) {
+      if (!result || !result.topics || !Array.isArray(result.topics)) {
+        console.error('Invalid topic result format:', result);
+        useFirstFoundVessel();
+        return;
+      }
+      
+      const topicsAndTypes = result.topics;
+      
+      // Find vessel topics
+      const vesselTopics = topicsAndTypes
+        .filter(topic => topic.name.endsWith('/odometry_sim'))
+        .map(topic => topic.name);
+      
+      console.log('Found vessel topics:', vesselTopics);
+      
+      if (vesselTopics.length > 0) {
+        // Extract vessel name from first topic
+        const parts = vesselTopics[0].split('/');
+        if (parts.length >= 2) {
+          vesselName = parts[1];
+          console.log(`Using vessel: ${vesselName}`);
+          subscribe(vesselName);
+        }
+      }
+    }
+    
+    // Legacy topic processing
+    function processTopicsLegacy(result) {
+      if (!result || !result.topics || !Array.isArray(result.topics)) {
+        console.error('Invalid topic result format:', result);
+        useFirstFoundVessel();
+        return;
+      }
+      
+      const topics = result.topics;
+      
+      // Find vessel topics
+      const vesselTopics = topics.filter(topic => topic.endsWith('/odometry_sim'));
+      
+      console.log('Found vessel topics (legacy):', vesselTopics);
+      
+      if (vesselTopics.length > 0) {
+        // Extract vessel name from first topic
+        const parts = vesselTopics[0].split('/');
+        if (parts.length >= 2) {
+          vesselName = parts[1];
+          console.log(`Using vessel: ${vesselName}`);
+          subscribe(vesselName);
+        }
+      }
+    }
+    
+    // Fallback to use first vessel found
+    function useFirstFoundVessel() {
+      vesselName = 'sookshma_00'; // Default vessel name
+      console.log(`Using default vessel: ${vesselName}`);
+      subscribe(vesselName);
+    }
+    
+    // Subscribe to vessel odometry
+    function subscribe(vesselName) {
+      try {
+        console.log(`Subscribing to vessel ${vesselName}`);
+        
+        // Try different message types for odometry
+        const odomTypes = [
+          'nav_msgs/Odometry', 
+          'nav_msgs/msg/Odometry'
+        ];
+        
+        subscribeWithTypes(`/${vesselName}/odometry_sim`, odomTypes);
+      } catch (error) {
+        console.error(`Error subscribing to vessel ${vesselName}:`, error);
+      }
+    }
+    
+    // Try different message types until one works
+    function subscribeWithTypes(topicName, messageTypes, index = 0) {
+      if (index >= messageTypes.length) {
+        console.error(`Failed to subscribe to ${topicName} with any message type`);
+        return;
+      }
+      
+      try {
+        console.log(`Trying to subscribe to ${topicName} with type ${messageTypes[index]}`);
+        
+        odomTopic = new ROSLIB.Topic({
+          ros: ros,
+          name: topicName,
+          messageType: messageTypes[index]
+        });
+        
+        odomTopic.subscribe(handleOdometry);
+        console.log(`Subscribed to ${topicName} with type ${messageTypes[index]}`);
+      } catch (error) {
+        console.warn(`Failed to subscribe to ${topicName} with type ${messageTypes[index]}:`, error);
+        subscribeWithTypes(topicName, messageTypes, index + 1);
+      }
+    }
+    
+    // Handle odometry data
+    function handleOdometry(message) {
+      // Update connection status
+      lastMessageTime = Date.now();
+      
+      // Extract position
+      const x = message.pose.pose.position.x;
+      const y = message.pose.pose.position.y;
+      const z = message.pose.pose.position.z;
+      
+      // Extract orientation (quaternion)
+      const qx = message.pose.pose.orientation.x;
+      const qy = message.pose.pose.orientation.y;
+      const qz = message.pose.pose.orientation.z;
+      const qw = message.pose.pose.orientation.w;
+      
+      // Store latest state
+      lastVesselState = {
+        position: { x, y, z },
+        quaternion: { x: qx, y: qy, z: qz, w: qw }
+      };
+      
+      // Update vessel position
+      vessel.position.set(x, z, y); // Note: Y and Z are swapped to match common 3D conventions
+      
+      // Create negative quaternion for Z rotation to make yaw clockwise
+      // Invert the z and w components to reverse rotation direction
+      const modifiedQx = qx;
+      const modifiedQy = qy;
+      const modifiedQz = -qz; // Invert z component to reverse rotation direction
+      const modifiedQw = qw;  // Keep w component the same
+      
+      // Update vessel orientation using modified quaternion
+      vessel.quaternion.set(modifiedQx, modifiedQz, modifiedQy, modifiedQw); // Adjust quaternion components to match the swapped axes
+      
+      // Convert quaternion to Euler angles for display
+      const euler = quaternionToEuler({x: qx, y: qy, z: qz, w: qw});
+      
+      // Update info display
+      document.getElementById('position').textContent = `${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}`;
+      document.getElementById('orientation').textContent = 
+        `${euler.roll.toFixed(1)}°, ${euler.pitch.toFixed(1)}°, ${euler.yaw.toFixed(1)}°`;
+      
+      // Update path
+      updatePath(x, z, y);
+      
+      // Reset camera to focus on vessel when first data arrives
+      if (pathPoints.length === 1) {
+        resetCamera();
+      }
+    }
+    
+    // Update the vessel path visualization
+    function updatePath(x, y, z) {
+      // Add point to path
+      pathPoints.push(new THREE.Vector3(x, y, z));
+      
+      // No need to limit path length anymore, we'll keep all points
+      // if (pathPoints.length > MAX_PATH_POINTS) {
+      //   pathPoints.shift();
+      // }
+      
+      // Update path geometry
+      vesselPath.geometry.dispose();
+      vesselPath.geometry = new THREE.BufferGeometry().setFromPoints(pathPoints);
+    }
+    
+    // Convert quaternion to Euler angles (in degrees)
+    function quaternionToEuler(q) {
+      const x = q.x, y = q.y, z = q.z, w = q.w;
+      const sinr_cosp = 2 * (w * x + y * z);
+      const cosr_cosp = 1 - 2 * (x * x + y * y);
+      const roll = Math.atan2(sinr_cosp, cosr_cosp) * 180 / Math.PI;
+      
+      const sinp = 2 * (w * y - z * x);
+      const pitch = Math.abs(sinp) >= 1 ? Math.sign(sinp) * 90 : Math.asin(sinp) * 180 / Math.PI;
+      
+      const siny_cosp = 2 * (w * z + x * y);
+      const cosy_cosp = 1 - 2 * (y * y + z * z);
+      // Inverting yaw angle to match clockwise positive rotation in maritime convention
+      const yaw = -Math.atan2(siny_cosp, cosy_cosp) * 180 / Math.PI;
+      
+      return { roll, pitch, yaw };
+    }
+    
+    // Check connection status
+    function checkConnectionStatus() {
+      if (!isConnected) return;
+      
+      const currentTime = Date.now();
+      const timeSinceLastMessage = currentTime - lastMessageTime;
+      
+      // If no messages for 3 seconds, consider connection stale
+      if (lastMessageTime > 0 && timeSinceLastMessage > 3000) {
+        document.getElementById('connectionStatus').className = 'status-stale';
+        document.getElementById('connectionText').textContent = 'Connection Stale';
+      }
+    }
+    
+    // Update vessel size based on scale factor
+    function updateVesselSize() {
+      console.log("Updating vessel size. Scale factor:", vesselScaleFactor);
+      
+      if (!vessel) {
+        console.warn("Vessel not yet created, cannot update size");
+        return;
+      }
+      
+      try {
+        // Store vessel position and orientation before recreating
+        const position = vessel.position.clone();
+        const quaternion = vessel.quaternion.clone();
+        
+        // Remove old vessel from scene
+        if (vesselAxes) {
+          vessel.remove(vesselAxes);
+          vesselAxes = null;
+        }
+        scene.remove(vessel);
+        
+        // Recalculate vessel size
+        vesselSize = {
+          width: initialVesselSize.width * vesselScaleFactor,
+          height: initialVesselSize.height * vesselScaleFactor,
+          length: initialVesselSize.length * vesselScaleFactor
+        };
+        
+        console.log("New vessel dimensions:", vesselSize);
+        
+        // Create new geometry with updated size
+        const geometry = new THREE.BoxGeometry(vesselSize.length, vesselSize.height, vesselSize.width);
+        
+        // Move pivot point to bottom center of the vessel
+        geometry.translate(0, vesselSize.height / 2, 0);
+        
+        // Create new material
+        const material = new THREE.MeshPhongMaterial({ 
+          color: 0x2196F3,
+          specular: 0x111111,
+          shininess: 30
+        });
+        
+        // Create new vessel mesh
+        vessel = new THREE.Mesh(geometry, material);
+        
+        // Restore position and orientation
+        vessel.position.copy(position);
+        vessel.quaternion.copy(quaternion);
+        
+        // Add to scene
+        scene.add(vessel);
+        
+        // Recreate the vessel-fixed axes
+        createVesselAxes();
+        
+        console.log("Vessel size updated successfully");
+      } catch (error) {
+        console.error("Error updating vessel size:", error);
+      }
+    }
+    
+    // Initialize everything
+    initScene();
+    connectToROS();
+  </script>
+</body>
+</html> 
