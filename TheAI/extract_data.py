@@ -2,6 +2,7 @@
 import os
 import csv
 import numpy as np
+import pandas as pd
 from rosbag2_py import SequentialReader, StorageOptions, ConverterOptions
 import rclpy
 from rclpy.serialization import deserialize_message
@@ -12,158 +13,17 @@ from rosidl_runtime_py.utilities import get_message
 import sys
 import glob
 from datetime import datetime
-from scipy.signal import savgol_filter
-from scipy.ndimage import gaussian_filter1d
 import argparse
+import math
+from scipy.signal import medfilt
 
 # Import the Actuator message type
 from interfaces.msg import Actuator
 
-def init_csv_files(output_dir, output_prefix):
-    """Initialize CSV files with headers for each data type"""
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # IMU data CSV
-    imu_csv_path = os.path.join(output_dir, f"{output_prefix}_imu.csv")
-    with open(imu_csv_path, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            'timestamp', 
-            'linear_acc_x', 'linear_acc_y', 'linear_acc_z',
-            'angular_vel_x', 'angular_vel_y', 'angular_vel_z'
-        ])
-    
-    # Odometry data CSV
-    odom_csv_path = os.path.join(output_dir, f"{output_prefix}_odom.csv")
-    with open(odom_csv_path, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            'timestamp',
-            'position_x', 'position_y', 'position_z',
-            'orientation_x', 'orientation_y', 'orientation_z', 'orientation_w',
-            'linear_vel_x', 'linear_vel_y', 'linear_vel_z',
-            'angular_vel_x', 'angular_vel_y', 'angular_vel_z'
-        ])
-    
-    # Smoothed odometry data CSV
-    smoothed_odom_csv_path = os.path.join(output_dir, f"{output_prefix}_smoothed_odom.csv")
-    with open(smoothed_odom_csv_path, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            'timestamp',
-            'position_x', 'position_y', 'position_z',
-            'orientation_x', 'orientation_y', 'orientation_z', 'orientation_w',
-            'linear_vel_x', 'linear_vel_y', 'linear_vel_z',
-            'angular_vel_x', 'angular_vel_y', 'angular_vel_z'
-        ])
-    
-    # Actuator data CSV
-    actuator_csv_path = os.path.join(output_dir, f"{output_prefix}_actuator.csv")
-    with open(actuator_csv_path, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            'timestamp',
-            'rudder', 'propeller'
-        ])
-    
-    # Combined data (for ML) CSV
-    combined_csv_path = os.path.join(output_dir, f"{output_prefix}_combined.csv")
-    with open(combined_csv_path, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            'timestamp',
-            'linear_acc_x', 'linear_acc_y', 'linear_acc_z',
-            'angular_vel_x', 'angular_vel_y', 'angular_vel_z',
-            'rudder', 'propeller',
-            'position_x', 'position_y'
-        ])
-    
-    # Smoothed combined data (for ML) CSV
-    smoothed_combined_csv_path = os.path.join(output_dir, f"{output_prefix}_smoothed_combined.csv")
-    with open(smoothed_combined_csv_path, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            'timestamp',
-            'linear_acc_x', 'linear_acc_y', 'linear_acc_z',
-            'angular_vel_x', 'angular_vel_y', 'angular_vel_z',
-            'rudder', 'propeller',
-            'position_x', 'position_y'
-        ])
-    
-    return {
-        'imu': imu_csv_path,
-        'odom': odom_csv_path,
-        'smoothed_odom': smoothed_odom_csv_path,
-        'actuator': actuator_csv_path,
-        'combined': combined_csv_path,
-        'smoothed_combined': smoothed_combined_csv_path
-    }
-
-def smooth_position_data(odom_data, min_distance=0.3, window_size=15):
-    """
-    Smooths position data and filters out points that are too close together
-    
-    Args:
-        odom_data (dict): Dictionary containing odometry data
-        min_distance (float): Minimum distance between consecutive points (in meters)
-        window_size (int): Window size for smoothing
-    
-    Returns:
-        dict: Dictionary containing smoothed and filtered odometry data
-    """
-    if len(odom_data) < window_size:
-        print("Warning: Not enough data points for smoothing. Using original data.")
-        return odom_data
-    
-    # Extract timestamps and position data
-    timestamps = sorted(odom_data.keys())
-    positions_x = np.array([odom_data[t]['position_x'] for t in timestamps])
-    positions_y = np.array([odom_data[t]['position_y'] for t in timestamps])
-    
-    # Apply Gaussian filter for smoothing
-    # Adjust sigma based on the noise level - higher sigma = more smoothing
-    positions_x_smoothed = gaussian_filter1d(positions_x, sigma=2.0)
-    positions_y_smoothed = gaussian_filter1d(positions_y, sigma=2.0)
-    
-    # Create a new dictionary for smoothed data
-    smoothed_odom_data = {}
-    
-    # Filter points to ensure minimum distance and add back to dictionary
-    last_x, last_y = positions_x_smoothed[0], positions_y_smoothed[0]
-    last_timestamp = timestamps[0]
-    
-    # Always include the first point
-    smoothed_odom_data[last_timestamp] = dict(odom_data[last_timestamp])
-    smoothed_odom_data[last_timestamp]['position_x'] = positions_x_smoothed[0]
-    smoothed_odom_data[last_timestamp]['position_y'] = positions_y_smoothed[0]
-    
-    for i in range(1, len(timestamps)):
-        current_x, current_y = positions_x_smoothed[i], positions_y_smoothed[i]
-        current_timestamp = timestamps[i]
-        
-        # Calculate distance from last included point
-        distance = np.sqrt((current_x - last_x)**2 + (current_y - last_y)**2)
-        
-        # Only include points that are at least min_distance meters away from the last included point
-        if distance >= min_distance:
-            smoothed_odom_data[current_timestamp] = dict(odom_data[current_timestamp])
-            smoothed_odom_data[current_timestamp]['position_x'] = current_x
-            smoothed_odom_data[current_timestamp]['position_y'] = current_y
-            
-            # Update last included point
-            last_x, last_y = current_x, current_y
-            last_timestamp = current_timestamp
-    
-    print(f"Original data points: {len(odom_data)}, Smoothed and filtered data points: {len(smoothed_odom_data)}")
-    return smoothed_odom_data
-
-def process_bag(bag_path, output_dir, min_distance=0.3):
+def process_bag(bag_path, output_dir, max_speed=0.5, max_turn_rate=30.0):
     """Process a bag file and extract data to CSV files"""
     # Get bag name without extension for file naming
     bag_name = os.path.basename(os.path.dirname(bag_path))
-    
-    # Initialize CSV files
-    csv_files = init_csv_files(output_dir, bag_name)
     
     # Set up bag reader
     storage_options = StorageOptions(
@@ -177,53 +37,29 @@ def process_bag(bag_path, output_dir, min_distance=0.3):
     reader = SequentialReader()
     reader.open(storage_options, converter_options)
     
-    # Dictionaries to store the latest data from each topic
-    latest_imu = None
-    latest_odom = None
-    latest_actuator = None
-    
-    # Create CSV writers
-    imu_file = open(csv_files['imu'], 'a', newline='')
-    imu_writer = csv.writer(imu_file)
-    
-    odom_file = open(csv_files['odom'], 'a', newline='')
-    odom_writer = csv.writer(odom_file)
-    
-    actuator_file = open(csv_files['actuator'], 'a', newline='')
-    actuator_writer = csv.writer(actuator_file)
-    
-    combined_file = open(csv_files['combined'], 'a', newline='')
-    combined_writer = csv.writer(combined_file)
-    
-    # Variable to track the last recorded actuator timestamp
-    last_actuator_timestamp = None
-    
-    # Data dictionaries for synchronization
+    # Data dictionaries for each topic type
     imu_data = {}
     odom_data = {}
     actuator_data = {}
     
-    # Get topic type
+    # Get topic types
     topic_types = reader.get_all_topics_and_types()
-    
-    # Create a mapping of topic names to message types
     topic_type_map = {topic.name: topic.type for topic in topic_types}
     
     print(f"Processing bag: {bag_path}")
     
-    # Process all messages
+    # First pass: read all messages and store in memory
     while reader.has_next():
         topic_name, data, t_stamp = reader.read_next()
         
         # Convert timestamp to seconds
-        # Handle both integer timestamps and object timestamps with sec/nanosec attributes
         if hasattr(t_stamp, 'sec') and hasattr(t_stamp, 'nanosec'):
             timestamp = t_stamp.sec + (t_stamp.nanosec / 1e9)
         elif isinstance(t_stamp, int):
             # If t_stamp is already an integer (nanoseconds), convert to seconds
             timestamp = t_stamp / 1e9
         else:
-            # If we can't determine the timestamp format, use a counter as fallback
+            # If we can't determine the timestamp format, skip
             print(f"Warning: Unknown timestamp format: {type(t_stamp)} for topic {topic_name}")
             continue
         
@@ -237,13 +73,6 @@ def process_bag(bag_path, output_dir, min_distance=0.3):
                 'angular_vel_y': msg.angular_velocity.y,
                 'angular_vel_z': msg.angular_velocity.z
             }
-            
-            # Write to IMU CSV
-            imu_writer.writerow([
-                timestamp,
-                msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z,
-                msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z
-            ])
             
         elif topic_name == '/sookshma_00/odometry':
             msg = deserialize_message(data, Odometry)
@@ -262,16 +91,6 @@ def process_bag(bag_path, output_dir, min_distance=0.3):
                 'angular_vel_y': msg.twist.twist.angular.y,
                 'angular_vel_z': msg.twist.twist.angular.z
             }
-            
-            # Write to Odometry CSV
-            odom_writer.writerow([
-                timestamp,
-                msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z,
-                msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, 
-                msg.pose.pose.orientation.z, msg.pose.pose.orientation.w,
-                msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z,
-                msg.twist.twist.angular.x, msg.twist.twist.angular.y, msg.twist.twist.angular.z
-            ])
             
         elif topic_name == '/sookshma_00/actuator_cmd':
             msg = deserialize_message(data, Actuator)
@@ -292,106 +111,321 @@ def process_bag(bag_path, output_dir, min_distance=0.3):
                 'propeller': propeller
             }
             
-            # Write to Actuator CSV
-            actuator_writer.writerow([
-                timestamp,
-                rudder, propeller
-            ])
-            
-            last_actuator_timestamp = timestamp
+    # Print statistics about collected data
+    print(f"Collected data:")
+    print(f"  IMU: {len(imu_data)} samples (100Hz)")
+    print(f"  Odometry: {len(odom_data)} samples (10Hz)")
+    print(f"  Actuator: {len(actuator_data)} samples (10Hz)")
     
-    # Close initial files
-    imu_file.close()
-    odom_file.close()
-    actuator_file.close()
+    # Apply physics-based filtering to odometry data
+    filtered_odom_data = apply_physics_filter(odom_data, max_speed=max_speed, max_turn_rate=max_turn_rate)
     
-    # Smooth the position data
-    smoothed_odom_data = smooth_position_data(odom_data, min_distance=min_distance)
+    # Create output directory
+    os.makedirs(output_dir, exist_ok=True)
     
-    # Write smoothed odometry data to CSV
-    smoothed_odom_file = open(csv_files['smoothed_odom'], 'a', newline='')
-    smoothed_odom_writer = csv.writer(smoothed_odom_file)
+    # Save separate data files
+    save_dict_to_csv(imu_data, os.path.join(output_dir, f"{bag_name}_imu.csv"), 'timestamp')
+    save_dict_to_csv(odom_data, os.path.join(output_dir, f"{bag_name}_odom.csv"), 'timestamp')
+    save_dict_to_csv(filtered_odom_data, os.path.join(output_dir, f"{bag_name}_filtered_odom.csv"), 'timestamp')
+    save_dict_to_csv(actuator_data, os.path.join(output_dir, f"{bag_name}_actuator.csv"), 'timestamp')
     
-    for timestamp, data in smoothed_odom_data.items():
-        smoothed_odom_writer.writerow([
-            timestamp,
-            data['position_x'], data['position_y'], data['position_z'],
-            data['orientation_x'], data['orientation_y'], data['orientation_z'], data['orientation_w'],
-            data['linear_vel_x'], data['linear_vel_y'], data['linear_vel_z'],
-            data['angular_vel_x'], data['angular_vel_y'], data['angular_vel_z']
-        ])
+    # Create combined dataset centered on actuator timestamps
+    combined_data = create_combined_dataset(actuator_data, filtered_odom_data, imu_data)
+    combined_path = os.path.join(output_dir, f"{bag_name}_combined.csv")
+    save_dict_to_csv(combined_data, combined_path, 'timestamp')
     
-    smoothed_odom_file.close()
-    
-    # Create combined dataset with synchronized timestamps
-    # We'll only include data points when actuator commands are available
-    combined_data = []
-    
-    # For each actuator timestamp, find the closest IMU and odometry data
-    for act_timestamp, act_values in actuator_data.items():
-        # Find closest IMU timestamp
-        closest_imu_timestamp = min(imu_data.keys(), key=lambda x: abs(x - act_timestamp), default=None)
-        closest_odom_timestamp = min(odom_data.keys(), key=lambda x: abs(x - act_timestamp), default=None)
-        
-        if closest_imu_timestamp and closest_odom_timestamp:
-            # Get the corresponding data
-            imu = imu_data[closest_imu_timestamp]
-            odom = odom_data[closest_odom_timestamp]
-            
-            # Write to combined CSV file
-            combined_writer.writerow([
-                act_timestamp,
-                imu['linear_acc_x'], imu['linear_acc_y'], imu['linear_acc_z'],
-                imu['angular_vel_x'], imu['angular_vel_y'], imu['angular_vel_z'],
-                act_values['rudder'], act_values['propeller'],
-                odom['position_x'], odom['position_y']
-            ])
-    
-    combined_file.close()
-    
-    # Create smoothed combined dataset
-    smoothed_combined_file = open(csv_files['smoothed_combined'], 'a', newline='')
-    smoothed_combined_writer = csv.writer(smoothed_combined_file)
-    
-    # For each actuator timestamp, find the closest IMU and smoothed odometry data
-    for act_timestamp, act_values in actuator_data.items():
-        # Find closest IMU timestamp
-        closest_imu_timestamp = min(imu_data.keys(), key=lambda x: abs(x - act_timestamp), default=None)
-        
-        # Find closest smoothed odometry timestamp
-        closest_smooth_odom_timestamp = min(smoothed_odom_data.keys(), key=lambda x: abs(x - act_timestamp), default=None) if smoothed_odom_data else None
-        
-        if closest_imu_timestamp and closest_smooth_odom_timestamp:
-            # Get the corresponding data
-            imu = imu_data[closest_imu_timestamp]
-            smooth_odom = smoothed_odom_data[closest_smooth_odom_timestamp]
-            
-            # Write to smoothed combined CSV file
-            smoothed_combined_writer.writerow([
-                act_timestamp,
-                imu['linear_acc_x'], imu['linear_acc_y'], imu['linear_acc_z'],
-                imu['angular_vel_x'], imu['angular_vel_y'], imu['angular_vel_z'],
-                act_values['rudder'], act_values['propeller'],
-                smooth_odom['position_x'], smooth_odom['position_y']
-            ])
-    
-    smoothed_combined_file.close()
-    
-    print(f"Processed bag: {bag_path}")
+    print(f"\nProcessed bag: {bag_path}")
     print(f"Data saved to {output_dir}/{bag_name}_*.csv")
     
-    # Return statistics about the data
+    # Return statistics
     return {
         'bag': bag_name,
         'imu_samples': len(imu_data),
         'odom_samples': len(odom_data),
-        'smoothed_odom_samples': len(smoothed_odom_data),
+        'filtered_odom_samples': len(filtered_odom_data),
         'actuator_samples': len(actuator_data),
-        'combined_samples': len(actuator_data),  # Same as actuator since we sync on actuator timestamps
-        'smoothed_combined_samples': sum(1 for _ in open(csv_files['smoothed_combined'])) - 1  # Subtract 1 for header
+        'combined_samples': len(combined_data)
     }
 
-def process_all_bags(base_dir, output_dir, min_distance=0.3):
+def apply_physics_filter(odom_data, max_speed=0.5, max_turn_rate=30.0, window_size=5):
+    """
+    Apply physics-based filtering to ensure realistic vessel movements
+    
+    Args:
+        odom_data: Dictionary of odometry data
+        max_speed: Maximum allowed speed in m/s
+        max_turn_rate: Maximum allowed turn rate in degrees/s
+        window_size: Window size for median filtering
+        
+    Returns:
+        filtered_odom_data: Dictionary of filtered odometry data
+    """
+    if len(odom_data) < 3:
+        print("Warning: Not enough data for physics filtering")
+        return odom_data
+    
+    # Convert to DataFrame for easier processing
+    timestamps = sorted(odom_data.keys())
+    data = {
+        'timestamp': timestamps,
+        'position_x': [odom_data[t]['position_x'] for t in timestamps],
+        'position_y': [odom_data[t]['position_y'] for t in timestamps],
+        'position_z': [odom_data[t]['position_z'] for t in timestamps],
+        'orientation_x': [odom_data[t]['orientation_x'] for t in timestamps],
+        'orientation_y': [odom_data[t]['orientation_y'] for t in timestamps],
+        'orientation_z': [odom_data[t]['orientation_z'] for t in timestamps],
+        'orientation_w': [odom_data[t]['orientation_w'] for t in timestamps],
+        'linear_vel_x': [odom_data[t]['linear_vel_x'] for t in timestamps],
+        'linear_vel_y': [odom_data[t]['linear_vel_y'] for t in timestamps],
+        'linear_vel_z': [odom_data[t]['linear_vel_z'] for t in timestamps],
+        'angular_vel_x': [odom_data[t]['angular_vel_x'] for t in timestamps],
+        'angular_vel_y': [odom_data[t]['angular_vel_y'] for t in timestamps],
+        'angular_vel_z': [odom_data[t]['angular_vel_z'] for t in timestamps]
+    }
+    df = pd.DataFrame(data)
+    
+    # Calculate time differences
+    df['dt'] = df['timestamp'].diff()
+    df.loc[0, 'dt'] = df.loc[1, 'dt']  # Set first dt to the second row's value
+    
+    # Calculate displacements
+    df['dx'] = df['position_x'].diff()
+    df['dy'] = df['position_y'].diff()
+    df.loc[0, 'dx'] = 0
+    df.loc[0, 'dy'] = 0
+    
+    # Calculate speeds
+    df['distance'] = np.sqrt(df['dx']**2 + df['dy']**2)
+    df['speed'] = df['distance'] / df['dt']
+    
+    # Calculate heading from orientation quaternion
+    df['heading'] = df.apply(lambda row: quaternion_to_heading(
+        row['orientation_x'], row['orientation_y'], row['orientation_z'], row['orientation_w']), axis=1)
+    
+    # Calculate heading changes
+    df['heading_diff'] = df['heading'].diff()
+    df.loc[0, 'heading_diff'] = 0
+    
+    # Handle wraparound (e.g., 350° to 10° should be 20° change, not 340°)
+    df.loc[df['heading_diff'] > 180, 'heading_diff'] = df['heading_diff'] - 360
+    df.loc[df['heading_diff'] < -180, 'heading_diff'] = df['heading_diff'] + 360
+    
+    # Calculate turn rate
+    df['turn_rate'] = np.abs(df['heading_diff'] / df['dt'])
+    
+    # Identify outliers based on speed and turn rate
+    df['is_valid'] = (df['speed'] <= max_speed) & (df['turn_rate'] <= max_turn_rate)
+    outliers = df[~df['is_valid']]
+    
+    # Log outlier information
+    if len(outliers) > 0:
+        print(f"Found {len(outliers)} outliers out of {len(df)} points ({len(outliers)/len(df)*100:.1f}%)")
+        print(f"  Max speed detected: {df['speed'].max():.2f} m/s (limit: {max_speed} m/s)")
+        print(f"  Max turn rate detected: {df['turn_rate'].max():.2f} deg/s (limit: {max_turn_rate} deg/s)")
+    
+    # Apply median filtering to smooth positions
+    if len(df) >= window_size:
+        df['position_x_filtered'] = medfilt(df['position_x'], window_size)
+        df['position_y_filtered'] = medfilt(df['position_y'], window_size)
+    else:
+        print("Warning: Not enough data points for median filtering")
+        df['position_x_filtered'] = df['position_x']
+        df['position_y_filtered'] = df['position_y']
+    
+    # Fix outliers using linear interpolation
+    for index in outliers.index:
+        if index > 0 and index < len(df) - 1:
+            # Find nearest valid points before and after
+            prev_valid_idx = df[:index].query('is_valid == True').index.max() if len(df[:index].query('is_valid == True')) > 0 else None
+            next_valid_idx = df[index:].query('is_valid == True').index.min() if len(df[index:].query('is_valid == True')) > 0 else None
+            
+            if prev_valid_idx is not None and next_valid_idx is not None:
+                # Linear interpolation
+                t_range = df.loc[next_valid_idx, 'timestamp'] - df.loc[prev_valid_idx, 'timestamp']
+                t_ratio = (df.loc[index, 'timestamp'] - df.loc[prev_valid_idx, 'timestamp']) / t_range
+                
+                # Interpolate positions
+                df.loc[index, 'position_x_filtered'] = df.loc[prev_valid_idx, 'position_x_filtered'] + \
+                    t_ratio * (df.loc[next_valid_idx, 'position_x_filtered'] - df.loc[prev_valid_idx, 'position_x_filtered'])
+                
+                df.loc[index, 'position_y_filtered'] = df.loc[prev_valid_idx, 'position_y_filtered'] + \
+                    t_ratio * (df.loc[next_valid_idx, 'position_y_filtered'] - df.loc[prev_valid_idx, 'position_y_filtered'])
+    
+    # Convert filtered data back to dictionary format
+    filtered_odom_data = {}
+    for _, row in df.iterrows():
+        t = row['timestamp']
+        filtered_odom_data[t] = {
+            'position_x': row['position_x_filtered'],
+            'position_y': row['position_y_filtered'],
+            'position_z': row['position_z'],
+            'orientation_x': row['orientation_x'],
+            'orientation_y': row['orientation_y'],
+            'orientation_z': row['orientation_z'],
+            'orientation_w': row['orientation_w'],
+            'linear_vel_x': row['linear_vel_x'],
+            'linear_vel_y': row['linear_vel_y'],
+            'linear_vel_z': row['linear_vel_z'],
+            'angular_vel_x': row['angular_vel_x'],
+            'angular_vel_y': row['angular_vel_y'],
+            'angular_vel_z': row['angular_vel_z'],
+            'speed': row['speed'],
+            'turn_rate': row['turn_rate'],
+            'is_valid': row['is_valid']
+        }
+    
+    return filtered_odom_data
+
+def quaternion_to_heading(x, y, z, w):
+    """Convert quaternion to heading angle in degrees"""
+    # Convert to Euler angles
+    t3 = 2.0 * (w * z + x * y)
+    t4 = 1.0 - 2.0 * (y * y + z * z)
+    yaw = math.atan2(t3, t4)
+    
+    # Convert to degrees and normalize to [0, 360)
+    heading = math.degrees(yaw) % 360
+    return heading
+
+def save_dict_to_csv(data_dict, filepath, time_key='timestamp'):
+    """Save a dictionary of dictionaries to a CSV file"""
+    if not data_dict:
+        print(f"Warning: No data to save to {filepath}")
+        return
+    
+    # Get all possible keys from the data
+    keys = set()
+    for timestamp, values in data_dict.items():
+        keys.update(values.keys())
+    
+    # Sort keys for consistent output, but ensure timestamp is first
+    sorted_keys = sorted(list(keys))
+    
+    # Write data to CSV
+    with open(filepath, 'w', newline='') as f:
+        writer = csv.writer(f)
+        # Write header with timestamp as the first column
+        header = [time_key] + sorted_keys
+        writer.writerow(header)
+        
+        # Write data rows
+        for timestamp, values in sorted(data_dict.items()):
+            row = [timestamp]  # Start with timestamp
+            for key in sorted_keys:  # Add other values
+                row.append(values.get(key, ''))
+            writer.writerow(row)
+    
+    print(f"Saved {len(data_dict)} samples to {filepath}")
+
+def find_closest_timestamp(target_time, time_dict, method='closest'):
+    """
+    Find the closest timestamp in time_dict to target_time
+    
+    Args:
+        target_time: Target timestamp
+        time_dict: Dictionary with timestamps as keys
+        method: Method to use ('closest', 'before', 'after')
+    
+    Returns:
+        Closest timestamp, or None if not found
+    """
+    if not time_dict:
+        return None
+    
+    if method == 'closest':
+        closest_time = min(time_dict.keys(), key=lambda x: abs(x - target_time))
+    elif method == 'before':
+        # Find the most recent timestamp before target_time
+        before_times = [t for t in time_dict.keys() if t <= target_time]
+        if not before_times:
+            return None
+        closest_time = max(before_times)
+    elif method == 'after':
+        # Find the earliest timestamp after target_time
+        after_times = [t for t in time_dict.keys() if t >= target_time]
+        if not after_times:
+            return None
+        closest_time = min(after_times)
+    else:
+        raise ValueError(f"Invalid method: {method}")
+    
+    # Print a warning if the time difference is large
+    time_diff = abs(closest_time - target_time)
+    if time_diff > 0.1:  # More than 100ms difference
+        print(f"Warning: Large time difference ({time_diff:.3f}s) when syncing data using method '{method}'")
+    
+    return closest_time
+
+def create_combined_dataset(actuator_data, odom_data, imu_data):
+    """Create a combined dataset by syncing all data sources based on actuator timestamps"""
+    combined_data = {}
+    
+    # Stats for reporting
+    total_time_diff_imu = 0
+    total_time_diff_odom = 0
+    max_time_diff_imu = 0
+    max_time_diff_odom = 0
+    
+    # Collect unique IMU samples used to verify we're not repeating data
+    used_imu_timestamps = set()
+    
+    # Use actuator timestamps as the primary time reference
+    for act_timestamp in sorted(actuator_data.keys()):
+        # Find closest odometry data - can use closest method since odom is at same rate as actuator
+        odom_timestamp = find_closest_timestamp(act_timestamp, odom_data, method='closest')
+        if odom_timestamp is None:
+            continue
+        
+        # Find most recent IMU data before this timestamp (IMU is at 100Hz)
+        imu_timestamp = find_closest_timestamp(act_timestamp, imu_data, method='before')
+        if imu_timestamp is None:
+            # If no IMU data before this timestamp, try getting the earliest after
+            imu_timestamp = find_closest_timestamp(act_timestamp, imu_data, method='after')
+            if imu_timestamp is None:
+                continue
+        
+        # Calculate time differences
+        odom_diff = abs(act_timestamp - odom_timestamp)
+        imu_diff = abs(act_timestamp - imu_timestamp)
+        
+        # Track statistics
+        total_time_diff_odom += odom_diff
+        total_time_diff_imu += imu_diff
+        max_time_diff_odom = max(max_time_diff_odom, odom_diff)
+        max_time_diff_imu = max(max_time_diff_imu, imu_diff)
+        
+        # Track used IMU timestamps
+        used_imu_timestamps.add(imu_timestamp)
+        
+        # Combine data
+        combined_entry = {}
+        combined_entry.update(actuator_data[act_timestamp])
+        combined_entry.update(odom_data[odom_timestamp])
+        combined_entry.update(imu_data[imu_timestamp])
+        
+        # Store in combined dictionary
+        combined_data[act_timestamp] = combined_entry
+    
+    # Print statistics
+    count = len(combined_data)
+    unique_imu_ratio = len(used_imu_timestamps) / count if count > 0 else 0
+    
+    if count > 0:
+        avg_time_diff_odom = total_time_diff_odom / count
+        avg_time_diff_imu = total_time_diff_imu / count
+        print(f"Created combined dataset with {count} samples")
+        print(f"Average time difference for odometry sync: {avg_time_diff_odom:.6f}s (max: {max_time_diff_odom:.6f}s)")
+        print(f"Average time difference for IMU sync: {avg_time_diff_imu:.6f}s (max: {max_time_diff_imu:.6f}s)")
+        print(f"Used {len(used_imu_timestamps)} unique IMU samples for {count} data points (ratio: {unique_imu_ratio:.2f})")
+        
+        if unique_imu_ratio < 0.8:
+            print(f"WARNING: Low unique IMU sample ratio ({unique_imu_ratio:.2f}) indicates potential data quality issues!")
+    else:
+        print("Warning: No combined data points created!")
+    
+    return combined_data
+
+def process_all_bags(base_dir, output_dir, max_speed=0.5, max_turn_rate=30.0):
     """Process all bag files in subdirectories of the given directory"""
     # Initialize ROS context
     rclpy.init()
@@ -403,10 +437,11 @@ def process_all_bags(base_dir, output_dir, min_distance=0.3):
             db3_file = next(f for f in files if f.endswith('.db3'))
             bag_files.append(os.path.join(root, db3_file))
     
+    # Process each bag file
     stats = []
     for bag_file in bag_files:
         try:
-            stat = process_bag(bag_file, output_dir, min_distance=min_distance)
+            stat = process_bag(bag_file, output_dir, max_speed=max_speed, max_turn_rate=max_turn_rate)
             stats.append(stat)
         except Exception as e:
             print(f"Error processing {bag_file}: {str(e)}")
@@ -414,13 +449,12 @@ def process_all_bags(base_dir, output_dir, min_distance=0.3):
     # Print statistics
     print("\nData Extraction Statistics:")
     print("=" * 100)
-    print(f"{'Bag Name':<20} | {'IMU':<8} | {'Odom':<8} | {'Smooth Odom':<12} | {'Actuator':<10} | {'Combined':<10} | {'Smooth Comb.':<12}")
+    print(f"{'Bag Name':<20} | {'IMU':<8} | {'Odom':<8} | {'Filtered':<8} | {'Actuator':<10} | {'Combined':<10}")
     print("-" * 100)
     
     for stat in stats:
         print(f"{stat['bag']:<20} | {stat['imu_samples']:<8} | {stat['odom_samples']:<8} | "
-              f"{stat['smoothed_odom_samples']:<12} | {stat['actuator_samples']:<10} | "
-              f"{stat['combined_samples']:<10} | {stat['smoothed_combined_samples']:<12}")
+              f"{stat['filtered_odom_samples']:<8} | {stat['actuator_samples']:<10} | {stat['combined_samples']:<10}")
     
     rclpy.shutdown()
 
@@ -431,8 +465,10 @@ if __name__ == '__main__':
                         help='Base directory containing ROS2 bags')
     parser.add_argument('--output_dir', type=str, default=None, 
                         help='Output directory for extracted data')
-    parser.add_argument('--min_distance', type=float, default=0.3, 
-                        help='Minimum distance between positions in meters')
+    parser.add_argument('--max_speed', type=float, default=0.5, 
+                        help='Maximum allowed vessel speed in m/s')
+    parser.add_argument('--max_turn_rate', type=float, default=30.0,
+                        help='Maximum allowed turn rate in degrees/s')
     args = parser.parse_args()
     
     # Define base directory for bag files and output directory for CSV files
@@ -448,4 +484,4 @@ if __name__ == '__main__':
     os.makedirs(output_dir, exist_ok=True)
     
     # Process all bags
-    process_all_bags(base_dir, output_dir, min_distance=args.min_distance) 
+    process_all_bags(base_dir, output_dir, max_speed=args.max_speed, max_turn_rate=args.max_turn_rate) 
