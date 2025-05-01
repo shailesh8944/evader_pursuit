@@ -163,6 +163,7 @@ def predict_and_evaluate(model, scaler, test_file, start_idx=0, segment_length=N
     print(f"Median Position Error: {median_error:.6f} meters")
     print(f"Maximum Position Error: {max_error:.6f} meters")
     print(f"Trajectory Length: {len(actual_trajectory)} points")
+    print(f"Start Index: {start_idx}\n")
     
     # Create results directory
     os.makedirs(results_dir, exist_ok=True)
@@ -177,6 +178,7 @@ def predict_and_evaluate(model, scaler, test_file, start_idx=0, segment_length=N
         f.write(f"Start Index: {start_idx}\n")
     
     # Plot the trajectory comparison
+    print("DEBUG: Predicted Trajectory Array:\n", predicted_trajectory) # Added for debugging
     plot_predicted_vs_actual_trajectory(actual_trajectory, predicted_trajectory, results_dir)
     
     # Plot prediction error over time

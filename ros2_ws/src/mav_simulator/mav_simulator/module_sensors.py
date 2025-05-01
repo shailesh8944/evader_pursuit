@@ -26,6 +26,7 @@ Author: MAV Simulator Team
 
 import numpy as np
 from rclpy.node import Node
+from mav_simulator.terminalMessages import print_info
 from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, PointCloud2, Image, LaserScan, NavSatFix, NavSatStatus
@@ -162,10 +163,9 @@ class UWBSensor(BaseSensor):
         
         # Override with custom covariance if provided
         if self.use_custom_covariance and self.custom_covariance:
-            for cov_item in self.custom_covariance:
-                if 'position_covariance' in cov_item:
-                    self.uwb_cov = np.array(cov_item['position_covariance']).reshape(3, 3)
-                    self.uwb_cov_full[0:3][:, 0:3] = self.uwb_cov
+            if 'position_covariance' in self.custom_covariance:
+                self.uwb_cov = np.array(self.custom_covariance['position_covariance']).reshape(3, 3)
+                self.uwb_cov_full[0:3][:, 0:3] = self.uwb_cov
 
     def get_measurement(self, quat=False):
         state = self.vessel_node.vessel.current_state
@@ -190,62 +190,73 @@ class UWBSensor(BaseSensor):
 class EncoderSensor(BaseSensor):
     def __init__(self, sensor_config, vessel_id, topic_prefix, vessel_node):
         super().__init__(sensor_config, vessel_id, topic_prefix, vessel_node)
-        
-        # Get number of control surfaces and thrusters from vessel
-        self.num_control_surfaces = len(vessel_node.vessel.control_surfaces['control_surfaces']) if 'control_surfaces' in vessel_node.vessel.__dict__ else 0
-        self.num_thrusters = len(vessel_node.vessel.thrusters['thrusters']) if 'thrusters' in vessel_node.vessel.__dict__ else 0
-        
-        # Calculate indices in state vector for actuators
-        # From vessel_ode: state vector structure is:
-        # - state[0:6]: Velocities [u, v, w, p, q, r]
-        # - state[6:9]: Positions [x, y, z]
-        # - state[9:12/13]: Euler angles [phi, theta, psi] or Quaternions [q0, q1, q2, q3]
-        # - state[control_start:thruster_start]: Control surface angles
-        # - state[thruster_start:]: Thruster states
-        use_quaternion = vessel_node.vessel.use_quaternion
+
+        # Store specific actuator details
+        self.actuator_type = sensor_config['actuator_type'] # e.g., 'Rudder', 'Thruster'
+        self.actuator_id = sensor_config['actuator_id'] # 1-based ID
+
+        # Determine the index in the state vector for this specific actuator
+        vessel = vessel_node.vessel
+        use_quaternion = vessel.use_quaternion
         attitude_size = 4 if use_quaternion else 3
-        self.control_start = 9 + attitude_size
-        self.thruster_start = self.control_start + self.num_control_surfaces
+        base_idx = 9 + attitude_size
+
+        self.state_index = -1
+        self.unit_conversion = 1.0 # Default: no conversion (e.g., RPM for thrusters)
+        self.noise_rms = 0.0
+        self.actuator_name_prefix = ''
+
+        # Control Surfaces (assuming 'Rudder', 'Elevator', 'Aileron' map to control surfaces)
+        if 'control_surfaces' in vessel.__dict__ and self.actuator_type in ['Rudder', 'Elevator', 'Aileron']: # Add other types if needed
+            self.actuator_name_prefix = 'cs'
+            num_control_surfaces = len(vessel.control_surfaces['control_surfaces'])
+            if 1 <= self.actuator_id <= num_control_surfaces:
+                self.state_index = base_idx + self.actuator_id - 1
+                self.unit_conversion = 180.0 / np.pi # State is radians, output is degrees
+                self.noise_rms = 1e-1 # 0.1 degrees RMS noise for control surfaces
+            else:
+                raise ValueError(f"Invalid actuator_id {self.actuator_id} for control surface type {self.actuator_type}")
+
+        # Thrusters
+        elif 'thrusters' in vessel.__dict__ and self.actuator_type == 'Thruster': # Assuming 'Thruster' type
+             self.actuator_name_prefix = 'th'
+             num_control_surfaces = len(vessel.control_surfaces.get('control_surfaces', [])) if 'control_surfaces' in vessel.__dict__ else 0
+             num_thrusters = len(vessel.thrusters['thrusters'])
+             if 1 <= self.actuator_id <= num_thrusters:
+                 thruster_start_idx = base_idx + num_control_surfaces
+                 self.state_index = thruster_start_idx + self.actuator_id - 1
+                 self.unit_conversion = 60.0 # State is rad/s (assuming), output is RPM - check vessel model if state is different!
+                 self.noise_rms = 1e-1 # 0.1 RPM RMS noise for thrusters - check unit consistency!
+             else:
+                 raise ValueError(f"Invalid actuator_id {self.actuator_id} for thruster type {self.actuator_type}")
         
-        # Create noise parameters for all actuators
-        # Control surfaces in radians, thrusters in RPM
-        self.encoders_rms = np.concatenate([
-            np.ones(self.num_control_surfaces) * 1e-1 * np.pi / 180,  # 0.1 deg for control surfaces
-            np.ones(self.num_thrusters) * 1e-1 / 60  # 0.1 RPM for thrusters
-        ])
-        self.encoders_cov = np.diag(self.encoders_rms ** 2)
+        else:
+             raise ValueError(f"Unknown or unsupported actuator_type: {self.actuator_type} or vessel missing required actuators.")
+
+        if self.state_index == -1:
+             raise ValueError(f"Could not determine state index for actuator {self.actuator_type} ID {self.actuator_id}")
+
+        self.encoder_cov = self.noise_rms ** 2 # Variance for the single measured value
 
     def get_measurement(self):
         state = self.vessel_node.vessel.current_state
         
-        # Get control surface angles from state vector (convert to degrees)
-        control_surface_values = [
-            state[self.control_start + i] * 180.0 / np.pi 
-            for i in range(self.num_control_surfaces)
-        ]
+        # Get the specific actuator value from the state vector
+        actuator_value_raw = state[self.state_index]
         
-        # Get thruster RPMs from state vector (convert to RPM)
-        thruster_values = [
-            state[self.thruster_start + i] * 60.0 
-            for i in range(self.num_thrusters)
-        ]
+        # Apply unit conversion
+        actuator_value_converted = actuator_value_raw * self.unit_conversion
         
-        # Add noise to measurements
-        actuator_values = np.concatenate([control_surface_values, thruster_values])
-        actuator_values += np.random.multivariate_normal(np.zeros(len(actuator_values)), self.encoders_cov)
-        
-        # Split back into control surfaces and thrusters
-        control_surface_values = actuator_values[:self.num_control_surfaces].tolist()
-        thruster_values = actuator_values[self.num_control_surfaces:].tolist()
-        
-        # Create actuator names
-        control_surface_names = [f'cs_{i+1}' for i in range(self.num_control_surfaces)]
-        thruster_names = [f'th_{i+1}' for i in range(self.num_thrusters)]
+        # Add noise to the converted measurement
+        actuator_value_noisy = actuator_value_converted + np.random.normal(0, self.noise_rms)
+
+        # Create actuator name string (e.g., 'cs_1', 'th_1')
+        actuator_name = f'{self.actuator_name_prefix}_{self.actuator_id}'
         
         return {
-            'actuator_values': control_surface_values + thruster_values,
-            'actuator_names': control_surface_names + thruster_names,
-            'covariance': self.encoders_cov.flatten()
+            'actuator_value': actuator_value_noisy,
+            'actuator_name': actuator_name,
+            'covariance': [self.encoder_cov] # Covariance is just the variance for a single value
         }
 
 class DVLSensor(BaseSensor):
@@ -283,7 +294,7 @@ def create_sensor(sensor_config, vessel_id, topic_prefix, vessel_node):
         'IMU': IMUSensor,
         'GPS': GPSSensor,
         'UWB': UWBSensor,
-        'encoders': EncoderSensor,
+        'encoder': EncoderSensor,
         'DVL': DVLSensor
     }
     

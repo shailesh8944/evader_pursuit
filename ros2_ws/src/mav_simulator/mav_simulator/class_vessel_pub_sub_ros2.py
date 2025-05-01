@@ -123,7 +123,7 @@ class Vessel_Pub_Sub():
             'GPS': NavSatFix,
             'UWB': PoseWithCovarianceStamped,
             'DVL': DVL,
-            'encoders': Actuator
+            'encoder': Actuator
         }
         return msg_types.get(sensor_type)
 
@@ -211,12 +211,15 @@ class Vessel_Pub_Sub():
             )
             msg.covariance = measurement['covariance']
             
-        elif sensor_type == 'encoders':
+        elif sensor_type == 'encoder':
             msg = Actuator()
             msg.header.stamp = current_time
-            msg.actuator_values = measurement['actuator_values']
-            msg.actuator_names = measurement['actuator_names']
-            # msg.covariance = measurement['covariance']
+            # Populate with single value and name from the specific encoder
+            msg.actuator_values = [measurement['actuator_value']]
+            msg.actuator_names = [measurement['actuator_name']]
+            # The Actuator message in interfaces.msg does not seem to have a standard covariance field.
+            # If you have a custom message with covariance, you can add:
+            # msg.covariance = measurement['covariance'] 
             
         return msg
 

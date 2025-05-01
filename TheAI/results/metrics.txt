@@ -1,0 +1,9 @@
+Model Evaluation Metrics:
+MSE: 0.061014
+MAE: 0.075463
+RMSE: 0.247010
+Mean Euclidean Error: 0.196959 meters
+Median Euclidean Error: 0.150510 meters
+90th Percentile Error: 0.308426 meters
+95th Percentile Error: 0.404447 meters
+99th Percentile Error: 0.734920 meters
