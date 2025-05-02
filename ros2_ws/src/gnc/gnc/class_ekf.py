@@ -125,7 +125,7 @@ class EKF():
         """
         Modified correct method to handle acceleration filtering
         """        
-
+        
         I = np.eye(self.n_states)
         if np.abs(np.linalg.det(Cd @ self.P @ Cd.T + R)) > 1e-6:
             K = self.P @ Cd.T @ np.linalg.inv(Cd @ self.P @ Cd.T + R)
@@ -146,6 +146,7 @@ class EKF():
                     change[i, 0] = clip(change[i, 0], threshold[i])
             
             self.x = self.x + change
+         
             self.P = (I - K @ Cd) @ self.P @ (I - K @ Cd).T + K @ R @ K.T
 
             for i in range(3,6):

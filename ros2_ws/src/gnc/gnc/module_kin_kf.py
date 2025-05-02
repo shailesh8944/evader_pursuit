@@ -155,6 +155,18 @@ def L5mat(eul, r_bs_b):
     return L5
 
 def state_mats(x):
+    """Calculate state matrices A and E for the extended Kalman filter.
+    
+    Args:
+        x: State vector containing positions, attitudes, velocities, angular rates, 
+           accelerations, and actuator positions
+    
+    Returns:
+        A, E: State transition and noise influence matrices
+    """
+    # Get state dimensions
+    n_states = len(x)
+    n_actuators = max(0, n_states - 15)  # Number of actuator states
     
     r_nb_n = x[0:3]
     Theta_nb = x[3:6]
@@ -162,8 +174,10 @@ def state_mats(x):
     omg_nb_b = x[9:12]
     acc_nb_b = x[12:15]
     
-    A = np.zeros((15,15))
+    # Create appropriately sized matrices
+    A = np.zeros((n_states, n_states))
     
+    # Fill the standard 15x15 part of the matrix
     A[0:3][:, 3:6] = L1mat(Theta_nb, v_nb_b)
     A[0:3][:, 6:9] = eul_to_rotm(Theta_nb)
     
@@ -176,11 +190,25 @@ def state_mats(x):
 
     A[12:15][:, 9:12] = Smat(acc_nb_b)
     A[12:15][:, 12:15] = -Smat(omg_nb_b)
-
-    E = np.zeros((15,6))
+    
+    # For actuator states, dynamics are modeled as first-order with time constant
+    # Actuator derivatives are proportional to difference between command and current position
+    # This is handled in the plant_model function
+    
+    # Create noise influence matrix - always use 6 columns for compatibility with EKF
+    E = np.zeros((n_states, 6))
 
     E[9:12][:, 0:3] = eul_to_rotm(Theta_nb).T
     E[12:15][:, 3:6] = eul_to_rotm(Theta_nb).T
+    
+    # Add noise influence for actuator states
+    # We'll use the existing 6 columns for actuator noise rather than adding new columns
+    if n_actuators > 0:
+        # Distribute actuator noise across the existing noise channels
+        # Use last 3 columns for actuator noise (share with acceleration noise)
+        for i in range(n_actuators):
+            noise_col = i % 3 + 3  # Use columns 3, 4, 5 (cycling if more than 3 actuators)
+            E[15+i][noise_col] = 0.1  # Small coupling to existing noise sources
 
     return A, E
 
@@ -192,7 +220,7 @@ def imu_mat(x, r_bs_b=np.array([0.0, 0.0, 0.0]), Theta_bs=np.array([0.0, 0.0, 0.
     omg_nb_b = x[9:12]
     acc_nb_b = x[12:15]
     
-    C = np.zeros((9, 15))
+    C = np.zeros((9, len(x)))  # Extend for actuator states
     
     C[0:3][:, 3:6] = L3mat(Theta_nb, Theta_bs)
     C[3:6][:, 9:12] = eul_to_rotm(Theta_bs).T
@@ -209,31 +237,76 @@ def gnss_mat(x, r_bs_b=np.array([0.0, 0.0, 0.0]), Theta_bs=np.array([0.0, 0.0, 0
     omg_nb_b = x[9:12]
     acc_nb_b = x[12:15]
     
-    C = np.zeros((3, 15))
+    C = np.zeros((3, len(x)))  # Extend for actuator states
     C[0:3][:, 0:3] = np.eye(3)
     C[0:3][:, 3:6] = L5mat(Theta_nb, r_bs_b)
 
     return C
 
-def plant_model(t, x, u):
+def encoder_mat(x, actuator_idx=None):
+    """Create measurement matrix for encoder sensors.
+    
+    Args:
+        x: Full state vector
+        actuator_idx: Index of the actuator in the state vector
+    
+    Returns:
+        C: Observation matrix for the encoder
+    """
+    if actuator_idx is None:
+        raise ValueError("Actuator index must be specified for encoder")
+    
+    # Create the measurement matrix (just selects the actuator state directly)
+    C = np.zeros((1, len(x)))
+    C[0, actuator_idx] = 1.0
+    
+    return C
 
+def plant_model(t, x, u):
+    """State dynamics model for EKF prediction.
+    
+    Args:
+        t: Time
+        x: State vector
+        u: Input vector
+        
+    Returns:
+        xd: State derivative vector
+    """
+    # Get state dimensions and determine how many actuator states we have
+    n_states = len(x)
+    n_actuators = max(0, n_states - 15)
+    
+    # Extract standard states
     r_nb_n = x[0:3]
     Theta_nb = x[3:6]
     v_nb_b = x[6:9]
     omg_nb_b = x[9:12]
     a_nb_b = x[12:15]
+    
+    # Extract actuator states if present
+    actuators = x[15:] if n_actuators > 0 else np.array([])
 
     R_b_n = eul_to_rotm(Theta_nb)
     J2_nb = J2mat(Theta_nb)
 
-    xd = np.zeros(15)
+    # Initialize state derivative vector
+    xd = np.zeros(n_states)
 
+    # Standard dynamics for vessel states
     xd[0:3] = R_b_n @ v_nb_b
     xd[3:6] = J2_nb @ omg_nb_b
     xd[6:9] = a_nb_b + np.cross(v_nb_b, omg_nb_b)
-    xd[9:12] = 0.0
+    xd[9:12] = 0.0  # Angular acceleration is not modeled
     xd[12:15] = np.cross(a_nb_b, omg_nb_b)
-
+    
+    # Actuator dynamics - default to small decay to prevent unbounded growth
+    # In reality, these would be driven by control inputs, which would typically come from measurements
+    if n_actuators > 0:
+        # Model as simple first-order system with long time constant (e.g., 10 seconds)
+        time_constant = 10.0
+        xd[15:] = -actuators / time_constant  # Slow decay toward zero when no measurements
+        
     return xd
 
 def imu_model(x, r_bs_b=np.array([0.0, 0.0, 0.0]), Theta_bs=np.array([0.0, 0.0, 0.0])):
@@ -266,3 +339,19 @@ def gnss_model(x, r_bs_b=np.array([0.0, 0.0, 0.0]), Theta_bs=np.array([0.0, 0.0,
     y = r_nb_n + R_b_n @ r_bs_b
 
     return y
+
+def encoder_model(x, actuator_idx=None):
+    """Measurement model for encoder sensors.
+    
+    Args:
+        x: Full state vector
+        actuator_idx: Index of the actuator in the state vector
+    
+    Returns:
+        y: Measurement value (actuator position)
+    """
+    if actuator_idx is None:
+        raise ValueError("Actuator index must be specified for encoder")
+    
+    # Simply return the actuator state
+    return np.array([x[actuator_idx]])
