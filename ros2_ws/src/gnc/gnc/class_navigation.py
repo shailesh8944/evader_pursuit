@@ -241,6 +241,7 @@ class Navigation(Node):
                 
                 # Update the EKF with the measurement
                 if not self.first_imu_flag:
+                    # self.get_logger().info(f"Setting actuator state: {y_encoder} for actuator: {name}, idx: {idx}")
                     self.ekf.correct(
                         y_encoder,
                         Cd_encoder,
@@ -251,6 +252,7 @@ class Navigation(Node):
                     )
                 else:
                     # During initialization, set the actuator state directly
+                    # self.get_logger().info(f"Setting actuator state: {y_encoder} for actuator: {name}, idx: {idx}")
                     self.ekf.x[idx] = y_encoder
             else:
                 self.get_logger().warning(f"Received encoder measurement for unknown actuator: {name}")

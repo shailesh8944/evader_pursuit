@@ -144,7 +144,6 @@ class EKF():
             if threshold is not None:
                 for i in range(len(change)):
                     change[i, 0] = clip(change[i, 0], threshold[i])
-            
             self.x = self.x + change
          
             self.P = (I - K @ Cd) @ self.P @ (I - K @ Cd).T + K @ R @ K.T

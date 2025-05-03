@@ -201,14 +201,6 @@ def state_mats(x):
     E[9:12][:, 0:3] = eul_to_rotm(Theta_nb).T
     E[12:15][:, 3:6] = eul_to_rotm(Theta_nb).T
     
-    # Add noise influence for actuator states
-    # We'll use the existing 6 columns for actuator noise rather than adding new columns
-    if n_actuators > 0:
-        # Distribute actuator noise across the existing noise channels
-        # Use last 3 columns for actuator noise (share with acceleration noise)
-        for i in range(n_actuators):
-            noise_col = i % 3 + 3  # Use columns 3, 4, 5 (cycling if more than 3 actuators)
-            E[15+i][noise_col] = 0.1  # Small coupling to existing noise sources
 
     return A, E
 
@@ -304,7 +296,7 @@ def plant_model(t, x, u):
     # In reality, these would be driven by control inputs, which would typically come from measurements
     if n_actuators > 0:
         # Model as simple first-order system with long time constant (e.g., 10 seconds)
-        time_constant = 10.0
+        time_constant = 0.1 #TODO need to change this and take from vessel config
         xd[15:] = -actuators / time_constant  # Slow decay toward zero when no measurements
         
     return xd
