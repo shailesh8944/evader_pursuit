@@ -27,6 +27,8 @@ def generate_launch_description():
         'web'
     ])
 
+    web_build_dir = '/workspaces/mavlab/ros2_ws/src/mav_simulator/web'
+
     return LaunchDescription([
         Node(
             package='mav_simulator',  # Replace with your package name
@@ -48,8 +50,9 @@ def generate_launch_description():
         ),        
         # Start the HTTP server to serve the web interface
         ExecuteProcess(
-            cmd=['python3', '-m', 'http.server', '8000', '--directory', web_dir],
+            cmd=['python3', '-m', 'http.server', '8000', '--directory', web_build_dir],
             name='http_server',
+            output='screen'
         ),
         # Start the rosbridge server
         IncludeLaunchDescription(

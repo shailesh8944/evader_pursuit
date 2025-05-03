@@ -1,5 +1,4 @@
 import numpy as np
-import warnings
 
 """
 Rudder control module for vessel simulation.
@@ -22,12 +21,16 @@ def ssa(ang, deg=False):
     """
 
     #===========================================================================
+    # TODO: Implement the ssa function
+    #===========================================================================
+    # Write your code here
+
     if deg:
         ang = (ang + 180) % (360.0) - 180.0
     else:
         ang = (ang + np.pi) % (2 * np.pi) - np.pi
-    #===========================================================================
 
+    #===========================================================================
     return ang
 
 def clip(val, min_val, max_val):
@@ -35,7 +38,6 @@ def clip(val, min_val, max_val):
     Clip a value to a range.
     """
     return max(min_val, min(val, max_val))
-
 
 def pid_control(t, state, waypoints, waypoint_idx, ye_int=0.0):
     """
@@ -55,7 +57,7 @@ def pid_control(t, state, waypoints, waypoint_idx, ye_int=0.0):
 
     # Check if we have reached the last waypoint
     if waypoint_idx == len(waypoints):
-        return 0.0, waypoint_idx
+        return 0.0, 0.0, waypoint_idx
 
     # Current state
     u, v, r = state[3], state[4], state[5]
@@ -67,52 +69,35 @@ def pid_control(t, state, waypoints, waypoint_idx, ye_int=0.0):
 
     delta_c = 0.0
     ye = 0.0
-    
     #===========================================================================
+    # TODO: Implement the PID control
+    #===========================================================================
+    # Write your code here
     
-    # Unit vector of waypoint line
+    a = -(wp_yn1 - wp_yn)
+    b = (wp_xn1 - wp_xn)
+    c = -wp_yn1*b-a*wp_xn1
+    
     wp_unit_vec = np.array([wp_xn - wp_xn1, wp_yn - wp_yn1, 0.0])
     wp_unit_vec = wp_unit_vec / np.linalg.norm(wp_unit_vec)
-    pi_p = np.arctan2(wp_unit_vec[1], wp_unit_vec[0])
 
-    # Vector from previous waypoint to current position
-    r_vec = np.array([x - wp_xn1, y - wp_yn1, 0.0])
+    # Calculate cross-track error
+    ye = -(a*x + b*y + c)/np.sqrt(a**2 + b**2)
+    pi_p = np.angle(wp_unit_vec[0] + 1j * wp_unit_vec[1]) 
 
-  
 
-    # Along-track and cross-track errors
-    xe = np.dot(r_vec, wp_unit_vec)
-    ye = np.cross(wp_unit_vec, r_vec)[2]
+    Kpo = 0.5
+    Kio = 0.03
     
 
-  
+    psid = pi_p + Kpo*(-ye) + Kio*(-ye_int)
+   
+    rd = 0
 
-    # Derivative of cross-track error
-    x_dot, y_dot = u * np.cos(psi) - v * np.sin(psi), u * np.sin(psi) + v * np.cos(psi)
-    ye_dot = np.cross(wp_unit_vec, np.array([x_dot, y_dot, 0.0]))[2]
+    Kpi = 0.6
+    Kdi = 0.4
 
-    # PID controller parameters
-    Kp_out = 1.0  # Proportional gain for outer loop
-    Ki_out = 0.0  # Integral gain for outer loop
-    
-    # psi_des = Kp_out * (0.0 - ye) + Ki_out * (0.0 - ye_int)
-    Delta = 1/Kp_out
-    psi_des = pi_p - np.arctan2(ye, Delta)
-
-
-    # warnings.warn(f"psi des: {psi_des*180/np.pi:.2f} ye :{ye:.2f} ye_int: {ye_int:.2f}")
-
-    r_des = Kp_out * ye_dot + Ki_out * ye
-    r_des = 0.0
-
-    # psi_des = 90.0 * np.pi / 180.0;
-
-    Kp_in = -1.0  # Proportional gain for inner loop
-    Kd_in = 0.0  # Derivative gain for inner loop
-
-    delta_c = Kp_in * ssa(psi_des - psi) + Kd_in * (r_des - r)
-    warnings.warn(f"psi des: {psi_des*180/np.pi:.2f} ye :{ye:.2f} ye_int: {ye_int:.2f} delta_c {delta_c*180/np.pi:.2f}")
-
+    delta_c =  Kpi*ssa(psid - psi) + Kdi*(rd - r)
 
     #===========================================================================
     

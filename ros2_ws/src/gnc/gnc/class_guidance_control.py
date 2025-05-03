@@ -11,7 +11,8 @@ class GuidanceControl(Node):
         super().__init__('guidance_controller')
 
         self.vessel = vessel
-        self.odom_topic = f'{self.vessel.vessel_name}_{self.vessel.vessel_id:02d}/odometry'
+        # self.odom_topic = f'{self.vessel.vessel_name}_{self.vessel.vessel_id:02d}/odometry'
+        self.odom_topic = f'{self.vessel.vessel_name}_{self.vessel.vessel_id:02d}/odometry_sim'
         self.actuator_topic = f'{self.vessel.vessel_name}_{self.vessel.vessel_id:02d}/actuator_cmd'
         self.waypoints_topic = f'{self.vessel.vessel_name}_{self.vessel.vessel_id:02d}/waypoints'
         

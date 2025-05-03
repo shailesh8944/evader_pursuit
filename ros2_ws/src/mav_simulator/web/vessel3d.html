@@ -169,15 +169,15 @@
     <div id="vesselDimensions">
       <div class="dimension-control">
         <label for="vesselLength">Length (X-axis):</label>
-        <input type="number" id="vesselLength" min="1" max="100" value="20">
+        <input type="number" id="vesselLength" min="1" max="100" value="2">
       </div>
       <div class="dimension-control">
         <label for="vesselWidth">Width (Y-axis):</label>
-        <input type="number" id="vesselWidth" min="1" max="100" value="10">
+        <input type="number" id="vesselWidth" min="1" max="100" value="1">
       </div>
       <div class="dimension-control">
         <label for="vesselHeight">Height (Z-axis):</label>
-        <input type="number" id="vesselHeight" min="1" max="100" value="5">
+        <input type="number" id="vesselHeight" min="1" max="100" value="0.5">
       </div>
       <button id="applyDimensions">Apply Dimensions</button>
     </div>
@@ -197,9 +197,9 @@
     
     // Vessel properties
     const initialVesselSize = {
-      width: 10,  // Y direction (breadth)
-      height: 5,  // Z direction (depth)
-      length: 20  // X direction (length)
+      width: 1,  // Y direction (breadth)
+      height: 0.5,  // Z direction (depth)
+      length: 2  // X direction (length)
     };
     let vesselSize = {...initialVesselSize};
     let vesselScaleFactor = 1.0;
