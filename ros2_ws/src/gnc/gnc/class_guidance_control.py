@@ -11,8 +11,8 @@ class GuidanceControl(Node):
         super().__init__('guidance_controller')
 
         self.vessel = vessel
-        self.odom_topic = f'{self.vessel.vessel_name}_{self.vessel.vessel_id:02d}/odometry'
-        # self.odom_topic = f'{self.vessel.vessel_name}_{self.vessel.vessel_id:02d}/odometry_sim'
+        # self.odom_topic = f'{self.vessel.vessel_name}_{self.vessel.vessel_id:02d}/odometry'
+        self.odom_topic = f'{self.vessel.vessel_name}_{self.vessel.vessel_id:02d}/odometry_sim'
         self.actuator_topic = f'{self.vessel.vessel_name}_{self.vessel.vessel_id:02d}/actuator_cmd'
         self.waypoints_topic = f'{self.vessel.vessel_name}_{self.vessel.vessel_id:02d}/waypoints'
         
@@ -114,6 +114,10 @@ class GuidanceControl(Node):
             self.get_logger().info(f'Waypoint {self.waypoint_idx} reached')
             self.waypoint_idx = wp_indx
             self.ye_int = 0.0
+
+            if self.waypoint_idx >= len(self.waypoints):
+                self.get_logger().info('***All waypoints reached***')
+                self.waypoint_idx = 1
 
         # Calculate time difference for integration
         dt = t - self.te_int

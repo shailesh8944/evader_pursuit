@@ -1,6 +1,0 @@
-Trajectory Prediction Metrics:
-Mean Position Error: 17.518518 meters
-Median Position Error: 17.882885 meters
-Maximum Position Error: 40.390919 meters
-Trajectory Length: 1671 points
-Start Index: 0

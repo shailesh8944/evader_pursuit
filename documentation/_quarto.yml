@@ -6,28 +6,22 @@ book:
   title: "Pani Simulator"
   author: "Rishabh Sharma"
   date: "3/24/2024"
-  repo-url: https://github.com/yourusername/mav_simulator
+  repo-url: https://github.com/goldenrishabh/panisim
   repo-actions: [edit, issue]
   chapters:
     - index.qmd
     - rawFiles/setup.qmd
     - rawFiles/quickstart.qmd
-    - part: "Kinematics"
-      chapters:
-        - rawFiles/Kinematics/KinematicsEquations.qmd
-        - rawFiles/Kinematics/KinematicsModule.qmd
-    - part: "Dynamics"  
-      chapters:
-      - rawFiles/Dynamics/hydrodynamics.qmd
-      - rawFiles/Dynamics/vessel.qmd
-      # - ./rawFiles/Control/control.qmd
-    - part: "Navigation"
-      chapters:
-        - rawFiles/Navigation/sensors.qmd
-    - part: "ROS2 Integration"
-      chapters:
-      - rawFiles/ROS2/ros2_integration.qmd
-
+    - rawFiles/Kinematics/Kinematics.qmd
+    - rawFiles/Dynamics/Dynamics.qmd
+    - rawFiles/Navigation/sensors.qmd
+    - rawFiles/Inputs/inputs.qmd
+    - rawFiles/ROS2/ros2.qmd
+    - rawFiles/WebConfigurator/web_configurator.qmd
+    - rawFiles/WebVisualization/web_visualization.qmd
+    - rawFiles/Example/example.qmd
+    - rawFiles/NoROS/noros.qmd
+    
 bibliography: references.bib
 
 format:

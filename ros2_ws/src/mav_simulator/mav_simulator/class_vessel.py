@@ -50,13 +50,15 @@ class Vessel:
     delta_c = None
     n_c = None
     
-    def __init__(self, vessel_params: Dict, hydrodynamic_data: Dict, vessel_id: int):
+    def __init__(self, vessel_params: Dict, hydrodynamic_data: Dict, vessel_id: int, ros_flag: bool = True):
         """Initialize vessel with parameters and hydrodynamic data.
         
         Args:
             vessel_params: Dictionary containing vessel parameters
             hydrodynamic_data: Dictionary containing hydrodynamic coefficients
         """
+
+        self.ros_flag = ros_flag
 
         self.active_dof = vessel_params['active_dof']
         self.maintain_speed = vessel_params['maintain_speed']
@@ -363,6 +365,26 @@ class Vessel:
         # Calculate velocity derivatives
 
         M = M_RB
+
+        if not self.ros_flag:
+            
+            ## TODO: Implement your controller logic here to get the actuator commands
+
+            ## example
+            # if self.control_surface_control_type == 'fixed_rudder':
+            #     self.delta_c = con.fixed_rudder(t, state, n_control_surfaces, 10.0) #Enter rudder angle here
+            # elif self.control_surface_control_type == 'switching_rudder':
+            #     self.delta_c = con.switching_rudder(t, state, n_control_surfaces)
+            # else:
+            #     raise ValueError(f"Invalid control surface control type: {self.control_surface_control_type}")
+                
+            # # Get thruster commands
+            # if self.thruster_control_type == 'fixed_rpm':
+            #     self.n_c = con.fixed_thrust(t, state, n_thrusters,1000.0) #Enter RPM here
+            # else:
+            #     raise ValueError(f"Invalid thruster control type: {self.thruster_control_type}")
+            pass
+            
         state_dot[0:6] = np.linalg.inv(M) @ F
         
         # Calculate position derivatives
@@ -683,6 +705,10 @@ class Vessel:
         self.current_state_der = self.vessel_ode(self.t + self.dt, self.current_state)
         
         self.t = sol.t[-1]
+
+        if not self.ros_flag:
+            self.history[self.time_index, :] = self.current_state
+            self.time_index += 1
 
         # print_debug(f"Current state at time {self.t:.2f}: {np.round(self.current_state, 1)}")
 

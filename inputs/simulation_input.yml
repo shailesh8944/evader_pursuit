@@ -1,5 +1,5 @@
 #Simulation Specific Inputs
-sim_time: 5
+sim_time: 100
 time_step: 0.1
 density: 1000
 gravity: 9.80665
@@ -29,7 +29,7 @@ agents:
   - 
     name: sookshma
     type: usv
-    U: 0.5 # For dinmensionalization of hydrodynamic coefficients
+    U: 0.5 # For dimensionalization of hydrodynamic coefficients
     maintain_speed: true
     active_dof: [1,1,1,1,1,1] # All degrees of freedom are active
     geometry: /workspaces/mavlab/inputs/{name}/geometry.yml

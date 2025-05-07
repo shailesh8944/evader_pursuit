@@ -86,16 +86,16 @@ def pid_control(t, state, waypoints, waypoint_idx, ye_int=0.0):
     pi_p = np.angle(wp_unit_vec[0] + 1j * wp_unit_vec[1]) 
 
 
-    Kpo = 0.5
-    Kio = 0.03
+    Kpo = 0.6
+    Kio = 0.05
     
 
     psid = pi_p + Kpo*(-ye) + Kio*(-ye_int)
    
     rd = 0
 
-    Kpi = 0.6
-    Kdi = 0.4
+    Kpi = 0.7
+    Kdi = 0.5
 
     delta_c =  Kpi*ssa(psid - psi) + Kdi*(rd - r)
 

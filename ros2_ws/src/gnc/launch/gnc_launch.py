@@ -57,5 +57,5 @@ def generate_launch_description():
         # Start the rosbridge server
         IncludeLaunchDescription(
             AnyLaunchDescriptionSource(rosbridge_launch)
-        ),
+        )
     ])
