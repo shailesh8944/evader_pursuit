@@ -1,0 +1,13 @@
+Test data file: extracted_data/test1/synchronized.csv
+Number of samples: 1221
+Test MSE:
+Position X: 1.257424
+Position Y: 3.170687
+Velocity X: 0.000000
+Velocity Y: 0.000117
+
+Test RMSE:
+Position X: 1.121349
+Position Y: 1.780642
+Velocity X: 0.000697
+Velocity Y: 0.010835
