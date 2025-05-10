@@ -187,7 +187,7 @@ def main(num_runs, num_waypoints, x_range, y_range, z_coord):
         print("Please source your ROS 2 setup file (e.g., 'source /opt/ros/<distro>/setup.bash') and try again.")
         sys.exit(1)
 
-    for run_index in range(31, num_runs + 1):
+    for run_index in range(1, num_runs + 1):
         print(f"\n{'='*10} Starting Run {run_index}/{num_runs} {'='*10}")
 
         launch_process = None
