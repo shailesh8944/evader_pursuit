@@ -13,8 +13,8 @@ import argparse
 import select
 
 # --- Configuration ---
-DEFAULT_NUM_RUNS = 1
-DEFAULT_NUM_WAYPOINTS = 3  # Including start and end [0,0,0]
+DEFAULT_NUM_RUNS = 50
+DEFAULT_NUM_WAYPOINTS = 4  # Including start and end [0,0,0]
 DEFAULT_X_RANGE = (-10.0, 10.0)
 DEFAULT_Y_RANGE = (-10.0, 10.0)
 MIN_WAYPOINT_DISTANCE = 10.0 # Minimum distance between consecutive waypoints
@@ -22,7 +22,7 @@ MAX_RETRIES_PER_WAYPOINT = 100 # Max attempts to find a suitable waypoint
 DEFAULT_Z_COORD = 0.0
 # Use relative paths assuming script is run from workspace root
 GUIDANCE_FILE_PATH = "/workspaces/mavlab/inputs/sookshma/guidance.yml"
-OUTPUT_BASE_DIR = "/workspaces/mavlab/data_from_sim"
+OUTPUT_BASE_DIR = "/workspaces/mavlab/data/data_from_sim_noNoise"
 VESSEL_NAME = "sookshma"
 VESSEL_ID = 0
 # Topics based on class_guidance_control.py and common usage
@@ -187,7 +187,7 @@ def main(num_runs, num_waypoints, x_range, y_range, z_coord):
         print("Please source your ROS 2 setup file (e.g., 'source /opt/ros/<distro>/setup.bash') and try again.")
         sys.exit(1)
 
-    for run_index in range(1, num_runs + 1):
+    for run_index in range(31, num_runs + 1):
         print(f"\n{'='*10} Starting Run {run_index}/{num_runs} {'='*10}")
 
         launch_process = None

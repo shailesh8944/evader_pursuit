@@ -330,6 +330,29 @@ class Vessel:
         
         # Calculate forces and moments
         F_hyd = self.hydrodynamic_forces(vel)
+
+
+
+        if not self.ros_flag:
+            
+            ## TODO: Implement your controller logic here to get the actuator commands
+
+            ## example
+            # if self.control_surface_control_type == 'fixed_rudder':
+            #     self.delta_c = con.fixed_rudder(t, state, n_control_surfaces, 10.0) #Enter rudder angle here
+            # elif self.control_surface_control_type == 'switching_rudder':
+            #     self.delta_c = con.switching_rudder(t, state, n_control_surfaces)
+            # else:
+            #     raise ValueError(f"Invalid control surface control type: {self.control_surface_control_type}")
+                
+            # # Get thruster commands
+            # if self.thruster_control_type == 'fixed_rpm':
+            #     self.n_c = con.fixed_thrust(t, state, n_thrusters,1000.0) #Enter RPM here
+            # else:
+            #     raise ValueError(f"Invalid thruster control type: {self.thruster_control_type}")
+            pass
+
+
         if self.n_control_surfaces > 0:
             F_control = self.control_forces(state[control_start:thruster_start])
         else:
@@ -343,6 +366,7 @@ class Vessel:
         # Calculate mass matrices
         M_RB = self.mass_matrix
         M_A = self.added_mass_matrix
+        
         if self.coriolis_flag:
           C_RB, C_A = self.calculate_coriolis_matrices(vel)
         
@@ -366,24 +390,7 @@ class Vessel:
 
         M = M_RB
 
-        if not self.ros_flag:
-            
-            ## TODO: Implement your controller logic here to get the actuator commands
-
-            ## example
-            # if self.control_surface_control_type == 'fixed_rudder':
-            #     self.delta_c = con.fixed_rudder(t, state, n_control_surfaces, 10.0) #Enter rudder angle here
-            # elif self.control_surface_control_type == 'switching_rudder':
-            #     self.delta_c = con.switching_rudder(t, state, n_control_surfaces)
-            # else:
-            #     raise ValueError(f"Invalid control surface control type: {self.control_surface_control_type}")
-                
-            # # Get thruster commands
-            # if self.thruster_control_type == 'fixed_rpm':
-            #     self.n_c = con.fixed_thrust(t, state, n_thrusters,1000.0) #Enter RPM here
-            # else:
-            #     raise ValueError(f"Invalid thruster control type: {self.thruster_control_type}")
-            pass
+        
             
         state_dot[0:6] = np.linalg.inv(M) @ F
         

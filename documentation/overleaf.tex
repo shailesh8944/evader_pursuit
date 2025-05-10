@@ -1,0 +1,199 @@
+\chapter{Navigation}\doublespacing % Main chapter title
+
+\label{Chapter2} % Change X to a consecutive number; for referencing this chapter elsewhere, use \ref{ChapterX}
+
+\fancyhead[EC]{\emph{Chapter III}} %left-side page, centre header
+\fancyhead[OC]{\emph{Navigation}} %right-side page centre header
+
+\section{Introduction}
+Navigation tells a robot where it is with respect to its global position which is a crucial requirement and precursor for the robot to plan its next step. Navigation sensors such as GPS, UWB, and Sound multilateration (underwater GPS) provide the global position to the robot, whereas sensors like IMU and DVL provide raw data (acceleration and velocity) of the robot in its local frame and one needs to perform dead reckoning in order to find the global position. Dead Reckoning is composed of two words, \textit{Dead} which means \textit{stationary} and \textit{Reckoning} which means \textit{the action or process of calculating or estimating something}, so together Dead Reckoning means \textit{Estimating the position of something with respect to a stationary point}. In our case the stationary point will be the starting point of the robot. All the sensors which we discussed are not accurate and have some inherent noise involved in their measurements. This noise introduces errors in dead reckoning and this error on accumulation becomes drift as shown in Fig \ref{fig:drimu}. Thus estimation algorithms are employed to handle this noise. Traditionally the proven and tested state estimation algorithm is the \textit{Extended Kalman Filter}.
+
+The Kalman filter is an algorithm which uses the system dynamics and sensor measurements to predict and correct the state of a system especially in-case of noisy measurements. It can be thought of like a frequency band filter except that it has the ability to adjust its gains based on certain probability equations.
+
+The Kalman filter has majorly two steps. The first one is the prediction step which uses the systems dynamic measurements such as velocity or acceleration to estimate the state of the system in the next instance. Then is the updation step which adjusts the co-variance matrices defined for the system and spits out the Kalman Gain matrix which is used to update the prediction based on sensor measurement.
+
+For example consider we have system model for the position of the car undergoing acceleration from time t = $t_{k-1}$ to t = ${t_k}$ as 
+\begin{equation}\label{eq:3.1}
+    \dot{x} = u + at
+\end{equation}
+where $\dot{x}$ is the velocity of the car, x being the position, u is the velocity of the car at the time $t_{k-1}$ and a is the acceleration of the car between time $t_{k-1}$ and time $t_{k}$. Suppose our car is equipped with an accelerometer and a GPS. The accelerometer give the acceleration of the car and the GPS gives us the position of the car. Our task is to estimate the position of the car. First, using the accelerometer measurements, we can find a prediction of the position of the car using \ref{eq:3.1}. Let us say that the predicted position of the car is 10m from the staring point. However as per the GPS readings our car has moved only 9m. Now, we know that there is an uncertainity related to the GPS measurements and the accelerometer measurements. Let us say that based on our personal observations we find the GPS to be more accurate than the accelerometer. Thus during the updation step, we'll give more weightage to the GPS reading than the accelerometer prediction.
+Let us say we have 60\% confidence on the GPS readings and 40\% confidence on the accelerometer readings, thus we have the estimated position of the car as
+\begin{equation}
+    x = 0.4\cdot10+0.6\cdot9 = 9.4 
+\end{equation}
+In this example we manually gave some constant confidences on the measurements. In case of a Kalman filter these are calculated dynamically using Process noise and sensor co-variance matrices.
+
+Let us now establish the five equations used in the Kalman filer algorithm
+\begin{subequations}\label{eq:3.3}
+\begin{equation}\label{eq:3.3a}
+    x_k^- = A\hat{x_{k-1}}+Bu_k
+\end{equation}
+\begin{equation}\label{eq:3.3b}
+    P_k^- = AP_{k-1}A^T+Q
+\end{equation}
+\end{subequations}
+\begin{subequations}\label{eq:3.4}
+    \begin{equation}\label{eq:3.4a}
+        K_k = \frac{P_k^-C^T}{CP_k^-C^T+R}
+    \end{equation}
+    \begin{equation}\label{eq:3.4b}
+        \hat{x_k}=\hat{x_k^-}+K_k(y_k-Cx_k^-)
+    \end{equation}
+    \begin{equation}\label{eq:3.4c}
+        P_k = (I-K_kC)P_k^-
+    \end{equation}
+\end{subequations}
+Equations \ref{eq:3.3} are called the prediction equations while equations \ref{eq:3.4} are called the update equations. Specifically, \ref{eq:3.3a} is called the state extrapolation equation, as we'll see it describes how the state evolves with time. \ref{eq:3.3b} is called the Covariance extrapolation equation which updates the covariance matrices which directly affects the Kalman Gain (or the confidence constants as discussed earlier). \ref{eq:3.4a} is the Kalman gain equation, \ref{eq:3.4b} is the state update equation and \ref{eq:3.4c} is the Covariance update equation. The Kalman Filter becomes Extended Kalman Filter when we deal with non-linear equations of motions. In this case the non-linear equations are linearized using Taylor expansion. 
+
+\subsection{EKF - Experimental Results}
+We will now see some of the Experimental Results of the performance of the Extended Kalman Filter done on the \textit{Sookshma} vessel in the Department of Ocean Engineering Wave Basin at IIT Madras. The algorithm leverages the Panisim Simulator Architecture with hardware in the loop. The goal of the experiment is to do waypoint tracking across four corner points in the wavebasin. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{Images/waypointTracking.jpg}
+    \caption{Way-point Tracking Experiment in Wavebasin at IIT Madras}
+    \label{fig:wptrack}
+\end{figure}
+
+
+All the run data has been collected using \textit{ROS2} bags. The navigation sensors used in this experiment are, four UWB sensors kept at each of the corner of the wavebasin, and an onboard IMU (by SBG Systems). The EKF is used to fuse the sensors and get the state estimates. In total, 15 states are estimated, three position (x,y,z), three orientation (Euler Angles), three linear velocity, three angular velocity and three linear acceleration. Some of the EKF experiments are shown in Fig \ref{fig:waypoint_tracking}.
+
+\begin{figure}[h]
+\centering
+\begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{Images/plot1ekf.png}
+    \subcaption{Waypoint Tracking example 1}
+    \label{fig:plot1}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{Images/plot2ekf.png}
+    \subcaption{Waypoint Tracking example 2}
+    \label{fig:plot2}
+\end{minipage}
+\caption{Waypoint Tracking examples}
+\label{fig:waypoint_tracking}
+\end{figure}
+
+As we can see in the Figures, the EKF estimation is very jerky and not smooth. In this scenario, the sensor noise (IMU) was considered to be higher and thus the UWB position estimates had more weightage over the IMU. There are also some sudden jumps seen in between in the position estimate plots. These jumps are due to incorrect UWB measurements near that area. These incorrect measurements are caused due to a physical obstruction in the wavebasin which causes the UWB signals to reflect off. 
+
+This is one of the disadvantage of using navigation sensors which depend on external signals. They often get obstructed (like GPS on a cloudy day) or even jammed or spoofed (during warfare). This calls for more accurate navigation sensors which do not rely on any external signals. Now we will explore one such proposed method.
+
+\subsection{DR via Machine Learning}
+With advancements in machine learning algorithms, data driven approaches for dead reckoning have started to emerge. We will now explore our attempt at the data-driven approach. 
+
+To start with, we attempted at two dof position estimate (x and y) for the USV \textit{Sookshma}. The goal was to develop a model capable of predicting the vessel's next 2D position (x, y) based on a set of inputs: current acceleration (from IMU: $a_x, a_y$), angular velocity ($w_z$), the current estimated position (x,y), and the rudder angle. We have only chosen the measurements which have relevance in the two degree planar motion. The core idea was for the model to implicitly learn and compensate for IMU sensor noise and biases, learn the USV dynamics with the control input (rudder) and effectively performing dead reckoning over time. The data collected from the experiments was too noisy and jerky and thus the data for training the models was created via simulation in Panisim. Two sets of data were collected, one with the IMU sensor simulated without noise and the other with IMU sensor simulated with covariance with added noise. The IMU data was simulated at 50Hz whereas the Position and rudder data was being published at 10Hz. A data extraction was carried out from the ROS2 bags and the data was synchronized at 10Hz for training the model.
+
+Since Dead Reckoning is a Markov process, i.e the next states only depend on the value of the current states and not previous history, it was decided to first test with a simple Feedforward Neural Network. 
+
+It is to be noted the prediction happens in an auto-regressive manner, i.e the position predicted by the model in the current time step is used as the input to the model to find the position in the next time step.
+
+\subsubsection{Feedforward Neural Network (FNN) Development}
+Several attempts were made with Feed Forward Neural Network. The below summarizes of the attempts which did not work and some which performed a bit decent. The below graphs are for the data with no IMU noise.
+
+\begin{itemize}
+    \item \textbf{Absolute Position Prediction:} Initially the FNN model was designed to directly predict the next absolute (x,y) position. A simple Feed forward architecture was used. The inputs were current planar acceleration, body velocity, angular velocity in the normal direction, current position and rudder angle. The output was the next time step's position and velocity. However, this approach led to poor performance, with the predicted trajectory quickly accumulating errors and drifting significantly from the actual path. The predictions also started diminishing in change. This was attributed to the auto-regressive nature of the prediction, where small errors at each step compound over time.
+
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.7\linewidth]{Images/fnn_prediction_trajectory_auto_regression.png}
+        \caption{Simple FNN performance}
+        \label{fig:enter-label}
+    \end{figure}
+    
+    \item \textbf{Delta Position Prediction:} To mitigate error accumulation and the diminishing prediction, the FNN was modified to predict the \textit{change} in position ($\Delta x, \Delta y$) from the current step to the next. The absolute position was then calculated by adding this predicted delta to the current position. This showed some improvement, but drift remained a considerable issue.
+
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=\linewidth]{Images/fnn_best_model_delta.png}
+        \caption{Architecture of the \textit{Difference in Position Prediction} model}
+        \label{fig:dippm}
+    \end{figure}
+
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=0.7\linewidth]{Images/fnn_delta_prediction_trajectory.png}
+        \caption{Prediction Result from delta predictions}
+        \label{fig:prdp}
+    \end{figure}
+    
+    Further attempts to improve the delta-predicting FNN involved adding `Dropout` layers for regularization and an additional `Dense` layer to increase model capacity. These changes offered only marginal benefits, the FNN's performance was still not satisfactory for reliable dead reckoning.
+    
+    \item \textbf{Decoupled FNN:} Inspired by successes with the LSTM model in \cite{b3}, a decoupled approach was adopted for the FNN. Two separate FNN models were trained: one exclusively for predicting $\Delta x$ and the other for $\Delta y$. Each model had its own output scaler. Also velocity was not used this time. This model performed the best for some paths. But still struggled with others.
+
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=\linewidth]{Images/fnn_best_model_decoupled.png}
+        \caption{Decoupled Model Architecture}
+        \label{fig:dma}
+    \end{figure}
+    
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=0.7\linewidth]{Images/fnn_decoupled_delta_prediction.png}
+        \caption{Best Prediction performed with Decoupled FNN Architecture}
+        \label{fig:bpda}
+    \end{figure}
+    
+    
+\end{itemize}
+
+
+\subsubsection{Long Short-Term Memory (LSTM) Network Development}
+Although Dead Reckoning is a Markov Process, it was proposed that the model may perform better by learning the trajectory and constraints between consecutive time steps, allowing it to capture temporal dependencies in the vessel's motion patterns. Given the sequential nature of navigation data, Long Short-Term Memory (LSTM) networks were explored as an alternative to the FNN approach. Also the IMU sensor noise and bias may have temporal dependency which LSTM may be able to capture well.
+
+\begin{itemize}
+    \item \textbf{Absolute Position Prediction:} Initially, similar to the FNN approach, an LSTM model was designed to predict absolute positions directly. The model took sequences of IMU data, current position, and rudder angle as inputs. However, this approach suffered from the same limitations as the FNN, with significant drift and diminishing changes in predictions over time due to the auto-regressive prediction method.
+    
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=0.7\linewidth]{Images/lstm_prediction_trajectory.png}
+        \caption{Initial LSTM with absolute position prediction}
+        \label{fig:lstm_abs}
+    \end{figure}
+    
+    \item \textbf{Delta Position Prediction:} Learning from the FNN experience, the LSTM models were modified to predict position deltas ($\Delta x, \Delta y$) instead of absolute positions. Sequence-to-vector prediction was used, where a sequence of past inputs predicts the delta at the end of the sequence. However this modification had no improvement.
+    
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=\linewidth]{Images/lstm_delta.png}
+        \caption{Architecture of the LSTM Delta Prediction Model}
+        \label{fig:lstm_delta_arch}
+    \end{figure}
+    
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=0.7\linewidth]{Images/lstm_delta_prediction_trajectory.png}
+        \caption{LSTM Delta Prediction Performance}
+        \label{fig:lstm_delta_perf}
+    \end{figure}
+    
+    \item \textbf{Decoupled LSTM (Based on Research):} Inspired by research in \cite{b3} we tried decoupling the LSTM layers for x and y direction. This approach involved:
+    \begin{enumerate}
+        \item Creating separate LSTM models for predicting $\Delta x$ and $\Delta y$, allowing each model to specialize in a single component of motion.
+        \item Using 128 LSTM units with recurrent dropout to prevent overfitting within the recurrent connections.
+        \item Applying a higher dropout rate (50\%) after dense layers to further enhance regularization.
+        \item Creating dedicated scalers for each model to normalize inputs and outputs independently.
+    \end{enumerate}
+    
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=\linewidth]{Images/lstm_delta_y_decoupled.png}
+        \caption{Decoupled LSTM Model Architecture}
+        \label{fig:lstm_decoupled_arch}
+    \end{figure}
+    
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=0.7\linewidth]{Images/lstm_decoupled_delta_prediction.png}
+        \caption{Performance of the Decoupled LSTM Approach}
+        \label{fig:lstm_decoupled_perf}
+    \end{figure}
+    
+    Although the model converged well in training, the auto-regressive in prediction still caused a large drift. Unlike the reference paper \cite{b3}, we are passing the acceleration and position in the input whereas the reference used a highly accurate DVL to predict velocities.
+\end{itemize}
+ 
+
+

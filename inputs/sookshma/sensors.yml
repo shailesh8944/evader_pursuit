@@ -7,7 +7,7 @@ sensors:
     sensor_location: [0.0, 0.0, 0.0] #[0.0, 0.0, 0.1]          
     sensor_orientation: [0.0, 0.0, 0.0]
     publish_rate: 50        
-    use_custom_covariance: true
+    use_custom_covariance: false
     custom_covariance:
       orientation_covariance: [4.97116638e-07,  1.92100383e-07, -5.37921803e-06,  1.92100383e-07,  4.19220441e-07, -2.48717925e-06, -5.37921803e-06, -2.48717925e-06,  1.15176790e-04]
       linear_acceleration_covariance: [0.01973958, -0.01976063,  0.02346221, -0.01976063,  0.0211394,  -0.02188356,  0.02346221, -0.02188356,  0.03132967]
