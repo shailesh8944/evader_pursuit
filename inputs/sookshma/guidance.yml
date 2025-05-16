@@ -1,6 +1,7 @@
 waypoints:
 - [0, 0, 0]
-- [9, -9, 0]
-- [-10, -10, 0]
+- [10, 0, 0]
+- [10, 10, 0]
+- [0, 10, 0]
 - [0, 0, 0]
-waypoints_type: XYZ
+waypoints_type: 'NED'

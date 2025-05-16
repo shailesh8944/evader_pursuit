@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class StatePredictorFNN(nn.Module):
     # Input size will now be 8: ax, ay, wz, vx, vy, sin_yaw, cos_yaw, rudder
     def __init__(self, input_size=8, hidden_size1=64, hidden_size2=32, output_size=3):

@@ -100,6 +100,7 @@ class IMUSensor(BaseSensor):
         acc_sensor = acc_sensor + kin.quat_to_rotm(q_sensor).T @ np.array([0, 0, -self.vessel_node.vessel.g])
         acc_sensor = acc_sensor + np.random.multivariate_normal(np.zeros(3), self.lin_acc_cov)
 
+
         omg_sensor = kin.quat_to_rotm(orientation_quat).T @ omg_bcs
         omg_sensor = omg_sensor + np.random.multivariate_normal(np.zeros(3), self.ang_vel_cov)
 

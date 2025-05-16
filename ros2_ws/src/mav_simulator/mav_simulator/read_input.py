@@ -232,7 +232,8 @@ def read_input(input_file: str = None) -> Tuple[Dict, List[Dict]]:
         'world_size': sim_config.get('world_size', [100, 100, float('inf')]),
         'gps_datum': sim_config.get('gps_datum', [0, 0, 0]),
         'nagents': sim_config.get('nagents', 1),
-        'geofence': sim_config.get('geofence', [])
+        'geofence': sim_config.get('geofence', []),
+        'static_obstacle': sim_config.get('static_obstacle', [])
     }
     
     # Process each vessel's configuration
@@ -269,7 +270,9 @@ def read_input(input_file: str = None) -> Tuple[Dict, List[Dict]]:
             'time_step': sim_params['time_step'],
             'density': sim_params['density'],
             'gravity': sim_params['gravity'],
-            'gps_datum': sim_params['gps_datum']
+            'gps_datum': sim_params['gps_datum'],
+            'geofence': sim_params['geofence'],
+            'static_obstacle': sim_params['static_obstacle']
         })
         
         # Transform all positions and orientations to CO frame

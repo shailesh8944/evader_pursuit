@@ -1,5 +1,2 @@
 bag_dir,csv_path
-../data/data_from_sim/test2,./extracted_data/test2/synchronized.csv
-../data/data_from_sim/test3,./extracted_data/test3/synchronized.csv
-../data/data_from_sim/test4,./extracted_data/test4/synchronized.csv
-../data/data_from_sim/test1,./extracted_data/test1/synchronized.csv
+../../data/data_from_sim/testing,./extracted_data/testing/synchronized.csv

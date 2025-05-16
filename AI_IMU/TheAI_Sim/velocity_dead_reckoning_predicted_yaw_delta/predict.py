@@ -80,8 +80,23 @@ def predict_trajectory(data_dir, run_id, model_path, scaler_params_path, output_
     predicted_global_x = [current_x_global]
     predicted_global_y = [current_y_global]
 
+    # Lists to store predicted deltas and inputs used
+    predicted_delta_vx = []
+    predicted_delta_vy = []
+    predicted_delta_yaw = []
+    input_accel_x = []
+    input_accel_y = []
+    input_ang_vel_z = []
+
     # The very first input to the model uses actual values from t=0, already scaled by VesselMotionDataset
     current_model_input_tensor = initial_model_input_t0.unsqueeze(0).to(device)
+
+    # Store inputs corresponding to the first state (t=0)
+    # These are used to predict the state at t=1
+    initial_exog_inputs = full_run_exogenous_inputs_raw[0] # Raw ax, ay, wz, rudder at t=0
+    input_accel_x.append(initial_exog_inputs[0].item())
+    input_accel_y.append(initial_exog_inputs[1].item())
+    input_ang_vel_z.append(initial_exog_inputs[2].item())
 
     with torch.no_grad():
         for t in range(num_timesteps - 1):
@@ -95,6 +110,11 @@ def predict_trajectory(data_dir, run_id, model_path, scaler_params_path, output_
             delta_vx_pred = predicted_deltas_unscaled_tensor[0, 0].item()
             delta_vy_pred = predicted_deltas_unscaled_tensor[0, 1].item()
             delta_yaw_pred = predicted_deltas_unscaled_tensor[0, 2].item()
+
+            # Store the predicted deltas
+            predicted_delta_vx.append(delta_vx_pred)
+            predicted_delta_vy.append(delta_vy_pred)
+            predicted_delta_yaw.append(delta_yaw_pred)
 
             # Update state by adding predicted UN SCALED deltas
             current_vx_body += delta_vx_pred
@@ -123,6 +143,11 @@ def predict_trajectory(data_dir, run_id, model_path, scaler_params_path, output_
                 wz_next_exog = full_run_exogenous_inputs_raw[t + 1, 2].item() # Raw exogenous
                 rudder_next_exog = full_run_exogenous_inputs_raw[t + 1, 3].item() # Raw exogenous
                 
+                # Store the inputs that will be used in the *next* iteration (for predicting t+2)
+                input_accel_x.append(ax_next_exog)
+                input_accel_y.append(ay_next_exog)
+                input_ang_vel_z.append(wz_next_exog)
+
                 sin_yaw_next = np.sin(current_yaw) # Use the NEWLY PREDICTED (absolute) yaw
                 cos_yaw_next = np.cos(current_yaw)
 
@@ -160,14 +185,42 @@ def predict_trajectory(data_dir, run_id, model_path, scaler_params_path, output_
         'predicted_body_vy': np.array(predicted_body_vy_abs),
         'predicted_yaw': np.array(predicted_yaw_abs),
         'predicted_global_x': np.array(predicted_global_x),
-        'predicted_global_y': np.array(predicted_global_y)
-    }
-    
-    min_len = min(len(v) for v in df_data.values())
-    for key in df_data:
-        df_data[key] = df_data[key][:min_len]
+        'predicted_global_y': np.array(predicted_global_y),
 
-    predictions_df = pd.DataFrame(df_data)
+        # Add predicted deltas (note: length is num_steps - 1)
+        'predicted_delta_vx': np.array(predicted_delta_vx),
+        'predicted_delta_vy': np.array(predicted_delta_vy),
+        'predicted_delta_yaw': np.array(predicted_delta_yaw),
+
+        # Add input accelerations/angular velocity (note: length should match num_predicted_steps)
+        'input_accel_x': np.array(input_accel_x),
+        'input_accel_y': np.array(input_accel_y),
+        'input_ang_vel_z': np.array(input_ang_vel_z)
+    }
+
+    # Adjust lengths: Predicted states have T steps, predicted deltas have T-1 steps.
+    # Inputs correspond to the prediction time step (input at t predicts state at t+1)
+    min_len = min(len(predicted_global_x), len(input_accel_x)) # Should be T
+    min_len_delta = len(predicted_delta_vx) # Should be T-1
+
+    df_data_aligned = {}
+    for key, value in df_data.items():
+        if key in ['predicted_delta_vx', 'predicted_delta_vy', 'predicted_delta_yaw']:
+            # Pad deltas at the beginning (no delta for t=0)
+            df_data_aligned[key] = np.pad(np.array(value), (1, 0), constant_values=np.nan)[:min_len]
+        elif len(value) == min_len:
+             df_data_aligned[key] = np.array(value)
+        else:
+             # Handle cases where actual data might be longer/shorter if prediction stopped early
+             df_data_aligned[key] = np.array(value)[:min_len]
+
+    # Ensure all arrays have the same final length 'min_len'
+    final_min_len = min(len(v) for v in df_data_aligned.values())
+    for key in df_data_aligned:
+        df_data_aligned[key] = df_data_aligned[key][:final_min_len]
+
+
+    predictions_df = pd.DataFrame(df_data_aligned)
     predictions_df.to_csv(output_file_path, index=False)
     print(f"Delta predictions saved to {output_file_path}")
 
