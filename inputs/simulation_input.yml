@@ -30,11 +30,62 @@ static_obstacle:
   - [12.993359, 80.238699]
   - [12.993547, 80.238437]
 
-nagents: 1
+nagents: 4
 
 agents:
   - 
     name: sookshma
+    type: usv
+    U: 0.5 # For dimensionalization of hydrodynamic coefficients
+    maintain_speed: true
+    active_dof: [1,1,1,1,1,1] # All degrees of freedom are active
+    geometry: /workspaces/mavlab/inputs/{name}/geometry.yml
+    inertia: /workspaces/mavlab/inputs/{name}/inertia.yml
+    hydrodynamics: /workspaces/mavlab/inputs/{name}/hydrodynamics.yml
+    control_surfaces: /workspaces/mavlab/inputs/{name}/control_surfaces.yml
+    initial_conditions: /workspaces/mavlab/inputs/{name}/initial_conditions.yml
+    sensors: /workspaces/mavlab/inputs/{name}/sensors.yml
+    guidance: /workspaces/mavlab/inputs/{name}/guidance.yml
+    control: /workspaces/mavlab/inputs/{name}/control.yml
+    thrusters: /workspaces/mavlab/inputs/{name}/thrusters.yml
+    
+
+  - 
+    name: sookshma2
+    type: usv
+    U: 0.5 # For dimensionalization of hydrodynamic coefficients
+    maintain_speed: true
+    active_dof: [1,1,1,1,1,1] # All degrees of freedom are active
+    geometry: /workspaces/mavlab/inputs/{name}/geometry.yml
+    inertia: /workspaces/mavlab/inputs/{name}/inertia.yml
+    hydrodynamics: /workspaces/mavlab/inputs/{name}/hydrodynamics.yml
+    control_surfaces: /workspaces/mavlab/inputs/{name}/control_surfaces.yml
+    initial_conditions: /workspaces/mavlab/inputs/{name}/initial_conditions.yml
+    sensors: /workspaces/mavlab/inputs/{name}/sensors.yml
+    guidance: /workspaces/mavlab/inputs/{name}/guidance.yml
+    control: /workspaces/mavlab/inputs/{name}/control.yml
+    thrusters: /workspaces/mavlab/inputs/{name}/thrusters.yml
+    
+
+  - 
+    name: sookshma3
+    type: usv
+    U: 0.5 # For dimensionalization of hydrodynamic coefficients
+    maintain_speed: true
+    active_dof: [1,1,1,1,1,1] # All degrees of freedom are active
+    geometry: /workspaces/mavlab/inputs/{name}/geometry.yml
+    inertia: /workspaces/mavlab/inputs/{name}/inertia.yml
+    hydrodynamics: /workspaces/mavlab/inputs/{name}/hydrodynamics.yml
+    control_surfaces: /workspaces/mavlab/inputs/{name}/control_surfaces.yml
+    initial_conditions: /workspaces/mavlab/inputs/{name}/initial_conditions.yml
+    sensors: /workspaces/mavlab/inputs/{name}/sensors.yml
+    guidance: /workspaces/mavlab/inputs/{name}/guidance.yml
+    control: /workspaces/mavlab/inputs/{name}/control.yml
+    thrusters: /workspaces/mavlab/inputs/{name}/thrusters.yml
+    
+
+  - 
+    name: evader
     type: usv
     U: 0.5 # For dimensionalization of hydrodynamic coefficients
     maintain_speed: true

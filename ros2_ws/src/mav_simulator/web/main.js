@@ -5,15 +5,41 @@ let lastMessageTime = Date.now();
 class VesselManager {
   constructor() {
     this.vessels = new Map();
-    this.activeVessel = null;
-    this.selectorHandlerAdded = false;
     this.configurationHandlerAdded = false;
+    this.defaultVessels = ['evader_03', 'sookshma2_01', 'sookshma3_02', 'sookshma_00'];
+    this.colorPalette = ['#FF6384', '#36A2EB', '#4BC0C0', '#FF9F40', '#9966FF', '#8BC34A', '#F06292', '#26A69A'];
+    this.vesselColors = new Map();
+    this.globalPathChart = null;
+    this.globalChartDirty = false;
+    this.globalPathLimit = 1500;
     this.userConfig = {
       controlSurfaces: 0,
       thrusters: 0
     };
+    this.dashboardTemplate = document.getElementById('vesselDashboardTemplate');
+    this.dashboardHost = document.getElementById('dashboardHost');
+    this.emptyState = document.getElementById('emptyState');
+    this.vesselSelect = document.getElementById('vesselSelect');
+    this.activeVesselList = document.getElementById('activeVesselsList');
+    this.setupSelectorControls();
     this.connectToROS();
     this.setupConfigurationPanel();
+    this.initGlobalPathChart();
+    this.syncActiveList();
+  }
+
+  setupSelectorControls() {
+    const addButton = document.getElementById('addVesselBtn');
+    const clearButton = document.getElementById('clearVesselsBtn');
+    if (addButton) {
+      addButton.addEventListener('click', () => this.handleAddVessel());
+    }
+    if (clearButton) {
+      clearButton.addEventListener('click', () => {
+        Array.from(this.vessels.keys()).forEach(name => this.toggleVessel(name, false));
+        this.syncActiveList();
+      });
+    }
   }
 
   connectToROS() {
@@ -97,10 +123,8 @@ class VesselManager {
   
   // Handle disconnection by cleaning up vessel data
   handleDisconnection() {
-    // Stop data collection for active vessel
-    if (this.activeVessel) {
-      this.activeVessel.stopDataCollection();
-    }
+    // Stop data collection for active vessels
+    this.vessels.forEach(vessel => vessel.stopDataCollection());
   }
 
   async discoverVessels() {
@@ -170,6 +194,12 @@ class VesselManager {
     // Hard-coded fallback for testing
     console.log('Using manual vessel discovery');
     const vesselTopics = [
+      '/evader_03/odometry_sim',
+      '/evader_03/vessel_state',
+      '/sookshma2_01/odometry_sim',
+      '/sookshma2_01/vessel_state',
+      '/sookshma3_02/odometry_sim',
+      '/sookshma3_02/vessel_state',
       '/sookshma_00/odometry_sim',
       '/sookshma_00/vessel_state'
     ];
@@ -177,51 +207,44 @@ class VesselManager {
   }
   
   updateVesselSelector(vesselTopics) {
-    // Extract vessel names
     const vesselNames = new Set();
     vesselTopics.forEach(topic => {
       const parts = topic.split('/');
       if (parts.length >= 2) {
-        const vesselName = parts[1];
-        vesselNames.add(vesselName);
+        vesselNames.add(parts[1]);
       }
     });
 
     console.log('Found vessels:', Array.from(vesselNames));
 
-    // Update vessel selector
-    const vesselSelect = document.getElementById('vesselSelect');
-    vesselSelect.innerHTML = '<option value="">Select Vessel</option>';
-    
+    if (!this.vesselSelect) return;
+    this.vesselSelect.innerHTML = '<option value="">Select Vessel</option>';
+
     if (vesselNames.size === 0) {
       const option = document.createElement('option');
-      option.value = "";
-      option.textContent = "No vessels found";
+      option.value = '';
+      option.textContent = 'No vessels found';
       option.disabled = true;
-      vesselSelect.appendChild(option);
+      this.vesselSelect.appendChild(option);
     } else {
       vesselNames.forEach(name => {
         const option = document.createElement('option');
         option.value = name;
         option.textContent = name;
-        vesselSelect.appendChild(option);
+        this.vesselSelect.appendChild(option);
       });
     }
 
-    // Setup vessel selection handler - only add once
-    if (!this.selectorHandlerAdded) {
-      vesselSelect.addEventListener('change', (e) => {
-        this.setActiveVessel(e.target.value);
+    // Auto-enable defaults the first time we discover vessels
+    if (this.vessels.size === 0) {
+      this.defaultVessels.forEach(name => {
+        if (vesselNames.has(name)) {
+          this.toggleVessel(name, true);
+        }
       });
-      this.selectorHandlerAdded = true;
     }
-    
-    // Auto-select first vessel if available
-    if (vesselNames.size === 1) {
-      const firstVessel = Array.from(vesselNames)[0];
-      vesselSelect.value = firstVessel;
-      this.setActiveVessel(firstVessel);
-    }
+
+    this.syncActiveList();
   }
 
   setupConfigurationPanel() {
@@ -267,10 +290,8 @@ class VesselManager {
       thrusters
     };
     
-    // Update the active vessel with the new configuration
-    if (this.activeVessel) {
-      this.activeVessel.setConfiguration(controlSurfaces, thrusters);
-    }
+    // Update all active vessels with the new configuration
+    this.vessels.forEach(vessel => vessel.setConfiguration(controlSurfaces, thrusters));
   }
   
   // When vessel state is received, store its length for auto-calculation
@@ -295,31 +316,282 @@ class VesselManager {
     }
   }
 
-  setActiveVessel(vesselName) {
-    if (this.activeVessel) {
-      this.activeVessel.unsubscribe();
-    }
+  handleAddVessel() {
+    if (!this.vesselSelect) return;
+    const vesselName = this.vesselSelect.value;
+    if (!vesselName) return;
+    this.toggleVessel(vesselName, true);
+  }
 
+  toggleVessel(vesselName, enable) {
     if (!vesselName) return;
 
-    this.activeVessel = new VesselVisualizer(vesselName, this.ros, this.userConfig);
-    this.activeVessel.subscribe();
+    if (enable) {
+      if (this.vessels.has(vesselName)) return;
+      const color = this.getVesselColor(vesselName);
+      const panelInfo = this.createVesselPanel(vesselName, color);
+      if (!panelInfo) return;
+      panelInfo.color = color;
+      const visualizer = new VesselVisualizer(vesselName, this.ros, this.userConfig, panelInfo, this);
+      this.vessels.set(vesselName, visualizer);
+      visualizer.subscribe();
+    } else {
+      const visualizer = this.vessels.get(vesselName);
+      if (!visualizer) return;
+      visualizer.destroy();
+      this.vessels.delete(vesselName);
+      this.removeGlobalDataset(vesselName);
+    }
+    this.syncActiveList();
+  }
+
+  createVesselPanel(vesselName, color) {
+    if (!this.dashboardTemplate || !this.dashboardHost) return null;
+    const fragment = this.dashboardTemplate.content.cloneNode(true);
+    const panel = fragment.querySelector('.vessel-panel');
+    if (!panel) return null;
+    panel.dataset.vessel = vesselName;
+    const title = panel.querySelector('.vessel-title');
+    if (title) {
+      title.textContent = vesselName;
+    }
+    if (color) {
+      const header = panel.querySelector('.panel-header');
+      if (header) {
+        header.style.borderLeft = `4px solid ${color}`;
+        header.style.paddingLeft = '16px';
+      }
+    }
+    const removeButton = panel.querySelector('[data-role="remove"]');
+    if (removeButton) {
+      removeButton.addEventListener('click', () => this.toggleVessel(vesselName, false));
+    }
+
+    const slug = this.slugifyVessel(vesselName);
+    panel.querySelectorAll('[id]').forEach((element) => {
+      element.id = `${slug}-${element.id}`;
+    });
+
+    this.dashboardHost.appendChild(panel);
+    this.updateEmptyState();
+    return { panel, domPrefix: slug, color };
+  }
+
+  slugifyVessel(name) {
+    return `vessel-${name.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  }
+
+  syncActiveList() {
+    if (!this.activeVesselList) return;
+    this.activeVesselList.innerHTML = '';
+    if (this.vessels.size === 0) {
+      const placeholder = document.createElement('span');
+      placeholder.style.color = 'var(--text-secondary)';
+      placeholder.textContent = 'No vessels selected';
+      this.activeVesselList.appendChild(placeholder);
+    } else {
+      this.vessels.forEach((_, name) => {
+        const chip = document.createElement('div');
+        chip.className = 'vessel-chip';
+        const color = this.getVesselColor(name);
+        chip.style.borderColor = color;
+        chip.style.color = color;
+        const label = document.createElement('span');
+        label.textContent = name;
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.textContent = '×';
+        closeBtn.addEventListener('click', () => this.toggleVessel(name, false));
+        chip.appendChild(label);
+        chip.appendChild(closeBtn);
+        this.activeVesselList.appendChild(chip);
+      });
+    }
+    this.updateEmptyState();
+  }
+
+  updateEmptyState() {
+    if (!this.emptyState) return;
+    this.emptyState.style.display = this.vessels.size === 0 ? 'block' : 'none';
+  }
+
+  getVesselColor(name) {
+    if (this.vesselColors.has(name)) return this.vesselColors.get(name);
+    const color = this.colorPalette[this.vesselColors.size % this.colorPalette.length] || '#36A2EB';
+    this.vesselColors.set(name, color);
+    return color;
+  }
+
+  initGlobalPathChart() {
+    const canvas = document.getElementById('globalPathChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    this.globalPathChart = new Chart(canvas, {
+      type: 'scatter',
+      data: {
+        datasets: []
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'nearest',
+          axis: 'xy',
+          intersect: false
+        },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              usePointStyle: true,
+              font: {
+                size: 12
+              }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const label = context.dataset.label || 'Series';
+                const x = context.parsed.x !== undefined ? context.parsed.x.toFixed(2) : '0.00';
+                const y = context.parsed.y !== undefined ? context.parsed.y.toFixed(2) : '0.00';
+                return `${label}: (${x}, ${y})`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: 'X Position (m)' },
+            type: 'linear',
+            grid: { color: 'rgba(0,0,0,0.05)' }
+          },
+          y: {
+            title: { display: true, text: 'Y Position (m)' },
+            type: 'linear',
+            grid: { color: 'rgba(0,0,0,0.05)' }
+          }
+        }
+      }
+    });
+  }
+
+  ensureGlobalDataset(vesselName) {
+    if (!this.globalPathChart) return null;
+    let dataset = this.globalPathChart.data.datasets.find(ds => ds._vessel === vesselName);
+    if (!dataset) {
+      const color = this.getVesselColor(vesselName);
+      dataset = {
+        label: vesselName,
+        data: [],
+        showLine: true,
+        borderColor: color,
+        backgroundColor: color,
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: false,
+        tension: 0.2,
+        _vessel: vesselName
+      };
+      this.globalPathChart.data.datasets.push(dataset);
+    }
+    return dataset;
+  }
+
+  updateGlobalPath(vesselName, point) {
+    if (!this.globalPathChart) return;
+    const dataset = this.ensureGlobalDataset(vesselName);
+    if (!dataset) return;
+    dataset.data.push(point);
+    if (dataset.data.length > this.globalPathLimit) {
+      dataset.data.splice(0, dataset.data.length - this.globalPathLimit);
+    }
+    this.globalChartDirty = true;
+  }
+
+  updateEvaderCaptureCircle(vesselName, centerX, centerY, radius = 1) {
+    if (!this.globalPathChart) return;
+    let dataset = this.globalPathChart.data.datasets.find(ds => ds._captureFor === vesselName);
+    if (!dataset) {
+      const color = this.getVesselColor(vesselName);
+      dataset = {
+        label: `${vesselName} Capture Radius`,
+        data: [],
+        showLine: true,
+        borderColor: color,
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        tension: 0.2,
+        fill: false,
+        _captureFor: vesselName
+      };
+      this.globalPathChart.data.datasets.push(dataset);
+    }
+    dataset.data = this.generateCirclePoints(centerX, centerY, radius);
+    this.globalChartDirty = true;
+  }
+
+  generateCirclePoints(cx, cy, radius) {
+    const points = [];
+    for (let angle = 0; angle <= 360; angle += 5) {
+      const rad = angle * Math.PI / 180;
+      points.push({
+        x: cx + radius * Math.cos(rad),
+        y: cy + radius * Math.sin(rad)
+      });
+    }
+    return points;
+  }
+
+  commitGlobalPathUpdate() {
+    if (this.globalPathChart && this.globalChartDirty) {
+      this.globalPathChart.update('none');
+      this.globalChartDirty = false;
+    }
+  }
+
+  removeGlobalDataset(vesselName) {
+    if (!this.globalPathChart) return;
+    const originalLength = this.globalPathChart.data.datasets.length;
+    this.globalPathChart.data.datasets = this.globalPathChart.data.datasets.filter(ds => ds._vessel !== vesselName && ds._captureFor !== vesselName);
+    if (this.globalPathChart.data.datasets.length !== originalLength) {
+      this.globalChartDirty = true;
+      this.commitGlobalPathUpdate();
+    }
+  }
+
+  isEvader(vesselName) {
+    if (!vesselName) return false;
+    return vesselName.toLowerCase().includes('evader');
   }
 }
 
 // Vessel visualization class
 class VesselVisualizer {
-  constructor(vesselName, ros, userConfig) {
+  constructor(vesselName, ros, userConfig, domContext, manager) {
     this.vesselName = vesselName;
     this.ros = ros;
     this.charts = new Map();
     this.sampleIndex = 0;
     this.setConfiguration(userConfig.controlSurfaces, userConfig.thrusters);
     this.setupChartPlugins();
+    this.panel = domContext ? domContext.panel : null;
+    this.domPrefix = domContext ? domContext.domPrefix : '';
+    this.manager = manager || null;
+    this.color = (domContext && domContext.color) || this.manager?.getVesselColor(this.vesselName) || '#36A2EB';
+    this.statusLabel = this.panel ? this.panel.querySelector('[data-role="status"]') : null;
     this.setupCharts();
     this.isCollectingData = false;
     this.lastMessageTime = Date.now();
     this.dataMonitorInterval = null;
+  }
+
+  getElement(id) {
+    if (!id) return null;
+    const actualId = this.domPrefix ? `${this.domPrefix}-${id}` : id;
+    return document.getElementById(actualId);
   }
   
   setConfiguration(controlSurfaces, thrusters) {
@@ -358,14 +630,15 @@ class VesselVisualizer {
     };
 
     // Setup path chart with improved styling
-    this.charts.set('path', new Chart(document.getElementById('pathChart'), {
+    const pathColor = this.color || '#FF6384';
+    this.charts.set('path', new Chart(this.getElement('pathChart'), {
     type: 'scatter',
     data: {
         datasets: [
           {
         label: 'Path',
         data: [],
-            borderColor: '#FF6384',
+            borderColor: pathColor,
             backgroundColor: 'transparent', // Remove fill color
         showLine: true,
             fill: false, // No fill
@@ -376,8 +649,8 @@ class VesselVisualizer {
           {
             label: 'Current Position',
             data: [],
-            borderColor: '#36A2EB',
-            backgroundColor: '#36A2EB',
+            borderColor: pathColor,
+            backgroundColor: pathColor,
             pointRadius: 6,
             pointHoverRadius: 8,
             showLine: false
@@ -460,7 +733,7 @@ class VesselVisualizer {
     }));
 
     // Create path controls container
-    const pathContainer = document.getElementById('pathChart').parentNode;
+    const pathContainer = this.getElement('pathChart').parentNode;
     const controlsContainer = document.createElement('div');
     controlsContainer.className = 'path-controls';
     
@@ -615,7 +888,7 @@ class VesselVisualizer {
           weight: 'normal'
         }
       };
-      this.charts.set(id, new Chart(document.getElementById(`${id}Chart`), config));
+      this.charts.set(id, new Chart(this.getElement(`${id}Chart`), config));
     });
   }
 
@@ -665,7 +938,8 @@ class VesselVisualizer {
   // Method to remove disconnect overlays when reconnecting
   removeDisconnectOverlays() {
     // Remove overlays from chart containers
-    document.querySelectorAll('.chart-disconnected').forEach(overlay => {
+    const scope = this.panel || document;
+    scope.querySelectorAll('.chart-disconnected').forEach(overlay => {
       overlay.classList.remove('active');
       // Remove after fade-out animation completes
       setTimeout(() => {
@@ -701,15 +975,7 @@ class VesselVisualizer {
 
   // Update showConnectionStatus to handle more connection states
   showConnectionStatus(status) {
-    const container = document.getElementById('vesselInfo');
-    if (!container) return;
-    
-    // Remove existing status indicator
-    const existingStatus = container.querySelector('.status-indicator');
-    if (existingStatus) {
-      existingStatus.remove();
-    }
-    
+    const container = this.getElement('vesselInfo');
     let statusClass = '';
     let statusText = '';
     
@@ -726,6 +992,22 @@ class VesselVisualizer {
       statusText = 'Disconnected';
       // Add disconnect overlays when disconnected
       this.addDisconnectOverlays();
+    }
+    
+    if (this.statusLabel) {
+      this.statusLabel.textContent = statusText;
+      this.statusLabel.classList.remove('connected', 'stale', 'disconnected');
+      if (statusClass) {
+        this.statusLabel.classList.add(statusClass);
+      }
+    }
+
+    if (!container) return;
+    
+    // Remove existing status indicator
+    const existingStatus = container.querySelector('.status-indicator');
+    if (existingStatus) {
+      existingStatus.remove();
     }
     
     const statusElement = document.createElement('div');
@@ -835,6 +1117,15 @@ class VesselVisualizer {
     console.log(`Unsubscribed from vessel ${this.vesselName}`);
   }
 
+  destroy() {
+    this.unsubscribe();
+    this.charts.forEach(chart => chart.destroy());
+    this.charts.clear();
+    if (this.panel && this.panel.parentNode) {
+      this.panel.remove();
+    }
+  }
+
   handleOdometry(message) {
     // Update last message time
     lastMessageTime = Date.now();
@@ -867,6 +1158,14 @@ class VesselVisualizer {
     this.updateChart('velocity', [u, v, w]);
     this.updateChart('angularVelocity', [p, q, r]);
     this.updateChart('orientation', [euler.roll, euler.pitch, euler.yaw]);
+
+    if (this.manager) {
+      this.manager.updateGlobalPath(this.vesselName, { x, y });
+      if (this.manager.isEvader(this.vesselName)) {
+        this.manager.updateEvaderCaptureCircle(this.vesselName, x, y);
+      }
+      this.manager.commitGlobalPathUpdate();
+    }
 
     // Update vessel info
     this.updateVesselInfo(message);
@@ -909,7 +1208,7 @@ class VesselVisualizer {
       this.updateControlSurfaces(state.slice(controlStart, end));
     } else {
       // Clear control surfaces chart if no controls
-      const container = document.getElementById('controlSurfacesChart');
+    const container = this.getElement('controlSurfacesChart');
       container.innerHTML = '<div style="text-align: center; padding: 20px;">No control surfaces configured</div>';
     }
     
@@ -918,7 +1217,7 @@ class VesselVisualizer {
       this.updateThrusters(state.slice(thrusterStart, thrusterStart + this.config.thrusters));
     } else {
       // Clear thrusters chart if no thrusters
-      const container = document.getElementById('thrustersChart');
+    const container = this.getElement('thrustersChart');
       container.innerHTML = '<div style="text-align: center; padding: 20px;">No thrusters configured</div>';
     }
   }
@@ -1071,7 +1370,7 @@ class VesselVisualizer {
   }
 
   updateControlSurfaces(controlStates) {
-    const container = document.getElementById('controlSurfacesChart');
+    const container = this.getElement('controlSurfacesChart');
     
     if (!controlStates || controlStates.length === 0) {
       container.innerHTML = '<div style="text-align: center; padding: 20px;">No control surfaces available</div>';
@@ -1172,7 +1471,7 @@ class VesselVisualizer {
   }
 
   updateThrusters(thrusterStates) {
-    const container = document.getElementById('thrustersChart');
+    const container = this.getElement('thrustersChart');
     
     if (!thrusterStates || thrusterStates.length === 0) {
       container.innerHTML = '<div style="text-align: center; padding: 20px;">No thrusters available</div>';
@@ -1273,7 +1572,8 @@ class VesselVisualizer {
 
   updateVesselInfo(message) {
     try {
-      const container = document.getElementById('vesselInfo');
+      const container = this.getElement('vesselInfo');
+      if (!container) return;
       
       if (!message || !message.pose || !message.pose.pose || !message.twist || !message.twist.twist) {
         console.warn('Incomplete odometry message received');
@@ -1326,7 +1626,7 @@ class VesselVisualizer {
     const roll = Math.atan2(sinr_cosp, cosr_cosp) * 180 / Math.PI;
 
     const sinp = 2 * (w * y - z * x);
-    const pitch = Math.abs(sinp) >= 1 ? Math.sign(sinp) * Math.PI / 2 : Math.asin(sinp) * 180 / Math.PI;
+    const pitch = Math.abs(sinp) >= 1 ? Math.sign(sinp) * 90 : Math.asin(sinp) * 180 / Math.PI;
 
     const siny_cosp = 2 * (w * z + x * y);
     const cosy_cosp = 1 - 2 * (y * y + z * z);
@@ -1339,7 +1639,7 @@ class VesselVisualizer {
   addDisconnectOverlays() {
     // Add disconnect overlay to each chart container
     this.charts.forEach((chart, id) => {
-      const canvas = document.getElementById(`${id}Chart`);
+      const canvas = this.getElement(`${id}Chart`);
       if (canvas) {
         const container = canvas.parentNode;
         
@@ -1360,7 +1660,7 @@ class VesselVisualizer {
     
     // Also handle control surfaces and thrusters containers
     ['controlSurfacesChart', 'thrustersChart'].forEach(id => {
-      const container = document.getElementById(id);
+      const container = this.getElement(id);
       if (container && !container.querySelector('.chart-disconnected')) {
         const overlay = document.createElement('div');
         overlay.className = 'chart-disconnected';
@@ -1390,7 +1690,7 @@ class VesselVisualizer {
 
   // Update showConnectionStatus to handle more connection states
   showConnectionStatus(status) {
-    const container = document.getElementById('vesselInfo');
+    const container = this.getElement('vesselInfo');
     if (!container) return;
     
     // Remove existing status indicator
